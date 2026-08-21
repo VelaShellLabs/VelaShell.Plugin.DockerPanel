@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- AVLN3001:面板视图刻意只有带上下文的构造(由 ShowPanelAsync 的工厂创建),
+         不走运行时 XAML 装载器的无参构造路径。 -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <EnablePreviewFeatures>true</EnablePreviewFeatures>
+    <Features>$(Features);runtime-async=on</Features>
+    <NoWarn>$(NoWarn);CA2252;SYSLIB5007;</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Description>VelaShell Docker 面板插件:在既有 SSH 会话上以 docker CLI 管理远端容器、镜像、卷、网络与 Compose 项目,含日志、统计、进程与 prune。</Description>
+    <!-- 与 plugin.json 的 id 一致;驱动构建后复制到应用输出的 plugins/&lt;目录名&gt;/。 -->
+    <VelaPluginId>velashell.dockerpanel</VelaPluginId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 插件工程只需要这一个包:契约程序集、与宿主版本一致的 Avalonia(含 AXAML 编译器)、
+         plugin.json 处理、清单校验与 `dotnet build -t:PackVpx` 都随它到位。
+         本插件**没有任何第三方依赖** —— 远端一侧靠的是服务器自带的 docker CLI,
+         本地一侧只用 BCL 的 System.Text.Json。 -->
+    <PackageReference Include="VelaShell.PluginSdk.Build" Version="1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 单测直接驱动内部类型(命令拼装、输出解析、视图模型)。 -->
+    <InternalsVisibleTo Include="VelaShell.Plugin.DockerPanel.Tests" />
+  </ItemGroup>
+
+</Project>
