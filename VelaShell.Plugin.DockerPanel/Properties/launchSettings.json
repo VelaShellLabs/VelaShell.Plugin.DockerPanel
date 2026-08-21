@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "VelaShell": {
-      "commandName": "Executable",
-      "executablePath": "%VELASHELL_EXE%"
-    }
-  }
-}
