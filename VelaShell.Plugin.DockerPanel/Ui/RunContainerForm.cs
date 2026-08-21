@@ -47,7 +47,14 @@ public sealed partial class RunContainerForm : PanelForm
             Separator = "→",
             AddLabel = "+ 添加挂载"
         };
-        Env = new("环境变量") { KeyPlaceholder = "KEY", ValuePlaceholder = "value", AddLabel = "+ 添加变量" };
+        Env = new("环境变量")
+        {
+            KeyPlaceholder = "KEY",
+            ValuePlaceholder = "value",
+            AddLabel = "+ 添加变量",
+            // 一屏十几条环境变量手敲不现实,而它们几乎总是已经躺在某个 .env 里。
+            ImportLabel = "从 .env 导入"
+        };
         _network = new("网络") { Value = "bridge" };
         foreach (string network in networks)
         {

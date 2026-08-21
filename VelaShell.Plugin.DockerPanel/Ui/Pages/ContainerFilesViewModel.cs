@@ -5,6 +5,27 @@ using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
 
+/// <summary>编辑器 / 差异视图里的一行。</summary>
+/// <param name="Number">显示的行号。</param>
+/// <param name="Marker">差异标记(<c>+</c> / <c>-</c> / <c>~</c>;没变为空)。</param>
+/// <param name="Text">行内容。</param>
+/// <param name="Tone">语气(界面按它给标记与底色上色)。</param>
+public readonly record struct EditorLine(string Number, string Marker, string Text, RowTone Tone);
+
+/// <summary>本面板往这个容器里写过的一次。</summary>
+/// <param name="At">什么时候。</param>
+/// <param name="Path">写了哪个文件。</param>
+/// <param name="Summary">改动摘要,如 <c>+2 −1</c> 或 <c>新建</c>。</param>
+public readonly record struct FileWriteRecord(DateTimeOffset At, string Path, string Summary)
+{
+    /// <summary>时间的显示文本。</summary>
+    public string TimeText => At.ToLocalTime().ToString(
+        At.ToLocalTime().Date == DateTime.Today ? "HH:mm:ss" : "MM-dd HH:mm");
+
+    /// <summary>文件名(路径太长,历史列表里只放名字)。</summary>
+    public string Name => Path[(Path.LastIndexOf('/') + 1)..];
+}
+
 /// <summary>文件树里的一项。</summary>
 public sealed class FileEntryItem(ContainerFileEntry entry, string changeMarker) : ObservableObject
 {
@@ -41,6 +62,15 @@ public sealed class FileEntryItem(ContainerFileEntry entry, string changeMarker)
     /// <summary>有没有变更标记。</summary>
     public bool HasChange => ChangeMarker.Length > 0;
 
+    /// <summary>「只看变更」过滤后是否显示。</summary>
+    public bool Visible
+    {
+        get => _visible;
+        set => SetField(ref _visible, value);
+    }
+
+    private bool _visible = true;
+
     /// <summary>变更标记的语气。</summary>
     public RowTone ChangeTone => ChangeMarker switch
     {
@@ -63,6 +93,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     : ObservableObject
 {
     private readonly Dictionary<string, string> _changes = [];
+    private readonly List<FileWriteRecord> _history = [];
     private string _path = "/";
     private bool _loaded;
     private bool _busy;
@@ -70,6 +101,130 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     private string _editorText = "";
     private string _originalText = "";
     private string _error = "";
+    private bool _changedOnly;
+    private bool _diffMode;
+    private bool _reloadAfterSave;
+    private ContainerFileEntry? _openEntry;
+
+    /// <summary>只看相对镜像有变更的那些条目。</summary>
+    public bool ChangedOnly
+    {
+        get => _changedOnly;
+        set
+        {
+            if (SetField(ref _changedOnly, value))
+            {
+                ApplyEntryView();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 差异视图(编辑 / 差异两态切换)。
+    /// <para>
+    /// 比的是**这次编辑前后**,不是相对镜像 —— 后者由左边那个 A/C/D 标记表达。
+    /// 用户按下保存前想确认的是"我刚改了什么",而不是"这个文件相对镜像改过什么"。
+    /// </para>
+    /// </summary>
+    public bool DiffMode
+    {
+        get => _diffMode;
+        set
+        {
+            if (SetField(ref _diffMode, value))
+            {
+                OnPropertiesChanged(nameof(EditMode));
+                RebuildEditorLines();
+            }
+        }
+    }
+
+    /// <summary>在编辑态(与 <see cref="DiffMode" /> 互斥)。</summary>
+    public bool EditMode => !DiffMode;
+
+    /// <summary>保存后顺带在容器里跑一次重载命令。</summary>
+    public bool ReloadAfterSave
+    {
+        get => _reloadAfterSave;
+        set => SetField(ref _reloadAfterSave, value);
+    }
+
+    /// <summary>差异视图里的行。</summary>
+    public ObservableCollection<EditorLine> DiffLines { get; } = [];
+
+    /// <summary>本面板往这个容器里写过的记录(最近在前)。</summary>
+    public ObservableCollection<FileWriteRecord> History { get; } = [];
+
+    /// <summary>有写入历史。</summary>
+    public bool HasHistory => History.Count > 0;
+
+    /// <summary>打开的那个文件的属性(大小 / 权限 / 属主 / 修改时间 / 相对镜像)。</summary>
+    public ObservableCollection<DetailField> FileProperties { get; } = [];
+
+    /// <summary>光标位置文本。</summary>
+    public string CaretText
+    {
+        get => _caretText;
+        private set => SetField(ref _caretText, value);
+    }
+
+    private string _caretText = "行 1, 列 1";
+
+    /// <summary>已改了几行。</summary>
+    public string ModifiedLinesText
+    {
+        get
+        {
+            if (!IsModified)
+            {
+                return "未修改";
+            }
+            int changed = LineDiff.CountChanged(LineDiff.Compute(_originalText, _editorText));
+            return $"已修改 {changed} 行";
+        }
+    }
+
+    /// <summary>换行符(照原文件的,保存时不改它)。</summary>
+    public string LineEnding => _originalText.Contains("\r\n", StringComparison.Ordinal) ? "CRLF" : "LF";
+
+    /// <summary>按扩展名猜的语言(只用来在状态条上显示)。</summary>
+    public string Language => GuessLanguage(OpenFileName);
+
+    /// <summary>
+    /// 这个文件多半需要的重载命令;猜不出来时为空。
+    /// <para>
+    /// 只覆盖最常改的那几类配置。猜不到就不显示那个勾选框 ——
+    /// 给一个会失败的默认命令,比不给更糟。
+    /// </para>
+    /// </summary>
+    public string ReloadCommand => OpenFilePath is not { } path ? "" : path switch
+    {
+        var p when p.Contains("/nginx/", StringComparison.Ordinal) => "nginx -s reload",
+        var p when p.Contains("/postgresql/", StringComparison.Ordinal) => "pg_ctl reload",
+        var p when p.Contains("/redis", StringComparison.Ordinal) => "redis-cli CONFIG SET appendonly yes",
+        _ => ""
+    };
+
+    /// <summary>有没有可用的重载命令。</summary>
+    public bool HasReloadCommand => ReloadCommand.Length > 0;
+
+    private static string GuessLanguage(string name)
+    {
+        int dot = name.LastIndexOf('.');
+        string ext = dot > 0 ? name[(dot + 1)..].ToLowerInvariant() : "";
+        return ext switch
+        {
+            "conf" or "cnf" or "ini" => name.Contains("nginx", StringComparison.OrdinalIgnoreCase) ? "nginx" : "ini",
+            "yml" or "yaml" => "yaml",
+            "json" => "json",
+            "sh" or "bash" => "shell",
+            "toml" => "toml",
+            "xml" => "xml",
+            "env" => "dotenv",
+            "" => name.StartsWith('.') ? "dotfile" : "text",
+            _ => ext
+        };
+    }
 
     /// <summary>当前目录。</summary>
     public string Path
@@ -149,7 +304,8 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         {
             if (SetField(ref _editorText, value))
             {
-                OnPropertiesChanged(nameof(IsModified), nameof(ModifiedText));
+                OnPropertiesChanged(nameof(IsModified), nameof(ModifiedText), nameof(ModifiedLinesText));
+                RebuildEditorLines();
             }
         }
     }
@@ -289,15 +445,153 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         }
     }
 
-    /// <summary>把本地一个文件送进容器当前目录。</summary>
-    private async Task UploadAsync()
+    /// <summary>切到编辑态。</summary>
+    public RelayCommand ShowEditCommand => _showEdit ??= new(_ =>
     {
-        if (shell.Client is not { } client)
+        DiffMode = false;
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _showEdit;
+
+    /// <summary>切到差异态。</summary>
+    public RelayCommand ShowDiffCommand => _showDiff ??= new(_ =>
+    {
+        DiffMode = true;
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _showDiff;
+
+    /// <summary>编辑器报一次光标位置(视图在选区变化时调)。</summary>
+    public void ReportCaret(int line, int column) => CaretText = $"行 {line}, 列 {column}";
+
+    /// <summary>按当前文本重算差异行。</summary>
+    private void RebuildEditorLines()
+    {
+        DiffLines.Clear();
+        if (!DiffMode)
         {
             return;
         }
+        foreach (DiffLine line in LineDiff.Compute(_originalText, _editorText))
+        {
+            (string marker, RowTone tone) = line.Marker switch
+            {
+                DiffMarker.Added => ("+", RowTone.Ok),
+                DiffMarker.Removed => ("−", RowTone.Danger),
+                DiffMarker.Changed => ("~", RowTone.Warn),
+                _ => (" ", RowTone.Idle)
+            };
+            // 删除的行在新文里没有行号,显示原文的那个 —— 空着会让人对不上原文件。
+            int number = line.Marker == DiffMarker.Removed ? line.OldNumber : line.NewNumber;
+            DiffLines.Add(new(number > 0 ? number.ToString() : "", marker, line.Text, tone));
+        }
+    }
+
+    private void BuildFileProperties()
+    {
+        FileProperties.Clear();
+        if (_openEntry is not { } entry)
+        {
+            return;
+        }
+        FileProperties.Add(new("大小", Humanize.Bytes(entry.Size)));
+        FileProperties.Add(new("权限", entry.Mode));
+        FileProperties.Add(new("属主", entry.Owner));
+        FileProperties.Add(new("修改时间", entry.Modified));
+        string marker = _changes.GetValueOrDefault(entry.FullPath, "");
+        FileProperties.Add(marker switch
+        {
+            "A" => new("相对镜像", "新增 (A)", RowTone.Ok),
+            "C" => new("相对镜像", "已修改 (C)", RowTone.Warn),
+            "D" => new("相对镜像", "已删除 (D)", RowTone.Danger),
+            _ => new("相对镜像", "与镜像一致")
+        });
+    }
+
+    private void Record(string path, string summary)
+    {
+        // 只留在内存里:写入历史是"这次会话里我动过什么"的备忘,
+        // 落盘会把它变成一份需要清理、需要考虑隐私的东西,而它不值那个代价。
+        _history.Insert(0, new(DateTimeOffset.UtcNow, path, summary));
+        while (_history.Count > 20)
+        {
+            _history.RemoveAt(_history.Count - 1);
+        }
+        History.Clear();
+        foreach (FileWriteRecord record in _history)
+        {
+            History.Add(record);
+        }
+        OnPropertyChanged(nameof(HasHistory));
+    }
+
+    /// <summary>这次改动的摘要,进写入历史(<c>+2 −1</c> 这种)。</summary>
+    private string DescribeEdit()
+    {
+        IReadOnlyList<DiffLine> diff = LineDiff.Compute(_originalText, _editorText);
+        int added = diff.Count(l => l.Marker is DiffMarker.Added or DiffMarker.Changed);
+        int removed = diff.Count(l => l.Marker is DiffMarker.Removed or DiffMarker.Changed);
+        return _originalText.Length == 0 ? "新建"
+            : added == 0 && removed == 0 ? "无改动"
+            : $"+{added} −{removed}";
+    }
+
+    /// <summary>
+    /// 保存后跑一次重载命令。
+    /// <para>
+    /// 失败**不**回滚文件 —— 文件已经写进去了,那是既成事实;
+    /// 假装"保存失败"会让用户以为可以重来一次,而实际上容器里的内容已经变了。
+    /// </para>
+    /// </summary>
+    private async Task RunReloadAsync(DockerClient client)
+    {
+        string command = ReloadCommand;
+        try
+        {
+            ExecCapture result = await client
+                .ExecCaptureAsync(containerId, ["/bin/sh", "-c", command], cancellationToken: shell.Lifetime)
+                .ConfigureAwait(true);
+            if (result.ExitCode == 0)
+            {
+                shell.Feedback.Notify(FeedbackKind.Success, "已重载配置", $"{containerName}:{command}");
+                return;
+            }
+            shell.Feedback.Notify(FeedbackKind.Warning, "文件已写回,但重载失败",
+                $"{command} 退出码 {result.ExitCode}\n{result.StandardError.Trim()}");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            shell.Feedback.Notify(FeedbackKind.Warning, "文件已写回,但重载没跑成", $"{command}:{ex.Message}");
+        }
+    }
+
+    private void ApplyEntryView()
+    {
+        foreach (FileEntryItem item in Entries)
+        {
+            // 目录永远留着 —— 藏掉目录会让"只看变更"变成一个走不进任何子目录的死胡同。
+            item.Visible = !_changedOnly || item.IsDirectory || item.HasChange;
+        }
+    }
+
+    /// <summary>把本地一个文件送进容器当前目录。</summary>
+    /// <summary>接住拖进来的那个文件,当成上传到当前目录。</summary>
+    public Task UploadDroppedAsync(IStorageFile file) => UploadFileAsync(file);
+
+    private async Task UploadAsync()
+    {
         IStorageFile? source = await FilePicker.PickOpenAsync($"上传到 {Path}").ConfigureAwait(true);
-        if (source is null)
+        if (source is not null)
+        {
+            await UploadFileAsync(source).ConfigureAwait(true);
+        }
+    }
+
+    private async Task UploadFileAsync(IStorageFile source)
+    {
+        if (shell.Client is not { } client)
         {
             return;
         }
@@ -428,6 +722,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
             {
                 Entries.Add(new(entry, _changes.GetValueOrDefault(entry.FullPath, "")));
             }
+            ApplyEntryView();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -459,6 +754,11 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
             _originalText = Encoding.UTF8.GetString(bytes);
             EditorText = _originalText;
             OpenFilePath = path;
+            _openEntry = Entries.FirstOrDefault(e => e.FullPath == path)?.Entry;
+            DiffMode = false;
+            BuildFileProperties();
+            OnPropertiesChanged(nameof(ModifiedLinesText), nameof(LineEnding), nameof(Language),
+                nameof(ReloadCommand), nameof(HasReloadCommand));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -524,10 +824,16 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         {
             await client.WriteFileAsync(containerId, path, Encoding.UTF8.GetBytes(EditorText), shell.Lifetime)
                         .ConfigureAwait(true);
+            Record(path, DescribeEdit());
             _originalText = EditorText;
-            OnPropertiesChanged(nameof(IsModified), nameof(ModifiedText));
+            OnPropertiesChanged(nameof(IsModified), nameof(ModifiedText), nameof(ModifiedLinesText));
+            RebuildEditorLines();
             shell.Feedback.Notify(FeedbackKind.Success, "已写回容器", $"{path} · {Humanize.Bytes(Encoding.UTF8.GetByteCount(EditorText))}");
             await LoadChangesAsync().ConfigureAwait(true);
+            if (ReloadAfterSave && HasReloadCommand)
+            {
+                await RunReloadAsync(client).ConfigureAwait(true);
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

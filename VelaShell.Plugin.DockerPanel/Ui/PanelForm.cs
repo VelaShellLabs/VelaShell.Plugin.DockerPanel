@@ -238,6 +238,61 @@ public sealed class PairListField : FormField
 
     private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Changed?.Invoke();
 
+    /// <summary>
+    /// 从一段 <c>.env</c> 文本导入(设计稿 06 号板那个「从 .env 导入」)。
+    /// <para>
+    /// 只认最朴素的那一档:<c>KEY=VALUE</c>,跳过空行与 <c>#</c> 注释,剥掉值两边的引号。
+    /// <b>不</b>做变量插值与多行值 —— dotenv 的方言各家不同,面板猜错一次就等于
+    /// 悄悄改了用户的配置。认不出来的行原样跳过,并把跳过的条数报出来。
+    /// </para>
+    /// </summary>
+    public (int Imported, int Skipped) ImportDotEnv(string text)
+    {
+        int imported = 0;
+        int skipped = 0;
+        foreach (string raw in text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+            {
+                continue;
+            }
+            // export FOO=bar 也很常见。
+            if (line.StartsWith("export ", StringComparison.Ordinal))
+            {
+                line = line[7..].TrimStart();
+            }
+            int equals = line.IndexOf('=', StringComparison.Ordinal);
+            if (equals <= 0)
+            {
+                skipped++;
+                continue;
+            }
+            string key = line[..equals].Trim();
+            string value = line[(equals + 1)..].Trim();
+            if (value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
+            {
+                value = value[1..^1];
+            }
+            // 同名覆盖:.env 里后写的赢,这里也一样。
+            if (Rows.FirstOrDefault(r => r.Key == key) is { } existing)
+            {
+                existing.Value = value;
+            }
+            else
+            {
+                Rows.Add(new(key, value));
+            }
+            imported++;
+        }
+        // 空的占位行留着没意义,导完清一遍。
+        foreach (PairRow blank in Rows.Where(r => r.Key.Length == 0 && r.Value.Length == 0).ToList())
+        {
+            Rows.Remove(blank);
+        }
+        return (imported, skipped);
+    }
+
     /// <summary>任一行增删或改动。</summary>
     public event Action? Changed;
 
@@ -255,6 +310,38 @@ public sealed class PairListField : FormField
 
     /// <summary>“+ 添加”的文字。</summary>
     public string AddLabel { get; init; } = "+ 添加";
+
+    /// <summary>「从 .env 导入」那个按钮的文字;留空表示这一组不提供导入。</summary>
+    public string ImportLabel { get; init; } = "";
+
+    /// <summary>这一组支不支持导入。</summary>
+    public bool CanImport => ImportLabel.Length > 0;
+
+    /// <summary>
+    /// 弹一个文件对话框选 <c>.env</c> 并导入。结果经 <see cref="ImportReport" /> 报给界面。
+    /// </summary>
+    public RelayCommand ImportCommand => _import ??= new(async _ =>
+    {
+        Avalonia.Platform.Storage.IStorageFile? file =
+            await FilePicker.PickOpenAsync("选一个 .env 文件").ConfigureAwait(true);
+        if (file is null)
+        {
+            return;
+        }
+        await using Stream stream = await file.OpenReadAsync().ConfigureAwait(true);
+        using var reader = new StreamReader(stream);
+        string text = await reader.ReadToEndAsync().ConfigureAwait(true);
+        (int imported, int skipped) = ImportDotEnv(text);
+        ImportReport = skipped == 0
+            ? $"已导入 {imported} 条"
+            : $"已导入 {imported} 条 · 跳过 {skipped} 行(不是 KEY=VALUE)";
+        OnPropertyChanged(nameof(ImportReport));
+    });
+
+    private RelayCommand? _import;
+
+    /// <summary>上一次导入的结果;没导过时为空。</summary>
+    public string ImportReport { get; private set; } = "";
 
     /// <summary>添加一行。</summary>
     public RelayCommand AddCommand { get; }

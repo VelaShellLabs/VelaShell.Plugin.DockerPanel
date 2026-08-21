@@ -20,10 +20,22 @@
                      Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}"
                      VerticalAlignment="Center" />
         </Border>
-        <Button Grid.Column="4" Theme="{StaticResource DockerIconButton}" ToolTip.Tip="关闭"
-                Command="{Binding CloseCommand}">
-          <ui:Glyph Key="Icon.x" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
-        </Button>
+        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2">
+          <Button Theme="{StaticResource DockerIconButton}"
+                  ToolTip.Tip="钉住 —— 切页与点别的行都不关它"
+                  Command="{Binding TogglePinCommand}">
+            <ui:Glyph Key="Docker.pin" Size="13"
+                      Brush="{Binding Pinned, Converter={x:Static ui:Converters.FeedbackBrush}, ConverterParameter=ok}" />
+          </Button>
+          <Button Theme="{StaticResource DockerIconButton}" ToolTip.Tip="最大化 / 还原"
+                  Command="{Binding ToggleMaximizeCommand}">
+            <ui:Glyph Key="Docker.maximize-2" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+          </Button>
+          <Button Theme="{StaticResource DockerIconButton}" ToolTip.Tip="关闭"
+                  Command="{Binding CloseCommand}">
+            <ui:Glyph Key="Icon.x" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 
@@ -150,6 +162,21 @@
             <TextBlock Text="删除…" FontSize="{DynamicResource VelaFontSize11}"
                        Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
           </StackPanel>
+        </Button>
+        <!-- 溢出菜单:不常用但确实要有的那几项 -->
+        <Button Theme="{StaticResource DockerIconButton}" ToolTip.Tip="更多">
+          <Button.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="复制容器 ID" Command="{Binding CopyIdCommand}" />
+              <MenuItem Header="复制 docker run 命令" Command="{Binding CopyRunCommand}" />
+              <Separator />
+              <MenuItem Header="提交为镜像…" Command="{Binding CommitCommand}" />
+              <MenuItem Header="修改重启策略…" Command="{Binding RestartPolicyCommand}" />
+              <Separator />
+              <MenuItem Header="强制杀死…" IsEnabled="{Binding IsRunning}" Command="{Binding KillCommand}" />
+            </MenuFlyout>
+          </Button.Flyout>
+          <ui:Glyph Key="Icon.chevron-down" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
         </Button>
       </StackPanel>
     </Border>

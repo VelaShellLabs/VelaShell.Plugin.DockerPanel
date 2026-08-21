@@ -148,6 +148,36 @@
           </ItemsControl>
           <TextBlock Text="{Binding BrowseHint}" Classes="hint" />
 
+          <Border Classes="divider" />
+          <TextBlock Text="标签" Classes="h3" />
+          <ItemsControl ItemsSource="{Binding SelectedLabels}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="pages:DetailField">
+                <Grid ColumnDefinitions="120,*" Margin="0,2">
+                  <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label"
+                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" TextWrapping="Wrap" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="(无)" Classes="hint" IsVisible="{Binding !SelectedLabels.Count}" />
+
+          <Border Classes="divider" />
+          <TextBlock Text="驱动选项" Classes="h3" />
+          <ItemsControl ItemsSource="{Binding SelectedOptions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="pages:DetailField">
+                <Grid ColumnDefinitions="120,*" Margin="0,2">
+                  <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label" />
+                  <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" TextWrapping="Wrap" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="使用默认 local 驱动" Classes="hint" IsVisible="{Binding !SelectedOptions.Count}" />
+
+          <Border Classes="divider" />
           <!-- 备份走的是浏览那条路:借一个挂着它的运行中容器,把挂载点整包取成 tar -->
           <Button Theme="{StaticResource DockerToolButton}" Height="26" HorizontalAlignment="Left"
                   IsEnabled="{Binding CanBackup}"

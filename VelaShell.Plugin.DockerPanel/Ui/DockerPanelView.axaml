@@ -434,6 +434,8 @@
               </Border>
               <TextBlock Classes="hint" TextWrapping="Wrap"
                          Text="rootless Docker 在 $XDG_RUNTIME_DIR/docker.sock;Colima、OrbStack 各有各的位置。按主机记住,重连生效。" />
+              <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
+                         Text="这里填的是**路径**,不是 DOCKER_HOST 那种 URL —— 面板只经 SSH 隧道连 unix socket,不走 TCP。远端的 DOCKER_CONTEXT 面板不读:上下文是 CLI 的概念,daemon 不认。" />
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Theme="{StaticResource DockerToolButton}" Content="保存并重连"
                         Command="{Binding ApplySocketPathCommand}" />
@@ -489,6 +491,41 @@
                 <TextBlock Text="自动换行" Classes="label" Foreground="{DynamicResource VelaTextPrimary}" />
               </StackPanel>
             </Grid>
+            <StackPanel Spacing="6">
+              <TextBlock Text="默认补多少行历史" Classes="label" Foreground="{DynamicResource VelaTextPrimary}" />
+              <Border CornerRadius="4" Padding="2" HorizontalAlignment="Left"
+                      Background="{DynamicResource VelaBgInput}"
+                      BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="logtail"
+                               IsChecked="{Binding Settings.LogTailIs100, Mode=OneWay}"
+                               Command="{Binding SetLogTailCommand}" CommandParameter="100">
+                    <TextBlock Text="100" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </RadioButton>
+                  <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="logtail"
+                               IsChecked="{Binding Settings.LogTailIs500, Mode=OneWay}"
+                               Command="{Binding SetLogTailCommand}" CommandParameter="500">
+                    <TextBlock Text="500" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </RadioButton>
+                  <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="logtail"
+                               IsChecked="{Binding Settings.LogTailIs2000, Mode=OneWay}"
+                               Command="{Binding SetLogTailCommand}" CommandParameter="2000">
+                    <TextBlock Text="2000" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </RadioButton>
+                  <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="logtail"
+                               IsChecked="{Binding Settings.LogTailIsAll, Mode=OneWay}"
+                               Command="{Binding SetLogTailCommand}" CommandParameter="all">
+                    <TextBlock Text="全部" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </RadioButton>
+                </StackPanel>
+              </Border>
+              <TextBlock Classes="hint" TextWrapping="Wrap"
+                         Text="「全部」在刷屏的容器上会一次拉回几十万行 —— 缓冲仍钉在 512 KB,多出来的会从最旧的开始丢。" />
+            </StackPanel>
             <Border Classes="divider" />
             <TextBlock Text="行为" Classes="h3" />
             <Grid ColumnDefinitions="Auto,*">

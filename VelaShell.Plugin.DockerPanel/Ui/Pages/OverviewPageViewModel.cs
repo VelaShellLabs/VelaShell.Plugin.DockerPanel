@@ -102,7 +102,17 @@ public sealed class OverviewPageViewModel : PageViewModel
 {
     private const int MaxEvents = 60;
 
+    /// <summary>算"持续高 CPU"的门槛,与行内 sparkline 转黄的阈值同一个数。</summary>
+    private const double HotCpuThreshold = 30;
+
+    /// <summary>要连续在高位这么久才报 —— CPU 尖峰在容器世界里再正常不过。</summary>
+    private static readonly TimeSpan HotCpuHold = TimeSpan.FromMinutes(2);
+
     private readonly List<double> _cpuTrend = [];
+    private readonly Dictionary<string, DateTimeOffset> _hotSince = [];
+    private readonly Dictionary<string, string> _hotNames = [];
+    private readonly Dictionary<string, double> _hotPercent = [];
+    private double _cpuPeak;
     private string _runningText = "—";
     private string _runningDetail = "";
     private string _cpuText = "—";
@@ -124,6 +134,9 @@ public sealed class OverviewPageViewModel : PageViewModel
         CleanupCommand = new RelayCommand(_ => Shell.GoToAsync(PanelPage.System));
         ComposeCommand = new RelayCommand(_ => Shell.GoToAsync(PanelPage.Compose));
         RefreshReclaimCommand = new RelayCommand(_ => RefreshReclaimAsync(Shell.Lifetime));
+        NewComposeCommand = new RelayCommand(_ => Shell.GoToAsync(PanelPage.Compose));
+        OpenTerminalCommand = new RelayCommand(_ => OpenTerminalAsync());
+        ExportDiagnosticsCommand = new RelayCommand(_ => ExportDiagnosticsAsync());
     }
 
     /// <inheritdoc />
@@ -221,6 +234,85 @@ public sealed class OverviewPageViewModel : PageViewModel
     /// <summary>重算可回收空间。</summary>
     public RelayCommand RefreshReclaimCommand { get; }
 
+    /// <summary>去 Compose 页新建项目。</summary>
+    public RelayCommand NewComposeCommand { get; }
+
+    /// <summary>打开一个容器的终端(挑第一个在跑的)。</summary>
+    public RelayCommand OpenTerminalCommand { get; }
+
+    /// <summary>导出一份诊断信息。</summary>
+    public RelayCommand ExportDiagnosticsCommand { get; }
+
+    /// <summary>能不能弹本地文件对话框。</summary>
+    public bool CanPickFiles => FilePicker.IsAvailable;
+
+    /// <summary>
+    /// 打开终端。挑第一个在跑的容器 —— 没有在跑的就说清楚,而不是打开一个空终端。
+    /// </summary>
+    private async Task OpenTerminalAsync()
+    {
+        await Shell.GoToAsync(PanelPage.Containers).ConfigureAwait(true);
+        if (Shell.Containers.View.FirstOrDefault(r => r.IsRunning) is not { } row)
+        {
+            Shell.Feedback.Status(FeedbackKind.Warning, "没有正在运行的容器 —— 终端要有个容器才能进。");
+            return;
+        }
+        Shell.Containers.RowTerminalCommand.Execute(row);
+    }
+
+    /// <summary>
+    /// 导出诊断:把面板此刻能拿到的那几份事实写成一个文本文件。
+    /// <para>
+    /// 用途是发给别人看。所以**不含**任何凭据、环境变量与日志正文 ——
+    /// 那些地方最容易夹带口令,而一份要发出去的文件不该由用户去逐行检查。
+    /// </para>
+    /// </summary>
+    private async Task ExportDiagnosticsAsync()
+    {
+        if (Client is not { } client)
+        {
+            return;
+        }
+        Avalonia.Platform.Storage.IStorageFile? target = await FilePicker
+            .PickSaveAsync("导出诊断信息", $"docker-diagnostics-{Shell.SelectedEndpoint?.DisplayName ?? "host"}.txt", "txt")
+            .ConfigureAwait(true);
+        if (target is null)
+        {
+            return;
+        }
+        try
+        {
+            SystemInfo info = await client.InfoAsync(Shell.Lifetime).ConfigureAwait(true);
+            SystemVersion version = await client.VersionAsync(Shell.Lifetime).ConfigureAwait(true);
+            ContainerSummary[] containers = await client.ListContainersAsync(true, Shell.Lifetime).ConfigureAwait(true);
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("# VelaShell Docker 面板 · 诊断信息");
+            sb.AppendLine("# 不含凭据、环境变量与日志正文 —— 可以直接发给别人。");
+            sb.AppendLine($"主机        {Shell.SelectedEndpoint?.DisplayName}");
+            sb.AppendLine($"socket      {Shell.SelectedEndpoint?.Endpoint.SocketPath}");
+            sb.AppendLine($"Engine      {version.Version} (API {version.ApiVersion})");
+            sb.AppendLine($"操作系统    {info.OperatingSystem} · {info.KernelVersion}");
+            sb.AppendLine($"架构 / CPU  {info.Architecture} · {info.NCPU} 核 · {Humanize.Bytes(info.MemTotal)}");
+            sb.AppendLine($"存储驱动    {info.Driver}");
+            sb.AppendLine($"容器 / 镜像 {info.Containers} / {info.Images}");
+            sb.AppendLine();
+            sb.AppendLine("## 容器");
+            foreach (ContainerSummary container in containers)
+            {
+                sb.AppendLine($"{container.Name,-28} {container.State,-10} {container.Image,-42} {container.Status}");
+            }
+            await using Stream output = await target.OpenWriteAsync().ConfigureAwait(true);
+            await using var writer = new StreamWriter(output);
+            await writer.WriteAsync(sb.ToString()).ConfigureAwait(true);
+            Shell.Feedback.Notify(FeedbackKind.Success, "诊断信息已导出",
+                $"{target.Name} —— 不含凭据与日志正文。");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Shell.Feedback.ReportError("导出诊断信息", ex);
+        }
+    }
+
     /// <inheritdoc />
     public override async Task RefreshAsync(CancellationToken cancellationToken)
     {
@@ -304,7 +396,11 @@ public sealed class OverviewPageViewModel : PageViewModel
         List<ContainerRow> running = [.. rows.Where(r => r.IsRunning && r.CpuPercent > 0)];
         double total = running.Sum(r => r.CpuPercent);
         CpuText = Humanize.Percent(total);
-        CpuDetail = running.Count > 0 ? $"{running.Count} 个容器在用 CPU" : "没有容器在用 CPU";
+        _cpuPeak = Math.Max(_cpuPeak, total);
+        CpuDetail = running.Count > 0
+            ? $"{(_hostCpus > 0 ? $"{_hostCpus} 核 · " : "")}峰值 {Humanize.Percent(_cpuPeak)}"
+            : "没有容器在用 CPU";
+        TrackHotContainers(running);
         // 内存卡走的是同一批采样:容器占用之和 / 宿主总量,
         // 单独再问一次 daemon 只会得到同样的数字。
         long usedMemory = rows.Where(r => r.IsRunning).Sum(r => r.MemoryBytes);
@@ -381,6 +477,60 @@ public sealed class OverviewPageViewModel : PageViewModel
             ReclaimDetail = "统计失败";
             Shell.Context.Log.Warn($"overview: system df failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 记住哪些容器一直在高位。
+    /// <para>
+    /// 关注的是**持续**而不是某一帧:CPU 尖峰在容器世界里再正常不过,
+    /// 把一次 40% 报成告警只会训练用户忽略这块面板。所以要连续几轮都在高位才算。
+    /// </para>
+    /// </summary>
+    private void TrackHotContainers(IReadOnlyList<ContainerRow> running)
+    {
+        HashSet<string> stillHot = [];
+        foreach (ContainerRow row in running.Where(r => r.CpuPercent >= HotCpuThreshold))
+        {
+            stillHot.Add(row.Id);
+            if (!_hotSince.ContainsKey(row.Id))
+            {
+                _hotSince[row.Id] = DateTimeOffset.UtcNow;
+            }
+            _hotNames[row.Id] = row.Name;
+            _hotPercent[row.Id] = row.CpuPercent;
+        }
+        // 掉下去就清零 —— 「已持续 12 分钟」得是真的连续,不能把两段拼起来。
+        foreach (string id in _hotSince.Keys.Where(id => !stillHot.Contains(id)).ToList())
+        {
+            _hotSince.Remove(id);
+            _hotNames.Remove(id);
+            _hotPercent.Remove(id);
+        }
+        RebuildHotAttention();
+    }
+
+    /// <summary>把"持续高 CPU"那几条插进关注列表,并把过期的那些拿掉。</summary>
+    private void RebuildHotAttention()
+    {
+        foreach (AttentionItem stale in Attention.Where(a => a.Icon == "Icon.cpu").ToList())
+        {
+            Attention.Remove(stale);
+        }
+        foreach ((string id, DateTimeOffset since) in _hotSince)
+        {
+            TimeSpan held = DateTimeOffset.UtcNow - since;
+            if (held < HotCpuHold)
+            {
+                continue;
+            }
+            string name = _hotNames.GetValueOrDefault(id, Humanize.ShortId(id));
+            Attention.Insert(0, new("Icon.cpu", RowTone.Warn,
+                $"{name} CPU 持续高于 {HotCpuThreshold:F0}%",
+                $"已持续 {Humanize.Duration(held)} · 当前 {Humanize.Percent(_hotPercent.GetValueOrDefault(id))}",
+                "查看统计",
+                () => OpenContainer(id)));
+        }
+        OnPropertyChanged(nameof(HasAttention));
     }
 
     private void BuildAttention(IReadOnlyList<ContainerSummary> containers)

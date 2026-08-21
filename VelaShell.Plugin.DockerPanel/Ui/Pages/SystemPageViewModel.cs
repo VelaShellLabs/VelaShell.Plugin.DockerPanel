@@ -136,6 +136,8 @@ public sealed class SystemPageViewModel : PageViewModel
             BuildDisk();
             BuildEngine();
             LoadedOnce = true;
+            // 宿主磁盘总量 Docker API 不给,只能另走一次 df。放在最后、失败不影响这一页。
+            await LoadHostDiskAsync(client, cancellationToken).ConfigureAwait(true);
         }
         finally
         {
@@ -175,6 +177,59 @@ public sealed class SystemPageViewModel : PageViewModel
         Stats.Add(new("镜像", info.Images.ToString()));
         Stats.Add(new("卷", (_usage?.Volumes?.Length ?? 0).ToString()));
         Stats.Add(new("构建缓存", Humanize.Bytes(_buildCacheBytes), RowTone.Warn));
+    }
+
+    /// <summary>
+    /// 问一次宿主磁盘的总量与可用量。
+    /// <para>
+    /// Engine API 没有这个 —— <c>system df</c> 只讲 Docker 自己占了多少,
+    /// 不讲那块盘还剩多少。但"还剩 3 GB"才是决定要不要清理的那个数,所以另走一次
+    /// <c>df</c>,查的是 <c>Docker Root Dir</c> 所在的那块盘(不是 <c>/</c>,它们常常不是同一块)。
+    /// </para>
+    /// <para>失败就不显示,不报错:它是锦上添花,不该让这一页看起来出了问题。</para>
+    /// </summary>
+    private async Task LoadHostDiskAsync(DockerClient client, CancellationToken cancellationToken)
+    {
+        string root = _info?.DockerRootDir is { Length: > 0 } dir ? dir : "/var/lib/docker";
+        try
+        {
+            ExecCapture result = await client
+                .ExecCaptureAsync(FirstRunningContainerId ?? "", ["/bin/sh", "-c", $"df -PB1 {Sh.Quote(root)}"],
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(true);
+            if (result.ExitCode != 0 || ParseDf(result.StandardOutput) is not var (total, used))
+            {
+                return;
+            }
+            HostDiskText = $"宿主盘 {Humanize.Bytes(total)} 中已用 {Humanize.Bytes(used)}";
+            OnPropertyChanged(nameof(HostDiskText));
+        }
+        catch (Exception)
+        {
+            // 没有可借的容器、镜像里没有 df、路径不存在 —— 三种都很常见,都不值得报。
+        }
+    }
+
+    /// <summary>借一个正在跑的容器来执行 df —— 面板没有"在宿主上执行命令"的通道。</summary>
+    private string? FirstRunningContainerId =>
+        Shell.Containers.View.FirstOrDefault(r => r.IsRunning)?.Id;
+
+    /// <summary>宿主磁盘那一句;拿不到时为空。</summary>
+    public string HostDiskText { get; private set; } = "";
+
+    /// <summary>解一行 <c>df -PB1</c>。返回 (总量, 已用)。</summary>
+    internal static (long Total, long Used)? ParseDf(string output)
+    {
+        foreach (string line in output.Split('\n').Skip(1))
+        {
+            string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            // Filesystem 1-blocks Used Available Capacity Mounted
+            if (parts.Length >= 4 && long.TryParse(parts[1], out long total) && long.TryParse(parts[2], out long used))
+            {
+                return (total, used);
+            }
+        }
+        return null;
     }
 
     private void BuildDisk()

@@ -10,6 +10,9 @@
       <Grid ColumnDefinitions="Auto,Auto,*,Auto">
         <TextBlock Grid.Column="0" Text="系统" Classes="h1" />
         <TextBlock Grid.Column="1" Text="{Binding DiskSubtitle}" Classes="meta" Margin="10,0,0,0" />
+        <TextBlock Grid.Column="1" Text="{Binding HostDiskText}" Classes="meta" Margin="10,16,0,0"
+                   IsVisible="{Binding HostDiskText, Converter={x:Static ui:Converters.NotEmpty}}"
+                   Foreground="{DynamicResource VelaTextTertiary}" />
         <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Command="{Binding RefreshCommand}">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <ui:Glyph Key="Icon.refresh-cw" Size="13" Brush="{DynamicResource VelaTextSecondary}" />

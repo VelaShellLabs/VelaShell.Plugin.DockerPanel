@@ -117,18 +117,42 @@
             </Border>
           </StackPanel>
 
-          <Button Theme="{StaticResource DockerToolButton}" Height="26" HorizontalAlignment="Left"
-                  Background="{DynamicResource VelaAccentDim}" BorderBrush="Transparent"
-                  Command="{Binding ConnectCommand}" CommandParameter="{Binding Selected}">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <ui:Glyph Key="Icon.plug" Size="12" Brush="{DynamicResource VelaAccent}" />
-              <TextBlock Text="接入容器…" FontSize="{DynamicResource VelaFontSize11}"
-                         Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Theme="{StaticResource DockerToolButton}" Height="26"
+                    Background="{DynamicResource VelaAccentDim}" BorderBrush="Transparent"
+                    Command="{Binding ConnectCommand}" CommandParameter="{Binding Selected}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Icon.plug" Size="12" Brush="{DynamicResource VelaAccent}" />
+                <TextBlock Text="接入容器…" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsVisible="{Binding CanPickFiles}"
+                    ToolTip.Tip="把 inspect 原文存成本地 JSON(留档与比对用)"
+                    Command="{Binding ExportCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Docker.braces" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+                <TextBlock Text="导出配置" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
 
           <Border Classes="divider" />
-          <TextBlock Text="基本信息" Classes="h3" />
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Grid.Column="0" Text="基本信息" Classes="h3" />
+            <Button Grid.Column="2" Theme="{StaticResource DockerIconButton}" Width="NaN" Height="18" Padding="6,0"
+                    ToolTip.Tip="docker network inspect 的原文" Command="{Binding ShowRawCommand}">
+              <TextBlock Text="原始 JSON" FontSize="{DynamicResource VelaFontSize10}"
+                         Foreground="{DynamicResource VelaAccent}" />
+            </Button>
+          </Grid>
+          <Border IsVisible="{Binding HasRaw}" CornerRadius="4" Padding="10,8" MaxHeight="320"
+                  Background="{DynamicResource VelaBgTerminal}" ClipToBounds="True">
+            <ScrollViewer>
+              <SelectableTextBlock Text="{Binding RawInspect}" Classes="code" FontSize="10" />
+            </ScrollViewer>
+          </Border>
           <ItemsControl ItemsSource="{Binding Basics}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="pages:DetailField">
@@ -155,7 +179,14 @@
           </ItemsControl>
 
           <Border Classes="divider" />
-          <TextBlock Text="已接入的容器" Classes="h3" />
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Grid.Column="0" Text="已接入的容器" Classes="h3" />
+            <Button Grid.Column="2" Theme="{StaticResource DockerIconButton}" Width="NaN" Height="18" Padding="6,0"
+                    IsVisible="{Binding Attached.Count}" Command="{Binding DisconnectAllCommand}">
+              <TextBlock Text="全部摘除" FontSize="{DynamicResource VelaFontSize10}"
+                         Foreground="{DynamicResource VelaError}" />
+            </Button>
+          </Grid>
           <ItemsControl ItemsSource="{Binding Attached}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="pages:AttachedContainer">

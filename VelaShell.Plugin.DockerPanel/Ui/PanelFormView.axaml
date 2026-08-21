@@ -161,12 +161,21 @@
                   <Grid ColumnDefinitions="Auto,Auto,*,Auto">
                     <TextBlock Grid.Column="0" Text="{Binding Label}" Classes="h3" />
                     <TextBlock Grid.Column="1" Text="{Binding Hint}" Classes="meta" Margin="7,0,0,0" />
-                    <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" Width="NaN" Height="18"
-                            Padding="0" Command="{Binding AddCommand}">
-                      <TextBlock Text="{Binding AddLabel}" FontSize="{DynamicResource VelaFontSize10}"
-                                 Foreground="{DynamicResource VelaAccent}" />
-                    </Button>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10">
+                      <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="18" Padding="0"
+                              IsVisible="{Binding CanImport}" Command="{Binding ImportCommand}">
+                        <TextBlock Text="{Binding ImportLabel}" FontSize="{DynamicResource VelaFontSize10}"
+                                   Foreground="{DynamicResource VelaAccent}" />
+                      </Button>
+                      <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="18" Padding="0"
+                              Command="{Binding AddCommand}">
+                        <TextBlock Text="{Binding AddLabel}" FontSize="{DynamicResource VelaFontSize10}"
+                                   Foreground="{DynamicResource VelaAccent}" />
+                      </Button>
+                    </StackPanel>
                   </Grid>
+                  <TextBlock Text="{Binding ImportReport}" Classes="meta"
+                             IsVisible="{Binding ImportReport, Converter={x:Static ui:Converters.NotEmpty}}" />
                   <ItemsControl ItemsSource="{Binding Rows}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="ui:PairRow">

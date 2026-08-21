@@ -90,6 +90,141 @@ public sealed class NetworksPageViewModel : PageViewModel
     /// <summary>选中网络的 IPAM 明细。</summary>
     public ObservableCollection<DetailField> Ipam { get; } = [];
 
+    /// <summary>inspect 原文;还没读过时为空。</summary>
+    public string RawInspect
+    {
+        get => _rawInspect;
+        private set
+        {
+            if (SetField(ref _rawInspect, value))
+            {
+                OnPropertyChanged(nameof(HasRaw));
+            }
+        }
+    }
+
+    private string _rawInspect = "";
+
+    /// <summary>原文读到了没有。</summary>
+    public bool HasRaw => RawInspect.Length > 0;
+
+    /// <summary>显示 inspect 原文(设计稿 08 号板的「原始 JSON」)。</summary>
+    public RelayCommand ShowRawCommand => _showRaw ??= new(_ => LoadRawAsync());
+
+    private RelayCommand? _showRaw;
+
+    /// <summary>把 inspect 原文存成本地 JSON。</summary>
+    public RelayCommand ExportCommand => _export ??= new(_ => ExportAsync());
+
+    private RelayCommand? _export;
+
+    /// <summary>把所有容器从这个网络上摘掉。</summary>
+    public RelayCommand DisconnectAllCommand => _disconnectAll ??= new(_ => DisconnectAllAsync());
+
+    private RelayCommand? _disconnectAll;
+
+    /// <summary>能不能弹本地文件对话框。</summary>
+    public bool CanPickFiles => FilePicker.IsAvailable;
+
+    private async Task LoadRawAsync()
+    {
+        if (Client is not { } client || Selected is not { } row)
+        {
+            return;
+        }
+        try
+        {
+            RawInspect = await client.InspectNetworkRawAsync(row.Id, Shell.Lifetime).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            RawInspect = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// 导出网络配置。
+    /// <para>
+    /// 导的是 <b>inspect 原文</b>,不是一份"能直接 create 回去"的清单 ——
+    /// inspect 里带着运行态(已接入的容器、分配出去的地址),那些东西重建时既不该也无法照搬。
+    /// 它的用途是留档与比对,文件头一行会写清这一点。
+    /// </para>
+    /// </summary>
+    private async Task ExportAsync()
+    {
+        if (Selected is not { } row)
+        {
+            return;
+        }
+        if (RawInspect.Length == 0)
+        {
+            await LoadRawAsync().ConfigureAwait(true);
+        }
+        Avalonia.Platform.Storage.IStorageFile? target = await FilePicker
+            .PickSaveAsync($"导出 {row.Name} 的配置", $"{row.Name}.json", "json").ConfigureAwait(true);
+        if (target is null)
+        {
+            return;
+        }
+        try
+        {
+            await using Stream output = await target.OpenWriteAsync().ConfigureAwait(true);
+            await using var writer = new StreamWriter(output);
+            await writer.WriteLineAsync(
+                    "// docker network inspect 的原文 —— 含运行态(已接入容器与已分配地址),不是可直接重建的清单。")
+                .ConfigureAwait(true);
+            await writer.WriteAsync(RawInspect).ConfigureAwait(true);
+            Shell.Feedback.Notify(FeedbackKind.Success, "网络配置已导出", target.Name);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Shell.Feedback.ReportError("导出网络配置", ex);
+        }
+    }
+
+    private async Task DisconnectAllAsync()
+    {
+        if (Client is not { } client || Selected is not { } row || Attached.Count == 0)
+        {
+            return;
+        }
+        AttachedContainer[] targets = [.. Attached];
+        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        {
+            Title = $"把 {targets.Length} 个容器从 {row.Name} 上摘掉?",
+            Icon = "Icon.unplug",
+            HostName = "",
+            ConfirmLabel = "全部摘除",
+            ConfirmIcon = "Icon.unplug",
+            Commands = [.. targets.Select(t => $"POST /networks/{row.ShortId}/disconnect ({t.Name})")],
+            CommandNote = $"等价于逐个执行  docker network disconnect {row.Name} <容器>",
+            Targets = [.. targets.Select(t => new ConfirmTarget(t.Name, t.Address, "", false))],
+            Consequences =
+            [
+                new(3, "容器之间将无法再通过这个网络互相解析与访问 —— 依赖服务名通信的会立刻失败。"),
+                new(1, "容器本身不受影响,不会停止;重新接入即可恢复。")
+            ]
+        })).ConfigureAwait(true);
+        if (!confirmed)
+        {
+            return;
+        }
+        foreach (AttachedContainer target in targets)
+        {
+            try
+            {
+                await client.DisconnectNetworkAsync(row.Id, target.Id, false, Shell.Lifetime).ConfigureAwait(true);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // 逐个判定:一个摘不掉不该让其余的也不摘。
+                Shell.Feedback.Notify(FeedbackKind.Warning, $"{target.Name} 摘不掉", ex.Message);
+            }
+        }
+        Shell.Feedback.Status(FeedbackKind.Success, $"已从 {row.Name} 摘除 {targets.Length} 个容器");
+        await RefreshAsync(Shell.Lifetime).ConfigureAwait(true);
+    }
+
     /// <summary>选中网络的基本信息。</summary>
     public ObservableCollection<DetailField> Basics { get; } = [];
 
@@ -215,6 +350,31 @@ public sealed class NetworksPageViewModel : PageViewModel
         }
     }
 
+    /// <summary>
+    /// 一个 CIDR 里能给容器用多少个地址;解不出来返回 <see langword="null" />。
+    /// <para>
+    /// 减 2 是网络地址与广播地址,再减 1 是网关 —— docker 的 bridge 网络会占掉 <c>.1</c>。
+    /// </para>
+    /// </summary>
+    internal static long? SubnetCapacity(string? cidr)
+    {
+        if (cidr is not { Length: > 0 } text || text.IndexOf('/') is not (> 0 and int slash))
+        {
+            return null;
+        }
+        if (!int.TryParse(text[(slash + 1)..], out int prefix))
+        {
+            return null;
+        }
+        // IPv6 的地址空间大到显示出来毫无意义,不给。
+        if (text.Contains(':', StringComparison.Ordinal) || prefix is < 0 or > 32)
+        {
+            return null;
+        }
+        long total = 1L << (32 - prefix);
+        return total > 3 ? total - 3 : 0;
+    }
+
     private async Task LoadDetailAsync(NetworkRow row, CancellationToken cancellationToken)
     {
         if (Client is not { } client)
@@ -233,6 +393,13 @@ public sealed class NetworksPageViewModel : PageViewModel
             Ipam.Add(new("子网", detail.FirstSubnet ?? "(自动)", RowTone.Ok));
             Ipam.Add(new("网关", detail.FirstGateway ?? "(自动)", RowTone.Ok));
             Ipam.Add(new("IPAM 驱动", detail.IPAM?.Driver ?? "default"));
+            // 「已分配 3 / 65533」:子网快用满是一个到了才发现就太晚的问题。
+            if (SubnetCapacity(detail.FirstSubnet) is { } capacity)
+            {
+                int used = Attached.Count;
+                Ipam.Add(new("已分配", $"{used} / {capacity:N0}",
+                    capacity > 0 && used > capacity * 0.8 ? RowTone.Warn : RowTone.Idle));
+            }
             Basics.Clear();
             Basics.Add(new("网络 ID", Humanize.ShortId(detail.Id)));
             Basics.Add(new("驱动", detail.Driver ?? "—"));

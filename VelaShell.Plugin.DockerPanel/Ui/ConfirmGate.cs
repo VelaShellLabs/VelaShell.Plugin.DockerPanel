@@ -83,6 +83,15 @@ public sealed record ConfirmRequest
 
     /// <summary>会丢数据那一档的补充说明(逐条)。</summary>
     public IReadOnlyList<string> DataLossPoints { get; init; } = [];
+
+    /// <summary>
+    /// 闸门上那个可选的"先做一件事再执行"勾选(删卷之前先备份为 tar)。
+    /// 留空表示这次不提供这个选项。
+    /// </summary>
+    public string? PrecautionLabel { get; init; }
+
+    /// <summary>勾选默认打开没有。删数据这一档默认**打开** —— 默认值该偏向不丢东西那一边。</summary>
+    public bool PrecautionDefault { get; init; } = true;
 }
 
 /// <summary>
@@ -105,6 +114,23 @@ public sealed class ConfirmGate : ObservableObject
         CancelCommand = new RelayCommand(_ => Complete(false));
     }
 
+    /// <summary>
+    /// 那个可选的"先做一件事再执行"勾选是否打开。发起方在 <c>AskAsync</c> 返回之后读它。
+    /// </summary>
+    public bool Precaution
+    {
+        get => _precaution;
+        set => SetField(ref _precaution, value);
+    }
+
+    private bool _precaution = true;
+
+    /// <summary>这次闸门有没有提供那个勾选。</summary>
+    public bool HasPrecaution => Request?.PrecautionLabel is { Length: > 0 };
+
+    /// <summary>那个勾选的文字。</summary>
+    public string PrecautionLabel => Request?.PrecautionLabel ?? "";
+
     /// <summary>当前请求;没有待确认的事情时为 <see langword="null" />。</summary>
     public ConfirmRequest? Request
     {
@@ -114,7 +140,8 @@ public sealed class ConfirmGate : ObservableObject
             if (SetField(ref _request, value))
             {
                 OnPropertiesChanged(nameof(IsOpen), nameof(IsDataLoss), nameof(HasTargets),
-                    nameof(HasConsequences), nameof(HasCommandNote), nameof(CanConfirm), nameof(RemainingHint));
+                    nameof(HasConsequences), nameof(HasCommandNote), nameof(CanConfirm), nameof(RemainingHint),
+                    nameof(HasPrecaution), nameof(PrecautionLabel));
                 ConfirmCommand.RaiseCanExecuteChanged();
             }
         }
@@ -205,6 +232,7 @@ public sealed class ConfirmGate : ObservableObject
         Ui.Post(() =>
         {
             TypedWord = "";
+            Precaution = request.PrecautionDefault;
             Commands.Clear();
             foreach (string command in request.Commands)
             {

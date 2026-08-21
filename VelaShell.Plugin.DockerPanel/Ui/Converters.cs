@@ -78,6 +78,9 @@ public static class Converters
     /// </summary>
     public static readonly IValueConverter SourceBrush = new SourceBrushConverter();
 
+    /// <summary>差异行的底色:增绿、删红、改黄,没变透明。</summary>
+    public static readonly IValueConverter DiffBackground = new DiffBackgroundConverter();
+
     /// <summary>键盘选中项的底色。</summary>
     public static readonly IValueConverter ActiveBackground = new ActiveBackgroundConverter();
 
@@ -108,6 +111,21 @@ public static class Converters
             };
             return Resolve(key, Brushes.Gray);
         }
+
+        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class DiffBackgroundConverter : IValueConverter
+    {
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+            value switch
+            {
+                RowTone.Ok => Resolve("VelaShellGreenDim", Brushes.Transparent),
+                RowTone.Danger => Resolve("VelaShellRedDim", Brushes.Transparent),
+                RowTone.Warn => Resolve("VelaShellYellowDim", Brushes.Transparent),
+                _ => Brushes.Transparent
+            };
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
             throw new NotSupportedException();

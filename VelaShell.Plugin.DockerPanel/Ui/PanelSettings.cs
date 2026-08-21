@@ -29,6 +29,18 @@ public sealed class PanelSettings(IPluginStorage storage) : ObservableObject
         set { if (SetField(ref _showStopped, value)) { Changed?.Invoke(); } }
     }
 
+    /// <summary>日志默认行数是不是 100(设置里那组分段按钮用)。</summary>
+    public bool LogTailIs100 => LogTail == "100";
+
+    /// <summary>日志默认行数是不是 500。</summary>
+    public bool LogTailIs500 => LogTail == "500";
+
+    /// <summary>日志默认行数是不是 2000。</summary>
+    public bool LogTailIs2000 => LogTail == "2000";
+
+    /// <summary>日志默认行数是不是「全部」。</summary>
+    public bool LogTailIsAll => LogTail == "all";
+
     /// <summary>行内画 CPU / 内存 sparkline(关掉可省一点远端开销)。</summary>
     public bool InlineSparklines
     {
@@ -83,6 +95,11 @@ public sealed class PanelSettings(IPluginStorage storage) : ObservableObject
         get => _autoRefreshFallback;
         set { if (SetField(ref _autoRefreshFallback, value)) { Changed?.Invoke(); } }
     }
+
+    /// <summary>行数分段按钮的选中态跟着 <see cref="LogTail" /> 走,改完要通知一遍。</summary>
+    public void NotifyLogTailSegments() =>
+        OnPropertiesChanged(nameof(LogTail), nameof(LogTailIs100), nameof(LogTailIs500),
+            nameof(LogTailIs2000), nameof(LogTailIsAll));
 
     /// <summary>任一项改动。</summary>
     public event Action? Changed;

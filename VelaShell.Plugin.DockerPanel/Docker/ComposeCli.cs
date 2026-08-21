@@ -205,6 +205,32 @@ public sealed class ComposeCli(IRemoteExecApi exec, IRemoteFsApi remoteFs, strin
         return result.ExitCode;
     }
 
+    /// <summary>
+    /// 跟着一个项目的**合并日志**(<c>compose logs -f</c>)。
+    /// <para>
+    /// 与容器页那个合并流不是一回事:那一个是面板自己把 N 条 <c>docker logs</c> 并起来,
+    /// 这一个交给 compose 自己去并 —— 它认得项目里有哪些服务,包括面板列表还没刷到的新容器。
+    /// </para>
+    /// </summary>
+    public Task<int> FollowLogsAsync(ComposeProject project, string tail, IProgress<ExecOutput> onOutput,
+        CancellationToken cancellationToken = default) =>
+        RunAsync(project, $"logs -f --no-color --tail {Sh.Quote(tail)}", onOutput, cancellationToken);
+
+    /// <summary>对单个服务跑一条子命令(逐服务的日志 / 重启走这里)。</summary>
+    public Task<int> RunForServiceAsync(ComposeProject project, string arguments, string service,
+        IProgress<ExecOutput> onOutput, CancellationToken cancellationToken = default) =>
+        RunAsync(project, $"{arguments} {Sh.Quote(service)}", onOutput, cancellationToken);
+
+    /// <summary>
+    /// 项目的 <c>.env</c> 路径。
+    /// <para>
+    /// compose 只认项目目录下那一个 <c>.env</c>(<c>--env-file</c> 另说),
+    /// 所以这里不去猜别的位置 —— 猜错了改的是一个没人读的文件。
+    /// </para>
+    /// </summary>
+    public static string EnvPath(ComposeProject project) =>
+        project.ProjectDirectory is { Length: > 0 } dir ? $"{dir}/.env" : "";
+
     /// <summary>读远端的 compose 文件(经 SFTP,不经 shell)。</summary>
     public async Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default)
     {

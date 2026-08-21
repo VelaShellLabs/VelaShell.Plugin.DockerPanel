@@ -142,6 +142,14 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             Palette.Open(SelectedEndpoint?.DisplayName ?? "(未选择)");
             return Task.CompletedTask;
         });
+        SetLogTailCommand = new RelayCommand(p =>
+        {
+            if (p is string tail)
+            {
+                Settings.LogTail = tail;
+                Settings.NotifyLogTailSegments();
+            }
+        });
         ApplySocketPathCommand = new RelayCommand(_ => ApplySocketPathAsync());
         ResetSocketPathCommand = new RelayCommand(_ =>
         {
@@ -539,6 +547,9 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         row.HasProject ? $"{(row.IsRunning ? "运行中" : row.Uptime)} · {row.Project}"
             : $"{(row.IsRunning ? "运行中" : row.Uptime)} · {row.Image}";
 
+    /// <summary>设置默认补多少行历史。</summary>
+    public RelayCommand SetLogTailCommand { get; }
+
     /// <summary>用输入框里的路径重连。</summary>
     public RelayCommand ApplySocketPathCommand { get; }
 
@@ -702,6 +713,36 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         await ConnectAsync(item).ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// 把一条排查命令送进宿主的终端(如同用户键入,需要授权)。
+    /// <para>
+    /// 送过去而不是面板自己跑:排查这类命令的输出常常要人读、要接着改着再跑一遍,
+    /// 那是终端的主场;而且它经宿主的授权闸,面板不越过那道门。
+    /// </para>
+    /// </summary>
+    private async Task SendToHostTerminalAsync(string command)
+    {
+        if (SelectedEndpoint?.Endpoint is not { Kind: DockerEndpointKind.Remote } endpoint)
+        {
+            Feedback.Notify(FeedbackKind.Info, "本机端点没有终端可送", $"自己执行:{command}");
+            return;
+        }
+        try
+        {
+            await _context.Terminal.WriteAsync(endpoint.SessionId, command + "\n", _lifetime.Token)
+                          .ConfigureAwait(true);
+            Feedback.Notify(FeedbackKind.Info, "已送到宿主终端", command);
+        }
+        catch (PluginPermissionDeniedException)
+        {
+            Feedback.Notify(FeedbackKind.Warning, "没有向终端回写的授权", $"可以自己执行:{command}");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Feedback.ReportError("送往宿主终端", ex);
+        }
+    }
+
     private void SetNoEndpoint(int connectedSessions)
     {
         State = PanelConnectionState.NoEndpoint;
@@ -733,16 +774,23 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
                     ErrorIcon = "Docker.circle-x";
                     ErrorTitle = "这台机器上找不到 docker.sock";
                     ErrorDetail = "路径不存在,也没有可用的 DOCKER_HOST。远端可能压根没装 Docker,或者 daemon 没在跑。";
-                    RecoveryActions.Add(new("换一个 socket 路径", "Icon.settings", true, () => SettingsOpen = true));
+                    RecoveryActions.Add(new("在终端里检查", "Icon.terminal", true,
+                        () => _ = SendToHostTerminalAsync(
+                            $"ls -l {item.Endpoint.SocketPath}; systemctl status docker --no-pager | head -5")));
+                    RecoveryActions.Add(new("换一个 socket 路径", "Icon.settings", false, () => SettingsOpen = true));
                     item.Update(false, "找不到 docker.sock", FeedbackKind.Error);
                     break;
                 case DockerUnreachableReason.PermissionDenied:
                     ErrorIcon = "Docker.lock";
                     ErrorTitle = "当前账号没有 docker.sock 的读写权限";
                     ErrorDetail = "账号不在 docker 组。把账号加进 docker 组,或者换一个有权限的账号 —— 面板不会替你 sudo,那需要一个它拿不到也不该拿的口令。";
-                    RecoveryActions.Add(new("怎么加进 docker 组", "Docker.users", false, () =>
-                        Feedback.Notify(FeedbackKind.Info, "把账号加进 docker 组",
-                            "在远端执行:sudo usermod -aG docker $USER,然后重新登录这条会话。")));
+                    RecoveryActions.Add(new("加进 docker 组", "Docker.users", true,
+                        () => _ = SendToHostTerminalAsync("sudo usermod -aG docker $USER")));
+                    // sudo -n 只在**已经配了免密**时才成 —— 面板绝不弹口令框,
+                    // 那需要一个它拿不到也不该拿的东西。配不了就如实报出来。
+                    RecoveryActions.Add(new("试试 sudo -n", "Docker.shield-alert", false,
+                        () => _ = SendToHostTerminalAsync(
+                            $"sudo -n test -r {item.Endpoint.SocketPath} && echo OK || echo '需要口令 —— 面板走不了这条路'")));
                     item.Update(true, "没有权限", FeedbackKind.Warning);
                     break;
                 case DockerUnreachableReason.TunnelUnsupported:

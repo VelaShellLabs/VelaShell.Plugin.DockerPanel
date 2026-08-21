@@ -197,6 +197,16 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>刷新。</summary>
     public RelayCommand RefreshCommand { get; }
 
+    /// <summary>空列表那一屏的「运行容器…」:去镜像页挑一个。</summary>
+    public RelayCommand RunFromImagesCommand => _runFromImages ??= new(_ => Shell.GoToAsync(PanelPage.Images));
+
+    private RelayCommand? _runFromImages;
+
+    /// <summary>空列表那一屏的「从 compose 起一套」。</summary>
+    public RelayCommand GoComposeCommand => _goCompose ??= new(_ => Shell.GoToAsync(PanelPage.Compose));
+
+    private RelayCommand? _goCompose;
+
     /// <inheritdoc />
     public override async Task ActivateAsync(CancellationToken cancellationToken)
     {
@@ -304,7 +314,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <inheritdoc />
     public override void Reset()
     {
-        CloseDetail();
+        CloseDetail(force: true);
         _ = ExitLogsModeAsync();
         _sampler.Stop();
         _all.Clear();
@@ -373,6 +383,8 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
             row.Busy = true;
         }
         PanelTask task = Shell.Tasks.Start("Docker.box", $"{verb} {targets.Count} 个容器", indeterminate: targets.Count == 1);
+        // 选中条原地变进度条:不弹窗、不遮列表,选中也不丢。
+        BatchProgress = new(verb, targets.Count, task);
         try
         {
             BatchResult result = await BatchRunner.RunAsync(
@@ -383,6 +395,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
                     task.Progress = total == 0 ? 0 : (double)done / total;
                     task.Indeterminate = total == 1;
                     task.Detail = current.Length > 0 ? $"{done}/{total} · 当前:{current}" : $"{done}/{total}";
+                    Ui.Post(() => BatchProgress?.Advance(done, current, DescribeWait(verb, current)));
                 },
                 task.Token).ConfigureAwait(true);
             task.Finish(
@@ -391,9 +404,19 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
             task.Payload = result;
             Shell.Feedback.ReportBatch(verb, result, inView: Shell.CurrentPage == PanelPage.Containers,
                 () => Shell.TaskCenterOpen = true);
+            // 有失败的就把结果留在选中条上,带一个「重试失败的 N 个」——
+            // 让用户为了重试去翻任务中心,是把最想立刻做的那件事藏起来。
+            if (!result.AllSucceeded)
+            {
+                BatchOutcome[] failures = [.. result.Failures];
+                BatchSummary = new(verb, result, [.. targets.Where(t => failures.Any(f => f.Target == t.Name))],
+                    action);
+            }
+            BatchProgress = null;
         }
         finally
         {
+            BatchProgress = null;
             foreach (ContainerRow row in targets)
             {
                 row.Busy = false;
@@ -401,6 +424,73 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
             await RefreshAsync(Shell.Lifetime).ConfigureAwait(true);
         }
     }
+
+    /// <summary>「当前在等什么」——- 说清楚比只报一个百分比有用。</summary>
+    private static string DescribeWait(string verb, string current) => current.Length == 0 ? "" : verb switch
+    {
+        "停止" => $"{current} · 等待 SIGTERM(10s 超时)",
+        "重启" => $"{current} · 等待重新启动",
+        "删除" => $"{current} · 等待可写层被回收",
+        _ => current
+    };
+
+    /// <summary>批量进行中的原地进度;没有时为 <see langword="null" />。</summary>
+    public BatchProgressState? BatchProgress
+    {
+        get => _batchProgress;
+        private set
+        {
+            if (SetField(ref _batchProgress, value))
+            {
+                OnPropertyChanged(nameof(HasBatchProgress));
+            }
+        }
+    }
+
+    private BatchProgressState? _batchProgress;
+
+    /// <summary>批量正在跑。</summary>
+    public bool HasBatchProgress => BatchProgress is not null;
+
+    /// <summary>批量结束后的结果条(只在有失败时出现)。</summary>
+    public BatchSummaryState? BatchSummary
+    {
+        get => _batchSummary;
+        private set
+        {
+            if (SetField(ref _batchSummary, value))
+            {
+                OnPropertyChanged(nameof(HasBatchSummary));
+            }
+        }
+    }
+
+    private BatchSummaryState? _batchSummary;
+
+    /// <summary>有失败结果要展示。</summary>
+    public bool HasBatchSummary => BatchSummary is not null;
+
+    /// <summary>关掉结果条。</summary>
+    public RelayCommand DismissBatchCommand => _dismissBatch ??= new(_ =>
+    {
+        BatchSummary = null;
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _dismissBatch;
+
+    /// <summary>只对失败的那几个再跑一遍。</summary>
+    public RelayCommand RetryFailedCommand => _retryFailed ??= new(_ =>
+    {
+        if (BatchSummary is not { } summary)
+        {
+            return Task.CompletedTask;
+        }
+        BatchSummary = null;
+        return BatchAsync(summary.Verb, summary.FailedRows, summary.Action);
+    });
+
+    private RelayCommand? _retryFailed;
 
     private async Task KillAsync(IReadOnlyList<ContainerRow> targets)
     {
@@ -474,9 +564,10 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
 
     private void CloseDetailIfRemoved(IReadOnlyList<ContainerRow> targets)
     {
+        // 钉住也拦不住这一条:容器都删了,留一个指向它的抽屉没有意义。
         if (Detail is { } detail && targets.Any(t => t.Id == detail.ContainerId))
         {
-            CloseDetail();
+            CloseDetail(force: true);
         }
     }
 
@@ -543,6 +634,20 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     public RelayCommand ExitLogsCommand => _exitLogs ??= new(_ => ExitLogsModeAsync());
 
     private RelayCommand? _exitLogs;
+
+    /// <summary>把某个来源从合并流里去掉(顶部 chip 上那个 ×)。</summary>
+    public RelayCommand RemoveSourceCommand => _removeSource ??= new(p =>
+    {
+        if (p is LogSource source
+            && LogSources.FirstOrDefault(s => s.Source.ContainerId == source.ContainerId) is { } item)
+        {
+            // 走勾选那条路,左边面板的状态跟着一起变 —— 两处不能各说各话。
+            item.Selected = false;
+        }
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _removeSource;
 
     /// <summary>来源全选 / 全不选。</summary>
     public RelayCommand ToggleAllSourcesCommand => _toggleAll ??= new(_ =>
@@ -776,15 +881,17 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         {
             return;
         }
-        CloseDetail();
+        // 换容器时钉住也要让位 —— 用户明确点了另一行。
+        CloseDetail(force: true);
         var detail = new ContainerDetailViewModel(Shell, this, row);
         Detail = detail;
         await detail.LoadAsync(Shell.Lifetime).ConfigureAwait(true);
     }
 
-    private void CloseDetail()
+    /// <summary>关抽屉。钉住的抽屉只有 <paramref name="force" /> 才关得掉。</summary>
+    private void CloseDetail(bool force = false)
     {
-        if (Detail is { } detail)
+        if (Detail is { } detail && (force || !detail.Pinned))
         {
             _ = detail.DisposeAsync();
             Detail = null;
@@ -794,8 +901,108 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        CloseDetail();
+        CloseDetail(force: true);
         await ExitLogsModeAsync().ConfigureAwait(false);
         await _sampler.DisposeAsync().ConfigureAwait(false);
     }
+}
+
+/// <summary>
+/// 批量进行中的原地进度(选中条变成的那一条)。
+/// <para>
+/// 设计稿 17 号板要求的形态:同一条位置不动,内容从"已选 10 个容器 + 五个动作"
+/// 变成"正在停止 10 个容器… 6/10 · 当前:worker-2 · 等待 SIGTERM" + 取消剩余。
+/// 不弹窗、不遮列表、选中不丢。
+/// </para>
+/// </summary>
+public sealed class BatchProgressState(string verb, int total, PanelTask task) : ObservableObject
+{
+    private int _done;
+    private string _wait = "";
+
+    /// <summary>动作名。</summary>
+    public string Verb { get; } = verb;
+
+    /// <summary>目标总数。</summary>
+    public int Total { get; } = total;
+
+    /// <summary>已完成数。</summary>
+    public int Done
+    {
+        get => _done;
+        private set
+        {
+            if (SetField(ref _done, value))
+            {
+                OnPropertiesChanged(nameof(CountText), nameof(Progress));
+            }
+        }
+    }
+
+    /// <summary>"6 / 10"。</summary>
+    public string CountText => $"{Done} / {Total}";
+
+    /// <summary>0–1。</summary>
+    public double Progress => Total == 0 ? 0 : (double)Done / Total;
+
+    /// <summary>标题。</summary>
+    public string Title => $"正在{Verb} {Total} 个容器…";
+
+    /// <summary>当前在等什么。</summary>
+    public string WaitText
+    {
+        get => _wait;
+        private set => SetField(ref _wait, value);
+    }
+
+    /// <summary>取消剩下的。</summary>
+    public RelayCommand CancelCommand => _cancel ??= new(_ =>
+    {
+        task.Cancel();
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _cancel;
+
+    /// <summary>推进一格。</summary>
+    public void Advance(int done, string current, string wait)
+    {
+        Done = done;
+        WaitText = wait.Length > 0 ? $"当前:{wait}" : current;
+    }
+}
+
+/// <summary>
+/// 批量结束后的结果条。只在**有失败**时出现 —— 全成功的时候状态栏那一句就够了,
+/// 再留一条要用户手动关掉的横幅是在收税。
+/// </summary>
+public sealed class BatchSummaryState(
+    string verb,
+    BatchResult result,
+    IReadOnlyList<ContainerRow> failedRows,
+    Func<DockerClient, string, CancellationToken, Task> action)
+{
+    /// <summary>动作名。</summary>
+    public string Verb { get; } = verb;
+
+    /// <summary>失败的那几行(重试用)。</summary>
+    public IReadOnlyList<ContainerRow> FailedRows { get; } = failedRows;
+
+    /// <summary>原来那个动作(重试用)。</summary>
+    public Func<DockerClient, string, CancellationToken, Task> Action { get; } = action;
+
+    /// <summary>标题。</summary>
+    public string Title => $"已{Verb} {result.SucceededCount} 个,{result.FailedCount} 个失败";
+
+    /// <summary>重试按钮上的文字。</summary>
+    public string RetryText => $"重试失败的 {result.FailedCount} 个";
+
+    /// <summary>失败的逐条明细。成功的那些不列 —— 它们不需要用户做任何事。</summary>
+    public IReadOnlyList<BatchOutcome> Failures { get; } = [.. result.Failures];
+
+    /// <summary>"+ N 个成功已折叠"。</summary>
+    public string CollapsedText => result.SucceededCount > 0 ? $"+ {result.SucceededCount} 个成功已折叠" : "";
+
+    /// <summary>有折叠起来的成功项。</summary>
+    public bool HasCollapsed => result.SucceededCount > 0;
 }

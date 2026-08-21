@@ -140,6 +140,16 @@
             </StackPanel>
           </Border>
 
+          <!-- 「先做一件事再执行」:默认打开 —— 默认值该偏向不丢东西那一边 -->
+          <Border IsVisible="{Binding HasPrecaution}" CornerRadius="6" Padding="11,9"
+                  Background="{DynamicResource VelaShellGreenDim}"
+                  BorderBrush="{DynamicResource VelaStatusConnected}" BorderThickness="1">
+            <CheckBox Classes="compact" IsChecked="{Binding Precaution}">
+              <TextBlock Text="{Binding PrecautionLabel}" Classes="cell" TextWrapping="Wrap"
+                         Foreground="{DynamicResource VelaTextPrimary}" />
+            </CheckBox>
+          </Border>
+
           <!-- 手打确认串 -->
           <StackPanel Spacing="5" IsVisible="{Binding IsDataLoss}">
             <StackPanel Orientation="Horizontal" Spacing="6">

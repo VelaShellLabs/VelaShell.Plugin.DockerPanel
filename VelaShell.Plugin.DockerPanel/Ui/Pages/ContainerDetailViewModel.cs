@@ -258,6 +258,74 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     /// <summary>关掉抽屉。</summary>
     public RelayCommand CloseCommand { get; }
 
+    /// <summary>
+    /// 钉住抽屉:列表刷新、切页、点别的行都不关它。
+    /// <para>
+    /// 用得着的场合很具体 —— 一边看着这个容器的日志,一边在列表里找别的东西。
+    /// </para>
+    /// </summary>
+    public bool Pinned
+    {
+        get => _pinned;
+        private set => SetField(ref _pinned, value);
+    }
+
+    private bool _pinned;
+
+    /// <summary>抽屉最大化(占满面板宽度)。</summary>
+    public bool Maximized
+    {
+        get => _maximized;
+        private set
+        {
+            if (SetField(ref _maximized, value))
+            {
+                OnPropertyChanged(nameof(DrawerWidth));
+            }
+        }
+    }
+
+    private bool _maximized;
+
+    /// <summary>抽屉宽度。最大化时用一个很大的值,布局会被面板本身夹住。</summary>
+    public double DrawerWidth => Maximized ? 4000 : 440;
+
+    /// <summary>切换钉住。</summary>
+    public RelayCommand TogglePinCommand => _togglePin ??= new(_ =>
+    {
+        Pinned = !Pinned;
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _togglePin;
+
+    /// <summary>切换最大化。</summary>
+    public RelayCommand ToggleMaximizeCommand => _toggleMax ??= new(_ =>
+    {
+        Maximized = !Maximized;
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _toggleMax;
+
+    /// <summary>复制等价的 <c>docker run</c> 命令(与右键菜单同一条路)。</summary>
+    public RelayCommand CopyRunCommand => _copyRun ??= new(_ =>
+    {
+        _page.RowCopyRunCommand.Execute(_row);
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _copyRun;
+
+    /// <summary>强杀。</summary>
+    public RelayCommand KillCommand => _kill ??= new(_ =>
+    {
+        _page.KillCommand.Execute(_row);
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _kill;
+
     /// <summary>把当前可写层提交成一个镜像。</summary>
     public RelayCommand CommitCommand { get; }
 

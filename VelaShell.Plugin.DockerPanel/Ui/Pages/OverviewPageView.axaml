@@ -97,6 +97,14 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <!-- 时间轴:一条没有刻度的趋势看不出多久以前 -->
+                <Grid ColumnDefinitions="*,*,*,*,Auto">
+                  <TextBlock Grid.Column="0" Text="-4m" Classes="meta" FontSize="9" />
+                  <TextBlock Grid.Column="1" Text="-3m" Classes="meta" FontSize="9" />
+                  <TextBlock Grid.Column="2" Text="-2m" Classes="meta" FontSize="9" />
+                  <TextBlock Grid.Column="3" Text="-1m" Classes="meta" FontSize="9" />
+                  <TextBlock Grid.Column="4" Text="现在" Classes="meta" FontSize="9" />
+                </Grid>
               </StackPanel>
             </Border>
 
@@ -206,6 +214,22 @@
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <ui:Glyph Key="Docker.broom" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
                       <TextBlock Text="清理空间" FontSize="{DynamicResource VelaFontSize11}"
+                                 Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <Button Theme="{StaticResource DockerToolButton}" Height="30" Command="{Binding OpenTerminalCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <ui:Glyph Key="Icon.terminal" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
+                      <TextBlock Text="打开终端" FontSize="{DynamicResource VelaFontSize11}"
+                                 Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <Button Theme="{StaticResource DockerToolButton}" Height="30" IsVisible="{Binding CanPickFiles}"
+                          ToolTip.Tip="导出一份可以直接发给别人的诊断信息(不含凭据与日志正文)"
+                          Command="{Binding ExportDiagnosticsCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <ui:Glyph Key="Docker.arrow-down-to-line" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
+                      <TextBlock Text="导出诊断" FontSize="{DynamicResource VelaFontSize11}"
                                  Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
                     </StackPanel>
                   </Button>

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Avalonia.Platform.Storage;
 using VelaShell.Plugin.DockerPanel.Docker;
 
@@ -94,6 +95,7 @@ public sealed class VolumesPageViewModel : PageViewModel
         {
             if (SetField(ref _selected, value))
             {
+                BuildSelectedDetails(value);
                 OnPropertiesChanged(nameof(HasSelection), nameof(SelectedUsers), nameof(CanBrowse), nameof(CanBackup), nameof(BrowseHint));
             }
         }
@@ -101,6 +103,12 @@ public sealed class VolumesPageViewModel : PageViewModel
 
     /// <summary>有选中。</summary>
     public bool HasSelection => Selected is not null;
+
+    /// <summary>选中卷的标签。</summary>
+    public ObservableCollection<DetailField> SelectedLabels { get; } = [];
+
+    /// <summary>选中卷的驱动选项。</summary>
+    public ObservableCollection<DetailField> SelectedOptions { get; } = [];
 
     /// <summary>选中卷的使用者。</summary>
     public IReadOnlyList<string> SelectedUsers =>
@@ -298,11 +306,23 @@ public sealed class VolumesPageViewModel : PageViewModel
                     ? $"仍有 {users.Count} 个容器引用它:{string.Join('、', users.Take(3))}"
                     : "当前没有容器引用它。",
                 "本面板没有找到这个卷的备份记录。"
-            ]
+            ],
+            // 只在真备得了的时候才给这个勾选 —— 一个点了没反应的复选框比没有更糟。
+            PrecautionLabel = CanBackupRow(row) ? "先备份为 tar 再删除" : null,
+            PrecautionDefault = true
         })).ConfigureAwait(true);
         if (!confirmed)
         {
             return;
+        }
+        if (Shell.Confirm.HasPrecaution && Shell.Confirm.Precaution)
+        {
+            // 备份失败就**不删** —— 用户勾这个框的意思正是"没有备份就别删"。
+            if (!await BackupAsync(row).ConfigureAwait(true))
+            {
+                Shell.Feedback.Notify(FeedbackKind.Warning, "没有删除", "备份没成功,卷保留原样。");
+                return;
+            }
         }
         try
         {
@@ -386,17 +406,22 @@ public sealed class VolumesPageViewModel : PageViewModel
     /// 而为了备份去拉一个 alpine 起临时容器,是在用户没要求的情况下动他的机器。
     /// </para>
     /// </summary>
-    private async Task BackupAsync(VolumeRow row)
+    /// <summary>这一行能不能备份(有运行中的容器挂着它,且能弹文件对话框)。</summary>
+    private bool CanBackupRow(VolumeRow row) =>
+        FilePicker.IsAvailable && _users.TryGetValue(row.Name, out List<string>? users) && users.Count > 0;
+
+    /// <summary>备份;返回是否真的存下来了(删卷前的那个勾选靠它决定要不要继续)。</summary>
+    private async Task<bool> BackupAsync(VolumeRow row)
     {
         if (Client is not { } client)
         {
-            return;
+            return false;
         }
         if (await FindMountAsync(row.Name).ConfigureAwait(true) is not { } mount)
         {
             Shell.Feedback.Notify(FeedbackKind.Warning, "没法备份这个卷",
                 "没有运行中的容器挂着它 —— 先起一个挂载了这个卷的容器再来备份。");
-            return;
+            return false;
         }
         (ContainerSummary container, string destination) = mount;
         IStorageFile? target = await FilePicker
@@ -404,7 +429,7 @@ public sealed class VolumesPageViewModel : PageViewModel
             .ConfigureAwait(true);
         if (target is null)
         {
-            return;
+            return false;
         }
         Busy = true;
         try
@@ -415,14 +440,41 @@ public sealed class VolumesPageViewModel : PageViewModel
             await archive.CopyToAsync(output, Shell.Lifetime).ConfigureAwait(true);
             Shell.Feedback.Notify(FeedbackKind.Success, "卷已备份",
                 $"{target.Name} · 经容器 {container.Name} 的 {destination}");
+            return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Shell.Feedback.ReportError("备份卷", ex);
+            return false;
         }
         finally
         {
             Busy = false;
+        }
+    }
+
+    /// <summary>
+    /// 把选中卷的标签与驱动选项摊平。
+    /// <para>
+    /// compose 起的卷会带上 <c>com.docker.compose.*</c> 那几条标签 ——
+    /// 它们是"这个卷归谁管"的唯一线索,删卷之前值得看一眼。
+    /// </para>
+    /// </summary>
+    private void BuildSelectedDetails(VolumeRow? row)
+    {
+        SelectedLabels.Clear();
+        SelectedOptions.Clear();
+        if (row is null)
+        {
+            return;
+        }
+        foreach ((string key, string value) in row.Summary.Labels ?? [])
+        {
+            SelectedLabels.Add(new(key, value));
+        }
+        foreach ((string key, string value) in row.Summary.Options ?? [])
+        {
+            SelectedOptions.Add(new(key, value));
         }
     }
 
