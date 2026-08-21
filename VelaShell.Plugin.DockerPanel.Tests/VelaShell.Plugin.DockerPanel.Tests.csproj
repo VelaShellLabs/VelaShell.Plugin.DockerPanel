@@ -21,14 +21,18 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="4.3.3" />
     <PackageReference Include="MSTest.TestFramework" Version="4.3.3" />
-    <PackageReference Include="VelaShell.PluginSdk.Testing" Version="1.1.0" />
+    <PackageReference Include="VelaShell.PluginSdk.Testing" Version="1.3.0" />
     <!-- 插件工程对 Avalonia 是 compile-only(运行时由宿主提供同一套程序集)。
          单测没有宿主,所以这里**要**把 Avalonia 的运行时程序集拉进来 ——
          否则一碰到视图模型的类型就是 FileNotFoundException,而那与被测逻辑无关。 -->
     <PackageReference Include="Avalonia" Version="12.1.1" />
+    <!-- 面板视图要真的构造一遍(见 PanelViewTests):控件需要 UI 线程与一个平台实现。 -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.1" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 被测工程。插件工程把 Avalonia / SDK 的运行时资产排除在自己的输出之外
+         (宿主共享),所以上面那条 Avalonia 的 PackageReference 才是必需的。 -->
     <ProjectReference Include="..\VelaShell.Plugin.DockerPanel\VelaShell.Plugin.DockerPanel.csproj" />
   </ItemGroup>
 

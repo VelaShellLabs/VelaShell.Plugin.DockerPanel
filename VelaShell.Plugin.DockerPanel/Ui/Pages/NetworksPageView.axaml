@@ -1,0 +1,236 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:VelaShell.Plugin.DockerPanel.Ui"
+             xmlns:pages="clr-namespace:VelaShell.Plugin.DockerPanel.Ui.Pages"
+             x:Class="VelaShell.Plugin.DockerPanel.Ui.Pages.NetworksPageView"
+             x:DataType="pages:NetworksPageViewModel">
+
+  <Grid ColumnDefinitions="*,Auto">
+    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+
+      <Border Grid.Row="0" Classes="toolbar">
+        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
+          <TextBlock Grid.Column="0" Text="网络" Classes="h1" />
+          <TextBlock Grid.Column="1" Text="{Binding TotalCount}" Classes="meta" Margin="8,0,0,0" />
+          <Border Grid.Column="2" Classes="input" Width="200" Height="26" Margin="12,0,0,0">
+            <Grid ColumnDefinitions="Auto,*">
+              <ui:Glyph Grid.Column="0" Key="Icon.search" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+              <TextBox Grid.Column="1" Classes="bare" Margin="7,0,0,0" Text="{Binding Search}"
+                       PlaceholderText="按名字、驱动或子网过滤…" />
+            </Grid>
+          </Border>
+          <Button Grid.Column="4" Theme="{StaticResource DockerToolButton}" Margin="0,0,8,0"
+                  Command="{Binding PruneCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <ui:Glyph Key="Docker.broom" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
+              <TextBlock Text="{Binding UnusedCount, StringFormat='清理未使用 ({0})'}"
+                         FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="5" Theme="{StaticResource DockerToolButton}" Margin="0,0,8,0"
+                  Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
+                  Command="{Binding CreateCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <ui:Glyph Key="Icon.plus" Size="13" Brush="{DynamicResource VelaAccentForeground}" />
+              <TextBlock Text="新建网络…" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                         Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="6" Theme="{StaticResource DockerIconButton}" Command="{Binding RefreshCommand}">
+            <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
+          </Button>
+        </Grid>
+      </Border>
+
+      <Border Grid.Row="1" Classes="header-row">
+        <Grid ColumnDefinitions="*,100,90,170,120,80">
+          <TextBlock Grid.Column="0" Text="名称" Classes="col" Margin="12,0,0,0" />
+          <TextBlock Grid.Column="1" Text="驱动" Classes="col" />
+          <TextBlock Grid.Column="2" Text="作用域" Classes="col" />
+          <TextBlock Grid.Column="3" Text="子网" Classes="col" />
+          <TextBlock Grid.Column="4" Text="已接入" Classes="col" />
+        </Grid>
+      </Border>
+
+      <ScrollViewer Grid.Row="2" Background="{DynamicResource VelaBgSurface}">
+        <ItemsControl ItemsSource="{Binding View}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="ui:NetworkRow">
+              <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="NaN" CornerRadius="0"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="0"
+                      Command="{Binding $parent[ItemsControl].((pages:NetworksPageViewModel)DataContext).SelectCommand}"
+                      CommandParameter="{Binding}">
+                <Grid Height="32" ColumnDefinitions="*,100,90,170,120,80">
+                  <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="7" Margin="12,0"
+                              VerticalAlignment="Center">
+                    <ui:Glyph Key="Icon.network" Size="13"
+                              Brush="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                    <TextBlock Text="{Binding Name}" Classes="name" />
+                    <!-- 内置的三个删不掉,标出来,别让用户去撞一条 daemon 的错误 -->
+                    <Border Classes="chip" Height="15" IsVisible="{Binding IsPredefined}"
+                            Background="{DynamicResource VelaBgActive}">
+                      <TextBlock Text="内置" FontSize="{DynamicResource VelaFontSize9}"
+                                 Foreground="{DynamicResource VelaTextTertiary}" VerticalAlignment="Center" />
+                    </Border>
+                  </StackPanel>
+                  <TextBlock Grid.Column="1" Text="{Binding Driver}" Classes="cell" />
+                  <TextBlock Grid.Column="2" Text="{Binding Scope}" Classes="cell" />
+                  <TextBlock Grid.Column="3" Text="{Binding Subnet}" Classes="cell"
+                             Foreground="{DynamicResource VelaInfo}" />
+                  <TextBlock Grid.Column="4" Text="{Binding AttachedText}" Classes="cell"
+                             Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                  <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="1" HorizontalAlignment="Right"
+                              Margin="0,0,6,0" VerticalAlignment="Center">
+                    <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="接入容器…"
+                            Command="{Binding $parent[ItemsControl].((pages:NetworksPageViewModel)DataContext).ConnectCommand}"
+                            CommandParameter="{Binding}">
+                      <ui:Glyph Key="Icon.plug" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                    </Button>
+                    <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="删除…"
+                            IsEnabled="{Binding !IsPredefined}"
+                            Command="{Binding $parent[ItemsControl].((pages:NetworksPageViewModel)DataContext).RemoveCommand}"
+                            CommandParameter="{Binding}">
+                      <ui:Glyph Key="Icon.trash-2" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                    </Button>
+                  </StackPanel>
+                </Grid>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Grid>
+
+    <!-- 详情 -->
+    <Border Grid.Column="1" Width="380" IsVisible="{Binding HasSelection}"
+            Background="{DynamicResource VelaBgSurface}"
+            BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
+      <ScrollViewer>
+        <StackPanel Margin="14,12" Spacing="12">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <ui:Glyph Key="Icon.network" Size="15" Brush="{DynamicResource VelaAccent}" />
+            <TextBlock Text="{Binding Selected.Name}" Classes="h2" />
+            <Border Classes="chip" Background="{DynamicResource VelaAccentDim}">
+              <TextBlock Text="{Binding Selected.Driver}" FontSize="{DynamicResource VelaFontSize10}"
+                         Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+            </Border>
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Theme="{StaticResource DockerToolButton}" Height="26"
+                    Background="{DynamicResource VelaAccentDim}" BorderBrush="Transparent"
+                    Command="{Binding ConnectCommand}" CommandParameter="{Binding Selected}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Icon.plug" Size="12" Brush="{DynamicResource VelaAccent}" />
+                <TextBlock Text="接入容器…" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsVisible="{Binding CanPickFiles}"
+                    ToolTip.Tip="把 inspect 原文存成本地 JSON(留档与比对用)"
+                    Command="{Binding ExportCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Docker.braces" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+                <TextBlock Text="导出配置" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+
+          <Border Classes="divider" />
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Grid.Column="0" Text="基本信息" Classes="h3" />
+            <Button Grid.Column="2" Theme="{StaticResource DockerIconButton}" Width="NaN" Height="18" Padding="6,0"
+                    ToolTip.Tip="docker network inspect 的原文" Command="{Binding ShowRawCommand}">
+              <TextBlock Text="原始 JSON" FontSize="{DynamicResource VelaFontSize10}"
+                         Foreground="{DynamicResource VelaAccent}" />
+            </Button>
+          </Grid>
+          <Border IsVisible="{Binding HasRaw}" CornerRadius="4" Padding="10,8" MaxHeight="320"
+                  Background="{DynamicResource VelaBgTerminal}" ClipToBounds="True">
+            <ScrollViewer>
+              <SelectableTextBlock Text="{Binding RawInspect}" Classes="code" FontSize="10" />
+            </ScrollViewer>
+          </Border>
+          <ItemsControl ItemsSource="{Binding Basics}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="pages:DetailField">
+                <Grid ColumnDefinitions="90,*" Height="22">
+                  <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label" />
+                  <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Border Classes="divider" />
+          <TextBlock Text="IPAM" Classes="h3" />
+          <ItemsControl ItemsSource="{Binding Ipam}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="pages:DetailField">
+                <Grid ColumnDefinitions="90,*" Height="22">
+                  <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label" />
+                  <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell"
+                             Foreground="{DynamicResource VelaInfo}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Border Classes="divider" />
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Grid.Column="0" Text="已接入的容器" Classes="h3" />
+            <Button Grid.Column="2" Theme="{StaticResource DockerIconButton}" Width="NaN" Height="18" Padding="6,0"
+                    IsVisible="{Binding Attached.Count}" Command="{Binding DisconnectAllCommand}">
+              <TextBlock Text="全部摘除" FontSize="{DynamicResource VelaFontSize10}"
+                         Foreground="{DynamicResource VelaError}" />
+            </Button>
+          </Grid>
+          <ItemsControl ItemsSource="{Binding Attached}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="pages:AttachedContainer">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Height="26">
+                  <Ellipse Grid.Column="0" Width="6" Height="6" VerticalAlignment="Center"
+                           Fill="{DynamicResource VelaStatusConnected}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="name" Margin="8,0" />
+                  <TextBlock Grid.Column="2" Text="{Binding Address}" Classes="meta"
+                             Foreground="{DynamicResource VelaInfo}" />
+                  <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" Width="20" Height="20"
+                          Margin="6,0,0,0" ToolTip.Tip="摘除"
+                          Command="{Binding $parent[ItemsControl].((pages:NetworksPageViewModel)DataContext).DisconnectCommand}"
+                          CommandParameter="{Binding}">
+                    <ui:Glyph Key="Icon.unplug" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+                  </Button>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Border Classes="divider" />
+          <Border CornerRadius="6" Padding="12,10" Background="{DynamicResource VelaShellRedDim}"
+                  BorderBrush="{DynamicResource VelaError}" BorderThickness="1">
+            <StackPanel Spacing="7">
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <ui:Glyph Key="Icon.triangle-alert" Size="13" Brush="{DynamicResource VelaError}" />
+                <TextBlock Text="删除网络" FontSize="{DynamicResource VelaFontSize11}" FontWeight="SemiBold"
+                           Foreground="{DynamicResource VelaError}" />
+              </StackPanel>
+              <TextBlock Text="{Binding RemoveHint}" FontSize="{DynamicResource VelaFontSize10}"
+                         Foreground="{DynamicResource VelaError}" TextWrapping="Wrap" LineHeight="16" />
+              <Button Theme="{StaticResource DockerToolButton}" Height="26"
+                      BorderBrush="{DynamicResource VelaError}" IsEnabled="{Binding CanRemove}"
+                      Command="{Binding RemoveCommand}" CommandParameter="{Binding Selected}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <ui:Glyph Key="Icon.trash-2" Size="12" Brush="{DynamicResource VelaError}" />
+                  <TextBlock Text="删除网络…" FontSize="{DynamicResource VelaFontSize11}"
+                             Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

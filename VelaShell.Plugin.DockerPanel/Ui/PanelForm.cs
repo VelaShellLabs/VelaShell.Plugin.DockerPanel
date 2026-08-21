@@ -1,396 +1,536 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
-/// <summary>表单项的形态。</summary>
-public enum FormFieldKind
+/// <summary>表单里的一个字段。</summary>
+public abstract class FormField(string label) : ObservableObject
 {
-    /// <summary>单行文本。</summary>
-    Text,
-
-    /// <summary>多行文本(端口/卷/环境变量这类"一行一条")。</summary>
-    Multiline,
-
-    /// <summary>勾选项。</summary>
-    Boolean,
-
-    /// <summary>下拉。</summary>
-    Choice
-}
-
-/// <summary>下拉里的一项。</summary>
-/// <param name="Value">回传给调用方的值。</param>
-/// <param name="Label">界面上的文字。</param>
-public sealed record FormChoice(string Value, string Label)
-{
-    /// <inheritdoc />
-    public override string ToString() => Label;
-}
-
-/// <summary>表单里的一项。</summary>
-public sealed class FormField : ObservableObject
-{
-    private string _value = string.Empty;
-    private FormChoice? _selectedChoice;
-
-    /// <summary>回传时的键。</summary>
-    public required string Key { get; init; }
+    private string? _error;
 
     /// <summary>标签。</summary>
-    public required string Label { get; init; }
+    public string Label { get; } = label;
 
-    /// <summary>形态。</summary>
-    public FormFieldKind Kind { get; init; } = FormFieldKind.Text;
+    /// <summary>标签右侧的灰色提示。</summary>
+    public string? Hint { get; init; }
 
-    /// <summary>占位提示。</summary>
-    public string Placeholder { get; init; } = string.Empty;
+    /// <summary>字段下方的校验错误;为空表示没问题。</summary>
+    public string? Error
+    {
+        get => _error;
+        set
+        {
+            if (SetField(ref _error, value))
+            {
+                OnPropertyChanged(nameof(HasError));
+            }
+        }
+    }
 
-    /// <summary>一行小字说明;为空则不占位置。</summary>
-    public string Hint { get; init; } = string.Empty;
+    /// <summary>有没有校验错误。</summary>
+    public bool HasError => !string.IsNullOrEmpty(_error);
+}
 
-    /// <summary>下拉的选项。</summary>
-    public IReadOnlyList<FormChoice> Choices { get; init; } = [];
+/// <summary>一行文本。</summary>
+public sealed class TextField(string label) : FormField(label)
+{
+    private string _value = "";
 
-    /// <summary>多行框的高度(逻辑像素)。</summary>
-    public double Height { get; init; } = 64;
-
-    /// <summary>值(布尔项为 <c>true</c>/<c>false</c>,下拉项为选项的 Value)。</summary>
+    /// <summary>值。</summary>
     public string Value
     {
         get => _value;
         set
         {
-            if (SetProperty(ref _value, value))
+            if (SetField(ref _value, value))
             {
-                RaisePropertyChanged(nameof(BoolValue));
+                Error = null;
                 Changed?.Invoke();
             }
         }
     }
 
-    /// <summary>勾选项绑定用的布尔视图。</summary>
-    public bool BoolValue
-    {
-        get => bool.TryParse(Value, out var parsed) && parsed;
-        set => Value = value ? "true" : "false";
-    }
+    /// <summary>占位文字。</summary>
+    public string Placeholder { get; init; } = "";
 
-    /// <summary>下拉绑定用的选中项视图。</summary>
-    public FormChoice? SelectedChoice
+    /// <summary>是不是等宽(路径、id、命令用等宽)。</summary>
+    public bool Mono { get; init; } = true;
+
+    /// <summary>只读(源镜像、当前名称这类"给你看清楚"的字段)。</summary>
+    public bool ReadOnly { get; init; }
+
+    /// <summary>值变了。</summary>
+    public event Action? Changed;
+}
+
+/// <summary>一个开关。</summary>
+public sealed class ToggleField(string label) : FormField(label)
+{
+    private bool _value;
+
+    /// <summary>值。</summary>
+    public bool Value
     {
-        get => _selectedChoice ??= Choices.FirstOrDefault(c => c.Value == Value) ?? Choices.FirstOrDefault();
+        get => _value;
         set
         {
-            if (SetProperty(ref _selectedChoice, value) && value is not null)
+            if (SetField(ref _value, value))
             {
-                Value = value.Value;
+                Changed?.Invoke();
             }
         }
     }
 
-    /// <summary>单行文本形态。</summary>
-    public bool IsText => Kind is FormFieldKind.Text;
+    /// <summary>开关下面那行说明。</summary>
+    public string Description { get; init; } = "";
 
-    /// <summary>多行文本形态。</summary>
-    public bool IsMultiline => Kind is FormFieldKind.Multiline;
+    /// <summary>打开这一项是危险的(特权模式之类)。</summary>
+    public bool Danger { get; init; }
 
-    /// <summary>勾选项形态。</summary>
-    public bool IsBoolean => Kind is FormFieldKind.Boolean;
+    /// <summary>值变了。</summary>
+    public event Action? Changed;
+}
 
-    /// <summary>下拉形态。</summary>
-    public bool IsChoice => Kind is FormFieldKind.Choice;
+/// <summary>下拉/分段里的一个选项。</summary>
+/// <param name="Value">值。</param>
+/// <param name="Label">显示文字。</param>
+/// <param name="Description">补充说明(单选列表才显示)。</param>
+/// <param name="Enabled">能不能选。</param>
+/// <param name="DisabledReason">不能选的原因。</param>
+public sealed record ChoiceOption(string Value, string Label, string Description = "", bool Enabled = true,
+    string DisabledReason = "");
 
-    /// <summary>有小字说明。</summary>
-    public bool HasHint => Hint.Length > 0;
+/// <summary>一组互斥选项(分段控件或下拉)。</summary>
+public sealed class ChoiceField : FormField
+{
+    private string _value = "";
 
-    /// <summary>值变化(表单据此重算命令预览)。</summary>
-    public Action? Changed { get; set; }
+    /// <summary>建一组互斥选项。</summary>
+    public ChoiceField(string label) : base(label) =>
+        SelectCommand = new(p =>
+        {
+            if (p is ChoiceOption { Enabled: true } option)
+            {
+                Value = option.Value;
+            }
+        });
+
+    /// <summary>选项。</summary>
+    public ObservableCollection<ChoiceOption> Options { get; } = [];
+
+    /// <summary>当前值。</summary>
+    public string Value
+    {
+        get => _value;
+        set
+        {
+            if (SetField(ref _value, value))
+            {
+                OnPropertyChanged(nameof(SelectedLabel));
+                Changed?.Invoke();
+            }
+        }
+    }
+
+    /// <summary>当前值对应的显示文字。</summary>
+    public string SelectedLabel => Options.FirstOrDefault(o => o.Value == _value)?.Label ?? _value;
+
+    /// <summary>用分段控件呈现(选项少时)还是下拉(选项多时)。</summary>
+    public bool AsSegments { get; init; }
+
+    /// <summary>选中变了。</summary>
+    public event Action? Changed;
+
+    /// <summary>选一个。</summary>
+    public RelayCommand SelectCommand { get; }
+}
+
+/// <summary>带说明的单选列表(重启策略那种)。</summary>
+public sealed class RadioListField : FormField
+{
+    private string _value = "";
+
+    /// <summary>建一个单选列表。</summary>
+    public RadioListField(string label) : base(label) =>
+        SelectCommand = new(p =>
+        {
+            if (p is ChoiceOption { Enabled: true } option)
+            {
+                Value = option.Value;
+            }
+        });
+
+    /// <summary>选项。</summary>
+    public ObservableCollection<ChoiceOption> Options { get; } = [];
+
+    /// <summary>当前值。</summary>
+    public string Value
+    {
+        get => _value;
+        set
+        {
+            if (SetField(ref _value, value))
+            {
+                OnPropertyChanged(nameof(SelectedValue));
+            }
+        }
+    }
+
+    /// <summary>当前值(绑定用的别名,方便模板里做相等判断)。</summary>
+    public string SelectedValue => _value;
+
+    /// <summary>选一个。</summary>
+    public RelayCommand SelectCommand { get; }
+}
+
+/// <summary>键值行(端口、卷、环境变量、驱动选项共用)。</summary>
+public sealed class PairRow(string key, string value) : ObservableObject
+{
+    private string _key = key;
+    private string _value = value;
+
+    /// <summary>左侧。</summary>
+    public string Key
+    {
+        get => _key;
+        set => SetField(ref _key, value);
+    }
+
+    /// <summary>右侧。</summary>
+    public string Value
+    {
+        get => _value;
+        set => SetField(ref _value, value);
+    }
+
+    /// <summary>第三格(协议、只读标记);不用时为空。</summary>
+    public string Extra { get; set; } = "";
+}
+
+/// <summary>可增删的键值列表。</summary>
+public sealed class PairListField : FormField
+{
+    /// <summary>建一个键值列表。</summary>
+    public PairListField(string label) : base(label)
+    {
+        AddCommand = new(_ => Rows.Add(new("", "")));
+        RemoveCommand = new(p =>
+        {
+            if (p is PairRow row)
+            {
+                Rows.Remove(row);
+            }
+        });
+        // 增删行、以及行里任一格的改动,都要把"等效命令"重算一遍 ——
+        // 那条预览存在的全部意义就是让用户核对自己填的东西,它一旦滞后就成了误导。
+        Rows.CollectionChanged += (_, e) =>
+        {
+            foreach (PairRow added in e.NewItems?.OfType<PairRow>() ?? [])
+            {
+                added.PropertyChanged += OnRowChanged;
+            }
+            foreach (PairRow removed in e.OldItems?.OfType<PairRow>() ?? [])
+            {
+                removed.PropertyChanged -= OnRowChanged;
+            }
+            Changed?.Invoke();
+        };
+    }
+
+    private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Changed?.Invoke();
+
+    /// <summary>
+    /// 从一段 <c>.env</c> 文本导入(设计稿 06 号板那个「从 .env 导入」)。
+    /// <para>
+    /// 只认最朴素的那一档:<c>KEY=VALUE</c>,跳过空行与 <c>#</c> 注释,剥掉值两边的引号。
+    /// <b>不</b>做变量插值与多行值 —— dotenv 的方言各家不同,面板猜错一次就等于
+    /// 悄悄改了用户的配置。认不出来的行原样跳过,并把跳过的条数报出来。
+    /// </para>
+    /// </summary>
+    public (int Imported, int Skipped) ImportDotEnv(string text)
+    {
+        int imported = 0;
+        int skipped = 0;
+        foreach (string raw in text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+            {
+                continue;
+            }
+            // export FOO=bar 也很常见。
+            if (line.StartsWith("export ", StringComparison.Ordinal))
+            {
+                line = line[7..].TrimStart();
+            }
+            int equals = line.IndexOf('=', StringComparison.Ordinal);
+            if (equals <= 0)
+            {
+                skipped++;
+                continue;
+            }
+            string key = line[..equals].Trim();
+            string value = line[(equals + 1)..].Trim();
+            if (value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
+            {
+                value = value[1..^1];
+            }
+            // 同名覆盖:.env 里后写的赢,这里也一样。
+            if (Rows.FirstOrDefault(r => r.Key == key) is { } existing)
+            {
+                existing.Value = value;
+            }
+            else
+            {
+                Rows.Add(new(key, value));
+            }
+            imported++;
+        }
+        // 空的占位行留着没意义,导完清一遍。
+        foreach (PairRow blank in Rows.Where(r => r.Key.Length == 0 && r.Value.Length == 0).ToList())
+        {
+            Rows.Remove(blank);
+        }
+        return (imported, skipped);
+    }
+
+    /// <summary>任一行增删或改动。</summary>
+    public event Action? Changed;
+
+    /// <summary>行。</summary>
+    public ObservableCollection<PairRow> Rows { get; } = [];
+
+    /// <summary>左侧占位。</summary>
+    public string KeyPlaceholder { get; init; } = "";
+
+    /// <summary>右侧占位。</summary>
+    public string ValuePlaceholder { get; init; } = "";
+
+    /// <summary>两格之间的符号(“→” / “=” / “:”)。</summary>
+    public string Separator { get; init; } = "=";
+
+    /// <summary>“+ 添加”的文字。</summary>
+    public string AddLabel { get; init; } = "+ 添加";
+
+    /// <summary>「从 .env 导入」那个按钮的文字;留空表示这一组不提供导入。</summary>
+    public string ImportLabel { get; init; } = "";
+
+    /// <summary>这一组支不支持导入。</summary>
+    public bool CanImport => ImportLabel.Length > 0;
+
+    /// <summary>
+    /// 弹一个文件对话框选 <c>.env</c> 并导入。结果经 <see cref="ImportReport" /> 报给界面。
+    /// </summary>
+    public RelayCommand ImportCommand => _import ??= new(async _ =>
+    {
+        Avalonia.Platform.Storage.IStorageFile? file =
+            await FilePicker.PickOpenAsync("选一个 .env 文件").ConfigureAwait(true);
+        if (file is null)
+        {
+            return;
+        }
+        await using Stream stream = await file.OpenReadAsync().ConfigureAwait(true);
+        using var reader = new StreamReader(stream);
+        string text = await reader.ReadToEndAsync().ConfigureAwait(true);
+        (int imported, int skipped) = ImportDotEnv(text);
+        ImportReport = skipped == 0
+            ? $"已导入 {imported} 条"
+            : $"已导入 {imported} 条 · 跳过 {skipped} 行(不是 KEY=VALUE)";
+        OnPropertyChanged(nameof(ImportReport));
+    });
+
+    private RelayCommand? _import;
+
+    /// <summary>上一次导入的结果;没导过时为空。</summary>
+    public string ImportReport { get; private set; } = "";
+
+    /// <summary>添加一行。</summary>
+    public RelayCommand AddCommand { get; }
+
+    /// <summary>删掉一行。</summary>
+    public RelayCommand RemoveCommand { get; }
+
+    /// <summary>非空行(两格都填了才算)。</summary>
+    public IEnumerable<PairRow> Filled =>
+        Rows.Where(r => r.Key.Trim().Length > 0 && r.Value.Trim().Length > 0);
+}
+
+/// <summary>可多选列表里的一项。</summary>
+public sealed class SelectItem(string id, string label, string meta, bool enabled, string disabledReason = "")
+    : ObservableObject
+{
+    private bool _selected;
+
+    /// <summary>标识。</summary>
+    public string Id { get; } = id;
+
+    /// <summary>显示文字。</summary>
+    public string Label { get; } = label;
+
+    /// <summary>右侧小字。</summary>
+    public string Meta { get; } = meta;
+
+    /// <summary>能不能选。</summary>
+    public bool Enabled { get; } = enabled;
+
+    /// <summary>不能选的原因。</summary>
+    public string DisabledReason { get; } = disabledReason;
+
+    /// <summary>选中了没有。</summary>
+    public bool Selected
+    {
+        get => _selected;
+        set
+        {
+            if (Enabled)
+            {
+                SetField(ref _selected, value);
+            }
+        }
+    }
+}
+
+/// <summary>带搜索的多选列表。</summary>
+public sealed class SelectListField(string label) : FormField(label)
+{
+    private string _search = "";
+
+    /// <summary>全部项。</summary>
+    public ObservableCollection<SelectItem> Items { get; } = [];
+
+    /// <summary>过滤后的项。</summary>
+    public ObservableCollection<SelectItem> View { get; } = [];
+
+    /// <summary>搜索词。</summary>
+    public string Search
+    {
+        get => _search;
+        set
+        {
+            if (SetField(ref _search, value))
+            {
+                ApplyFilter();
+            }
+        }
+    }
+
+    /// <summary>搜索框占位。</summary>
+    public string Placeholder { get; init; } = "过滤…";
+
+    /// <summary>已选的项。</summary>
+    public IEnumerable<SelectItem> SelectedItems => Items.Where(i => i.Selected);
+
+    /// <summary>重建过滤视图。</summary>
+    public void ApplyFilter()
+    {
+        View.Clear();
+        foreach (SelectItem item in Items.Where(i =>
+                     _search.Length == 0 || i.Label.Contains(_search, StringComparison.OrdinalIgnoreCase)))
+        {
+            View.Add(item);
+        }
+    }
 }
 
 /// <summary>
-/// 面板内的通用表单层。
+/// 一个表单弹窗。
 /// <para>
-/// 拉镜像、跑容器、建卷、建网络、重命名、打标签、接网络、进容器 —— 这八件事的界面差别
-/// 只是"几个输入框 + 一个按钮"。为它们各写一个对话框是八份几乎一样的 AXAML;
-/// 这里把表单**声明化**(和宿主给协议插件的连接表单是同一个思路),
-/// 视图里只有一份 <c>ItemsControl</c>。
-/// </para>
-/// <para>
-/// 表单顶上永远有一条**命令预览**:用户按下"执行"之前,就能看到那条会在生产机上跑起来的
-/// 命令长什么样。这一条比表单本身更重要 —— 它把"我以为我填对了"变成"我看到了"。
+/// 全部复用同一个壳:标题栏 → 主机条 → 内容 → 页脚。主机条一行都不能省 ——
+/// 同时开着两台机器时,它是最便宜的保险。
 /// </para>
 /// </summary>
-public sealed class PanelForm : ObservableObject
+public abstract class PanelForm : ObservableObject
 {
-    private TaskCompletionSource<IReadOnlyDictionary<string, string>?>? _pending;
-    private Func<IReadOnlyDictionary<string, string>, string>? _preview;
-    private bool _isOpen;
-    private string _title = string.Empty;
-    private string _description = string.Empty;
-    private string _submitLabel = "OK";
-    private string _cancelLabel = "Cancel";
-    private string _previewText = string.Empty;
-    private string _previewLabel = string.Empty;
-
-    /// <summary>构造。</summary>
-    public PanelForm()
-    {
-        SubmitCommand = new(() =>
-        {
-            Close(Snapshot());
-            return Task.CompletedTask;
-        });
-        CancelCommand = new(() =>
-        {
-            Close(null);
-            return Task.CompletedTask;
-        });
-    }
-
-    /// <summary>表单是否打开。</summary>
-    public bool IsOpen
-    {
-        get => _isOpen;
-        private set => SetProperty(ref _isOpen, value);
-    }
+    private string _commandPreview = "";
+    private string _commandNote = "";
+    private string? _formError;
 
     /// <summary>标题。</summary>
-    public string Title
-    {
-        get => _title;
-        private set => SetProperty(ref _title, value);
-    }
+    public abstract string Title { get; }
 
-    /// <summary>副标题;为空则不占位置。</summary>
-    public string Description
-    {
-        get => _description;
-        private set
-        {
-            SetProperty(ref _description, value);
-            RaisePropertyChanged(nameof(HasDescription));
-        }
-    }
+    /// <summary>标题图标。</summary>
+    public virtual string Icon => "Icon.settings";
 
-    /// <summary>有副标题。</summary>
-    public bool HasDescription => Description.Length > 0;
+    /// <summary>确认按钮文字。</summary>
+    public abstract string ConfirmLabel { get; }
 
-    /// <summary>提交按钮文案。</summary>
-    public string SubmitLabel
-    {
-        get => _submitLabel;
-        private set => SetProperty(ref _submitLabel, value);
-    }
+    /// <summary>确认按钮图标。</summary>
+    public virtual string ConfirmIcon => "Docker.check";
 
-    /// <summary>取消按钮文案。</summary>
-    public string CancelLabel
-    {
-        get => _cancelLabel;
-        private set => SetProperty(ref _cancelLabel, value);
-    }
+    /// <summary>页脚左侧的提示。</summary>
+    public virtual string FooterHint => "Esc 取消";
 
-    /// <summary>命令预览那一行的标签(如"将执行")。</summary>
-    public string PreviewLabel
-    {
-        get => _previewLabel;
-        private set => SetProperty(ref _previewLabel, value);
-    }
-
-    /// <summary>命令预览。</summary>
-    public string PreviewText
-    {
-        get => _previewText;
-        private set
-        {
-            SetProperty(ref _previewText, value);
-            RaisePropertyChanged(nameof(HasPreview));
-        }
-    }
-
-    /// <summary>有命令预览。</summary>
-    public bool HasPreview => PreviewText.Length > 0;
-
-    /// <summary>表单项。</summary>
+    /// <summary>字段。</summary>
     public ObservableCollection<FormField> Fields { get; } = [];
 
-    /// <summary>提交。</summary>
-    public AsyncCommand SubmitCommand { get; }
+    /// <summary>“等效命令”里显示的那条请求。</summary>
+    public string CommandPreview
+    {
+        get => _commandPreview;
+        protected set => SetField(ref _commandPreview, value);
+    }
 
-    /// <summary>取消。</summary>
-    public AsyncCommand CancelCommand { get; }
+    /// <summary>请求下面那行等价的命令行。</summary>
+    public string CommandNote
+    {
+        get => _commandNote;
+        protected set => SetField(ref _commandNote, value);
+    }
+
+    /// <summary>有没有命令预览。</summary>
+    public bool HasPreview => CommandPreview.Length > 0;
+
+    /// <summary>整表级别的错误。</summary>
+    public string? FormError
+    {
+        get => _formError;
+        set
+        {
+            if (SetField(ref _formError, value))
+            {
+                OnPropertyChanged(nameof(HasFormError));
+            }
+        }
+    }
+
+    /// <summary>有没有整表错误。</summary>
+    public bool HasFormError => !string.IsNullOrEmpty(_formError);
 
     /// <summary>
-    /// 摆出一个表单并等结果。
+    /// 校验。返回 <see langword="false" /> 时把原因写在字段的 <see cref="FormField.Error" />
+    /// 或 <see cref="FormError" /> 上 —— 让用户知道**哪一格**不对,而不是一句"输入有误"。
     /// </summary>
-    /// <param name="title">标题。</param>
-    /// <param name="description">副标题。</param>
-    /// <param name="fields">表单项。</param>
-    /// <param name="submitLabel">提交按钮文案。</param>
-    /// <param name="cancelLabel">取消按钮文案。</param>
-    /// <param name="previewLabel">命令预览的标签;为空表示不显示预览。</param>
-    /// <param name="preview">按当前值生成命令预览。</param>
-    /// <returns>用户填的值;取消时为 <see langword="null" />。</returns>
-    public Task<IReadOnlyDictionary<string, string>?> AskAsync(
-        string title,
-        string description,
-        IReadOnlyList<FormField> fields,
-        string submitLabel,
-        string cancelLabel,
-        string previewLabel = "",
-        Func<IReadOnlyDictionary<string, string>, string>? preview = null)
+    public virtual bool Validate() => true;
+
+    /// <summary>字段变动后重算命令预览。</summary>
+    protected virtual void UpdatePreview()
     {
-        if (_pending is not null)
-        {
-            return Task.FromResult<IReadOnlyDictionary<string, string>?>(null);
-        }
-        Title = title;
-        Description = description;
-        SubmitLabel = submitLabel;
-        CancelLabel = cancelLabel;
-        PreviewLabel = previewLabel;
-        _preview = preview;
-        Fields.Clear();
-        foreach (var field in fields)
-        {
-            field.Changed = UpdatePreview;
-            Fields.Add(field);
-        }
-        UpdatePreview();
-        _pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        IsOpen = true;
-        return _pending.Task;
     }
 
-    /// <summary>关掉表单(面板释放时用,当作取消)。</summary>
-    public void Dismiss() => Close(null);
-
-    /// <summary>建一个单行文本项。</summary>
-    /// <param name="key">键。</param>
-    /// <param name="label">标签。</param>
-    /// <param name="value">初值。</param>
-    /// <param name="placeholder">占位提示。</param>
-    /// <param name="hint">小字说明。</param>
-    /// <returns>表单项。</returns>
-    public static FormField Text(string key, string label, string value = "", string placeholder = "", string hint = "") =>
-        new() { Key = key, Label = label, Kind = FormFieldKind.Text, Value = value, Placeholder = placeholder, Hint = hint };
-
-    /// <summary>建一个多行文本项。</summary>
-    /// <param name="key">键。</param>
-    /// <param name="label">标签。</param>
-    /// <param name="value">初值。</param>
-    /// <param name="placeholder">占位提示。</param>
-    /// <param name="height">高度。</param>
-    /// <param name="hint">小字说明。</param>
-    /// <returns>表单项。</returns>
-    public static FormField Multiline(string key, string label, string value = "", string placeholder = "", double height = 64, string hint = "") =>
-        new()
-        {
-            Key = key,
-            Label = label,
-            Kind = FormFieldKind.Multiline,
-            Value = value,
-            Placeholder = placeholder,
-            Height = height,
-            Hint = hint
-        };
-
-    /// <summary>建一个勾选项。</summary>
-    /// <param name="key">键。</param>
-    /// <param name="label">标签。</param>
-    /// <param name="value">初值。</param>
-    /// <param name="hint">小字说明。</param>
-    /// <returns>表单项。</returns>
-    public static FormField Boolean(string key, string label, bool value = false, string hint = "") =>
-        new()
-        {
-            Key = key,
-            Label = label,
-            Kind = FormFieldKind.Boolean,
-            Value = value ? "true" : "false",
-            Hint = hint
-        };
-
-    /// <summary>建一个下拉项。</summary>
-    /// <param name="key">键。</param>
-    /// <param name="label">标签。</param>
-    /// <param name="choices">选项。</param>
-    /// <param name="value">初值。</param>
-    /// <param name="hint">小字说明。</param>
-    /// <returns>表单项。</returns>
-    public static FormField Choice(string key, string label, IReadOnlyList<FormChoice> choices, string value = "", string hint = "") =>
-        new()
-        {
-            Key = key,
-            Label = label,
-            Kind = FormFieldKind.Choice,
-            Choices = choices,
-            Value = value.Length > 0 ? value : choices.FirstOrDefault()?.Value ?? string.Empty,
-            Hint = hint
-        };
-
-    private void UpdatePreview() =>
-        PreviewText = _preview is null || PreviewLabel.Length == 0 ? string.Empty : _preview(Snapshot());
-
-    private Dictionary<string, string> Snapshot()
+    /// <summary>把某个字段的变动接到预览上。</summary>
+    protected void Watch(TextField field)
     {
-        Dictionary<string, string> values = [with(StringComparer.Ordinal)];
-        foreach (var field in Fields)
-        {
-            values[field.Key] = field.Value;
-        }
-        return values;
+        field.Changed += UpdatePreview;
+        Fields.Add(field);
     }
 
-    private void Close(IReadOnlyDictionary<string, string>? answer)
+    /// <summary>把某个开关接到预览上。</summary>
+    protected void Watch(ToggleField field)
     {
-        var pending = _pending;
-        _pending = null;
-        _preview = null;
-        IsOpen = false;
-        foreach (var field in Fields)
-        {
-            // 断掉回调:表单项是一次性的,留着引用等于让已关闭的表单还能被旧控件唤醒。
-            field.Changed = null;
-        }
-        pending?.TrySetResult(answer);
+        field.Changed += UpdatePreview;
+        Fields.Add(field);
     }
-}
 
-/// <summary>取表单值的小工具。</summary>
-public static class FormValues
-{
-    /// <summary>取字符串值(去首尾空白)。</summary>
-    /// <param name="values">表单值。</param>
-    /// <param name="key">键。</param>
-    /// <param name="fallback">回退值。</param>
-    /// <returns>值。</returns>
-    public static string Text(this IReadOnlyDictionary<string, string> values, string key, string fallback = "") =>
-        values.TryGetValue(key, out var value) && value.Trim().Length > 0 ? value.Trim() : fallback;
+    /// <summary>把某个选择接到预览上。</summary>
+    protected void Watch(ChoiceField field)
+    {
+        field.Changed += UpdatePreview;
+        Fields.Add(field);
+    }
 
-    /// <summary>取多行值(保留换行,只去首尾空白)。</summary>
-    /// <param name="values">表单值。</param>
-    /// <param name="key">键。</param>
-    /// <returns>值。</returns>
-    public static string Lines(this IReadOnlyDictionary<string, string> values, string key) =>
-        values.TryGetValue(key, out var value) ? value.Trim() : string.Empty;
-
-    /// <summary>取布尔值。</summary>
-    /// <param name="values">表单值。</param>
-    /// <param name="key">键。</param>
-    /// <param name="fallback">回退值。</param>
-    /// <returns>值。</returns>
-    public static bool Flag(this IReadOnlyDictionary<string, string> values, string key, bool fallback = false) =>
-        values.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed) ? parsed : fallback;
-
-    /// <summary>取整数值。</summary>
-    /// <param name="values">表单值。</param>
-    /// <param name="key">键。</param>
-    /// <param name="fallback">回退值。</param>
-    /// <returns>值。</returns>
-    public static int Number(this IReadOnlyDictionary<string, string> values, string key, int fallback = 0) =>
-        values.TryGetValue(key, out var value)
-        && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : fallback;
+    /// <summary>把某个键值列表接到预览上。</summary>
+    protected void Watch(PairListField field)
+    {
+        field.Changed += UpdatePreview;
+        Fields.Add(field);
+    }
 }

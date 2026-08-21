@@ -3,209 +3,392 @@ using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
+/// <summary>行的状态色。界面按它取左侧色条、圆点与状态文字的颜色。</summary>
+public enum RowTone
+{
+    /// <summary>运行中 / 健康 / 成功。</summary>
+    Ok,
+
+    /// <summary>暂停 / 需要注意。</summary>
+    Warn,
+
+    /// <summary>不健康 / 异常退出。</summary>
+    Danger,
+
+    /// <summary>已停止 / 未使用。</summary>
+    Idle,
+
+    /// <summary>过渡态(重启中、创建中)。</summary>
+    Busy
+}
+
 /// <summary>
-/// 列表里的一行:一个**稳定的身份**外加一个会被换掉的数据模型。
+/// 列表行的公共部分:身份、选中态、忙碌态。
 /// <para>
-/// 为什么不直接把 <see cref="ContainerItem" /> 这类记录塞进
-/// <see cref="ObservableCollection{T}" />:面板每隔几秒就整批刷新一次,
-/// 而容器的 <c>Status</c> 每次都在变(<c>Up 3 minutes</c> → <c>Up 4 minutes</c>)。
-/// 记录是值相等的,内容一变就是"另一个对象",于是每次刷新都会把用户**正选着的那一行**
-/// 从 <c>ListBox</c> 里换掉 —— 选中态没了,右边的详情跟着空掉。
-/// 包一层身份稳定的行对象,刷新就只是"同一行的字变了"。
+/// 行是**就地合并**的(见 <see cref="KeyedCollection{T}" />):刷新只更新内容,不换实例。
+/// 用户选中三行准备批量停止,一条事件刷新一次就全丢了 —— 那是这个面板能犯的最烦人的错误。
 /// </para>
 /// </summary>
-/// <typeparam name="T">数据模型类型。</typeparam>
-/// <param name="model">初始模型。</param>
-public abstract class Row<T>(T model) : ObservableObject where T : class
+public abstract class RowBase(string id) : ObservableObject
 {
-    /// <summary>当前数据。</summary>
-    public T Model { get; private set; } = model;
+    private bool _selected;
+    private bool _busy;
+    private double _busyProgress;
 
-    /// <summary>这一行的稳定身份(刷新时按它配对)。</summary>
-    public abstract string Key { get; }
+    /// <summary>稳定身份。</summary>
+    public string Id { get; } = id;
 
-    /// <summary>换掉数据(身份不变)。</summary>
-    /// <param name="model">新数据。</param>
-    public void Update(T model)
+    /// <summary>短 id。</summary>
+    public string ShortId => Humanize.ShortId(Id);
+
+    /// <summary>是否被勾选(批量操作的目标)。</summary>
+    public bool Selected
     {
-        if (Equals(Model, model))
+        get => _selected;
+        set
         {
-            return;
+            if (SetField(ref _selected, value))
+            {
+                SelectionChanged?.Invoke();
+            }
         }
-        Model = model;
-        RaisePropertyChanged(nameof(Model));
-        OnModelChanged();
     }
 
-    /// <summary>模型换过之后的钩子(派生属性通知)。</summary>
-    protected virtual void OnModelChanged()
+    /// <summary>
+    /// 这一行正在被操作。界面据此在行顶画一条 2px 进度条、把动作按钮换成"取消",
+    /// 其余按钮禁用**而不是消失** —— 位置不跳。
+    /// </summary>
+    public bool Busy
     {
-    }
-}
-
-/// <summary>容器行。除了容器本身,还挂着 <c>docker stats</c> 的实时数字。</summary>
-/// <param name="model">容器。</param>
-public sealed class ContainerRow(ContainerItem model) : Row<ContainerItem>(model)
-{
-    private string _cpu = string.Empty;
-    private string _memory = string.Empty;
-    private string _network = string.Empty;
-    private string _blockIo = string.Empty;
-    private string _pids = string.Empty;
-
-    /// <inheritdoc />
-    public override string Key => Model.Id;
-
-    /// <summary>CPU 占用。</summary>
-    public string Cpu
-    {
-        get => _cpu;
-        private set => SetProperty(ref _cpu, value);
+        get => _busy;
+        set => SetField(ref _busy, value);
     }
 
-    /// <summary>内存用量。</summary>
-    public string Memory
+    /// <summary>行内进度 0–1;为 0 表示不确定型。</summary>
+    public double BusyProgress
     {
-        get => _memory;
-        private set => SetProperty(ref _memory, value);
+        get => _busyProgress;
+        set => SetField(ref _busyProgress, value);
     }
 
-    /// <summary>网络收发。</summary>
-    public string Network
+    /// <summary>勾选状态变了。</summary>
+    public event Action? SelectionChanged;
+}
+
+/// <summary>容器列表的一行。</summary>
+public sealed class ContainerRow(ContainerSummary summary) : RowBase(summary.Id)
+{
+    private ContainerSummary _summary = summary;
+    private string _cpuText = "—";
+    private string _memText = "—";
+    private double _cpuPercent;
+    private long _memoryBytes;
+
+    /// <summary>最近若干次 CPU 采样(行内 sparkline 用)。</summary>
+    public ObservableCollection<double> CpuSamples { get; } = [];
+
+    /// <summary>
+    /// 拥有这一行的页面。
+    /// <para>
+    /// 存在的唯一理由是右键菜单:<c>ContextMenu</c> 弹在一棵**独立的 popup 树**里,
+    /// <c>$parent[ItemsControl]</c> 在那里解析不到页面的视图模型。给行一个回引,
+    /// 菜单项就能写成 <c>{Binding Owner.XxxCommand}</c>。
+    /// </para>
+    /// </summary>
+    public Pages.ContainersPageViewModel? Owner { get; set; }
+
+    /// <summary>底层数据。</summary>
+    public ContainerSummary Summary => _summary;
+
+    /// <summary>容器名。</summary>
+    public string Name => _summary.Name;
+
+    /// <summary>镜像引用。</summary>
+    public string Image => _summary.Image ?? "";
+
+    /// <summary>端口摘要。</summary>
+    public string Ports => Humanize.Ports(_summary.Ports);
+
+    /// <summary>compose 项目名;不属于任何项目时为空。</summary>
+    public string Project => _summary.ComposeProject ?? "";
+
+    /// <summary>有没有 compose 项目。</summary>
+    public bool HasProject => Project.Length > 0;
+
+    /// <summary>daemon 的状态串。</summary>
+    public string Status => _summary.Status ?? "";
+
+    /// <summary>是否在跑。</summary>
+    public bool IsRunning => _summary.State == "running";
+
+    /// <summary>是否暂停。</summary>
+    public bool IsPaused => _summary.State == "paused";
+
+    /// <summary>是否不健康。</summary>
+    public bool IsUnhealthy => Status.Contains("(unhealthy)", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>是否异常退出。</summary>
+    public bool IsFailed => _summary.State == "exited" && !Status.Contains("(0)", StringComparison.Ordinal);
+
+    /// <summary>行的状态色。</summary>
+    public RowTone Tone =>
+        _summary.State is "restarting" or "created" ? RowTone.Busy
+        : IsUnhealthy || IsFailed ? RowTone.Danger
+        : IsPaused ? RowTone.Warn
+        : IsRunning ? RowTone.Ok
+        : RowTone.Idle;
+
+    /// <summary>
+    /// 运行时长 / 停止多久。直接用 daemon 那句人话的后半段,
+    /// 而不是自己算 —— 它已经把 "Up 3 days (healthy)" 里的括号处理好了。
+    /// </summary>
+    public string Uptime
     {
-        get => _network;
-        private set => SetProperty(ref _network, value);
-    }
-
-    /// <summary>块设备读写。</summary>
-    public string BlockIo
-    {
-        get => _blockIo;
-        private set => SetProperty(ref _blockIo, value);
-    }
-
-    /// <summary>进程数。</summary>
-    public string Pids
-    {
-        get => _pids;
-        private set => SetProperty(ref _pids, value);
-    }
-
-    /// <summary>贴上一次统计快照;<paramref name="stats" /> 为 null 表示这个容器没在跑。</summary>
-    /// <param name="stats">统计。</param>
-    public void ApplyStats(StatsItem? stats)
-    {
-        Cpu = stats?.CpuPercent ?? string.Empty;
-        Memory = stats?.MemUsage ?? string.Empty;
-        Network = stats?.NetIO ?? string.Empty;
-        BlockIo = stats?.BlockIO ?? string.Empty;
-        Pids = stats?.Pids ?? string.Empty;
-    }
-}
-
-/// <summary>镜像行。</summary>
-/// <param name="model">镜像。</param>
-public sealed class ImageRow(ImageItem model) : Row<ImageItem>(model)
-{
-    /// <inheritdoc />
-    /// <remarks>同一个镜像 id 可以有多个标签,每个标签在 <c>docker images</c> 里各占一行 —— 身份必须带上标签。</remarks>
-    public override string Key => $"{Model.Id}|{Model.Repository}:{Model.Tag}";
-}
-
-/// <summary>卷行。</summary>
-/// <param name="model">卷。</param>
-public sealed class VolumeRow(VolumeItem model) : Row<VolumeItem>(model)
-{
-    /// <inheritdoc />
-    public override string Key => Model.Name;
-}
-
-/// <summary>网络行。</summary>
-/// <param name="model">网络。</param>
-public sealed class NetworkRow(NetworkItem model) : Row<NetworkItem>(model)
-{
-    /// <inheritdoc />
-    public override string Key => Model.Id;
-}
-
-/// <summary>compose 项目行。</summary>
-/// <param name="model">项目。</param>
-public sealed class ComposeRow(ComposeProjectItem model) : Row<ComposeProjectItem>(model)
-{
-    /// <inheritdoc />
-    public override string Key => Model.Name;
-}
-
-/// <summary>会话下拉里的一项。</summary>
-/// <param name="SessionId">宿主的会话 id。</param>
-/// <param name="Display">展示文字(<c>user@host</c>)。</param>
-/// <param name="Host">主机名(设置按主机记,换个会话再连上还是同一套 sudo / DOCKER_HOST)。</param>
-public sealed record SessionOption(string SessionId, string Display, string Host)
-{
-    /// <inheritdoc />
-    public override string ToString() => Display;
-}
-
-/// <summary>执行记录里的一条。</summary>
-/// <param name="Time">发起时刻(本地)。</param>
-/// <param name="Command">远端实际执行的命令。</param>
-/// <param name="ExitCode">退出码。</param>
-/// <param name="Elapsed">耗时。</param>
-public sealed record CommandLogEntry(DateTimeOffset Time, string Command, int ExitCode, TimeSpan Elapsed)
-{
-    /// <summary>一行文本形式(执行记录抽屉里就是一段纯文本)。</summary>
-    public string Line =>
-        $"[{Time:HH:mm:ss}] ({ExitCode}) {Elapsed.TotalMilliseconds:F0}ms  {Command}";
-}
-
-/// <summary>把新数据合进现有行集合,尽量保住行的身份(以及用户的选中态)。</summary>
-public static class RowSync
-{
-    /// <summary>按 <see cref="Row{T}.Key" /> 就地合并。</summary>
-    /// <typeparam name="TRow">行类型。</typeparam>
-    /// <typeparam name="TModel">模型类型。</typeparam>
-    /// <param name="target">现有集合(就地改)。</param>
-    /// <param name="models">新数据(顺序即目标顺序)。</param>
-    /// <param name="keyOf">从模型取身份。</param>
-    /// <param name="create">造一个新行。</param>
-    public static void Apply<TRow, TModel>(
-        ObservableCollection<TRow> target,
-        IReadOnlyList<TModel> models,
-        Func<TModel, string> keyOf,
-        Func<TModel, TRow> create)
-        where TRow : Row<TModel>
-        where TModel : class
-    {
-        for (var i = 0; i < models.Count; i++)
+        get
         {
-            var model = models[i];
-            var key = keyOf(model);
-            if (i < target.Count && target[i].Key == key)
+            string status = Status;
+            if (status.Length == 0)
             {
-                target[i].Update(model);
-                continue;
+                return "—";
             }
-            var existing = -1;
-            for (var j = i + 1; j < target.Count; j++)
+            // 已退出的容器:括号里的退出码是这一行最要紧的信息,不能跟着括号一起被裁掉。
+            if (status.StartsWith("Exited ", StringComparison.Ordinal))
             {
-                if (target[j].Key == key)
-                {
-                    existing = j;
-                    break;
-                }
+                return "退出 " + status[7..];
             }
-            if (existing >= 0)
-            {
-                var row = target[existing];
-                row.Update(model);
-                target.Move(existing, i);
-                continue;
-            }
-            target.Insert(i, create(model));
+            // 运行中的容器:括号里是健康状态,它已经由左侧色条与圆点表达了,这一列只要时长。
+            int paren = status.IndexOf(" (", StringComparison.Ordinal);
+            string text = paren > 0 ? status[..paren] : status;
+            return text.StartsWith("Up ", StringComparison.Ordinal) ? text[3..] : text;
         }
-        while (target.Count > models.Count)
+    }
+
+    /// <summary>CPU 占用文本。</summary>
+    public string CpuText
+    {
+        get => _cpuText;
+        private set => SetField(ref _cpuText, value);
+    }
+
+    /// <summary>内存占用文本。</summary>
+    public string MemText
+    {
+        get => _memText;
+        private set => SetField(ref _memText, value);
+    }
+
+    /// <summary>CPU 百分比(决定 sparkline 是否转黄)。</summary>
+    public double CpuPercent
+    {
+        get => _cpuPercent;
+        private set
         {
-            target.RemoveAt(target.Count - 1);
+            if (SetField(ref _cpuPercent, value))
+            {
+                OnPropertyChanged(nameof(CpuHot));
+            }
         }
+    }
+
+    /// <summary>CPU 高到该提醒的程度。</summary>
+    public bool CpuHot => _cpuPercent >= 30;
+
+    /// <summary>最近一帧的内存占用字节(总览页按它汇总,没采到时为 0)。</summary>
+    public long MemoryBytes
+    {
+        get => _memoryBytes;
+        private set => SetField(ref _memoryBytes, value);
+    }
+
+    /// <summary>用新快照更新这一行。</summary>
+    public void Update(ContainerRow incoming)
+    {
+        _summary = incoming.Summary;
+        if (!IsRunning)
+        {
+            CpuText = "—";
+            MemText = "—";
+            CpuPercent = 0;
+            MemoryBytes = 0;
+            if (CpuSamples.Count > 0)
+            {
+                CpuSamples.Clear();
+            }
+        }
+        OnPropertiesChanged(nameof(Summary), nameof(Name), nameof(Image), nameof(Ports), nameof(Project),
+            nameof(HasProject), nameof(Status), nameof(IsRunning), nameof(IsPaused), nameof(IsUnhealthy),
+            nameof(IsFailed), nameof(Tone), nameof(Uptime));
+    }
+
+    /// <summary>吃进一帧统计。</summary>
+    public void ApplyStats(ContainerStats stats)
+    {
+        CpuPercent = stats.CpuPercent;
+        CpuText = Humanize.Percent(stats.CpuPercent);
+        MemoryBytes = (long)stats.MemoryUsed;
+        // 列表这一格很窄,只放绝对值;"占上限多少"留给详情抽屉,那里有横向空间。
+        MemText = Humanize.Bytes(stats.MemoryUsed);
+        CpuSamples.Add(stats.CpuPercent);
+        // 只留最近 14 个点:行内那条 sparkline 就这么宽,多留的点画不出来也没人看。
+        while (CpuSamples.Count > 14)
+        {
+            CpuSamples.RemoveAt(0);
+        }
+    }
+}
+
+/// <summary>镜像列表的一行。</summary>
+public sealed class ImageRow(ImageSummary summary) : RowBase(summary.Id)
+{
+    private ImageSummary _summary = summary;
+
+    /// <summary>拥有这一行的页面(右键菜单用,理由同 <see cref="ContainerRow.Owner" />)。</summary>
+    public Pages.ImagesPageViewModel? Owner { get; set; }
+
+    /// <summary>底层数据。</summary>
+    public ImageSummary Summary => _summary;
+
+    /// <summary>仓库名(第一个标签的前半段)。</summary>
+    public string Repository => SplitTag().Repository;
+
+    /// <summary>标签(第一个标签的后半段)。</summary>
+    public string Tag => SplitTag().Tag;
+
+    /// <summary>是否悬空。</summary>
+    public bool IsDangling => _summary.IsDangling;
+
+    /// <summary>大小。</summary>
+    public string SizeText => Humanize.Bytes(_summary.Size);
+
+    /// <summary>创建时间。</summary>
+    public string CreatedText => Humanize.AgoFromUnix(_summary.Created);
+
+    /// <summary>被多少容器使用。</summary>
+    public string UsageText => _summary.Containers switch
+    {
+        < 0 => IsDangling ? "悬空" : "—",
+        0 => IsDangling ? "悬空" : "未使用",
+        1 => "1 个容器",
+        _ => $"{_summary.Containers} 个容器"
+    };
+
+    /// <summary>使用情况的语气。</summary>
+    public RowTone Tone => IsDangling ? RowTone.Warn : _summary.Containers > 0 ? RowTone.Ok : RowTone.Idle;
+
+    /// <summary>全部标签(详情用)。</summary>
+    public string AllTags => _summary.RepoTags is { Length: > 0 } tags ? string.Join(" · ", tags) : "<none>";
+
+    /// <summary>用新快照更新。</summary>
+    public void Update(ImageRow incoming)
+    {
+        _summary = incoming.Summary;
+        OnPropertiesChanged(nameof(Summary), nameof(Repository), nameof(Tag), nameof(IsDangling),
+            nameof(SizeText), nameof(CreatedText), nameof(UsageText), nameof(Tone), nameof(AllTags));
+    }
+
+    private (string Repository, string Tag) SplitTag()
+    {
+        string first = _summary.RepoTags is { Length: > 0 } tags ? tags[0] : "<none>:<none>";
+        int colon = first.LastIndexOf(':');
+        // 冒号可能属于端口(registry:5000/foo),所以只有它出现在最后一个斜杠之后才是标签分隔。
+        int slash = first.LastIndexOf('/');
+        return colon > slash && colon > 0 ? (first[..colon], first[(colon + 1)..]) : (first, "latest");
+    }
+}
+
+/// <summary>卷列表的一行。</summary>
+public sealed class VolumeRow(VolumeSummary summary, int refCount) : RowBase(summary.Name)
+{
+    private VolumeSummary _summary = summary;
+    private int _refCount = refCount;
+
+    /// <summary>底层数据。</summary>
+    public VolumeSummary Summary => _summary;
+
+    /// <summary>卷名。</summary>
+    public string Name => _summary.Name;
+
+    /// <summary>驱动。</summary>
+    public string Driver => _summary.Driver ?? "local";
+
+    /// <summary>挂载点。</summary>
+    public string Mountpoint => _summary.Mountpoint ?? "";
+
+    /// <summary>创建时间。</summary>
+    public string CreatedText => Humanize.LocalTime(_summary.CreatedAt);
+
+    /// <summary>被多少容器引用。</summary>
+    public int RefCount => _refCount;
+
+    /// <summary>使用情况文本。</summary>
+    public string UsageText => _refCount switch
+    {
+        <= 0 => "未使用",
+        1 => "1 个容器",
+        _ => $"{_refCount} 个容器"
+    };
+
+    /// <summary>大小;<c>/system/df</c> 没算过时给破折号。</summary>
+    public string SizeText => _summary.UsageData is { Size: >= 0 } usage ? Humanize.Bytes(usage.Size) : "—";
+
+    /// <summary>语气。</summary>
+    public RowTone Tone => _refCount > 0 ? RowTone.Ok : RowTone.Warn;
+
+    /// <summary>compose 项目名。</summary>
+    public string Project => _summary.Labels?.GetValueOrDefault("com.docker.compose.project") ?? "";
+
+    /// <summary>用新快照更新。</summary>
+    public void Update(VolumeRow incoming)
+    {
+        _summary = incoming.Summary;
+        _refCount = incoming.RefCount;
+        OnPropertiesChanged(nameof(Summary), nameof(Name), nameof(Driver), nameof(Mountpoint),
+            nameof(CreatedText), nameof(RefCount), nameof(UsageText), nameof(SizeText), nameof(Tone), nameof(Project));
+    }
+}
+
+/// <summary>网络列表的一行。</summary>
+public sealed class NetworkRow(NetworkSummary summary) : RowBase(summary.Id)
+{
+    private NetworkSummary _summary = summary;
+
+    /// <summary>底层数据。</summary>
+    public NetworkSummary Summary => _summary;
+
+    /// <summary>网络名。</summary>
+    public string Name => _summary.Name;
+
+    /// <summary>驱动。</summary>
+    public string Driver => _summary.Driver ?? "";
+
+    /// <summary>作用域。</summary>
+    public string Scope => _summary.Scope ?? "";
+
+    /// <summary>第一段子网。</summary>
+    public string Subnet => _summary.FirstSubnet ?? "—";
+
+    /// <summary>是否内置(bridge/host/none —— 删不掉)。</summary>
+    public bool IsPredefined => _summary.IsPredefined;
+
+    /// <summary>接入的容器数。</summary>
+    public int AttachedCount => _summary.Containers?.Count ?? 0;
+
+    /// <summary>接入情况文本。</summary>
+    public string AttachedText => AttachedCount switch
+    {
+        0 => "未接入",
+        1 => "1 个容器",
+        _ => $"{AttachedCount} 个容器"
+    };
+
+    /// <summary>语气。</summary>
+    public RowTone Tone => IsPredefined ? RowTone.Idle : AttachedCount > 0 ? RowTone.Ok : RowTone.Warn;
+
+    /// <summary>用新快照更新。</summary>
+    public void Update(NetworkRow incoming)
+    {
+        _summary = incoming.Summary;
+        OnPropertiesChanged(nameof(Summary), nameof(Name), nameof(Driver), nameof(Scope), nameof(Subnet),
+            nameof(IsPredefined), nameof(AttachedCount), nameof(AttachedText), nameof(Tone));
     }
 }

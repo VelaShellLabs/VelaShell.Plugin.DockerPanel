@@ -1,0 +1,279 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:VelaShell.Plugin.DockerPanel.Ui"
+             xmlns:pages="clr-namespace:VelaShell.Plugin.DockerPanel.Ui.Pages"
+             x:Class="VelaShell.Plugin.DockerPanel.Ui.Pages.ContainerFilesView"
+             x:DataType="pages:ContainerFilesViewModel">
+
+  <!--
+    容器内文件浏览与在线编辑。
+    列目录走 exec 跑 ls(Engine API 没有列目录这个端点,而 /archive 只能整包取走);
+    读写单个文件走 /archive 的 tar 流 —— 不经 shell,不受登录 shell 与引用规则影响。
+  -->
+
+  <!-- DragDrop.AllowDrop:拖文件进来 = 上传到当前目录(设计稿 04 号板那块拖放区) -->
+  <DockPanel DragDrop.AllowDrop="True">
+    <Border DockPanel.Dock="Top" Classes="subbar">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+        <Button Grid.Column="0" Theme="{StaticResource DockerIconButton}" ToolTip.Tip="上一级"
+                IsEnabled="{Binding CanGoUp}" Command="{Binding UpCommand}">
+          <ui:Glyph Key="Icon.folder-up" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+        </Button>
+        <TextBlock Grid.Column="1" Text="{Binding Path}" Classes="cell" Margin="8,0,0,0" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <ui:Glyph Key="Docker.git-compare" Size="12" Brush="{DynamicResource VelaWarning}" />
+          <TextBlock Text="{Binding ChangeText}" Classes="meta" Foreground="{DynamicResource VelaWarning}" />
+        </StackPanel>
+        <ToggleButton Grid.Column="4" Theme="{StaticResource DockerSwitch}" Margin="10,0,6,0"
+                      ToolTip.Tip="只看相对镜像有变更的条目" IsChecked="{Binding ChangedOnly}" />
+        <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="2" Margin="8,0,0,0">
+          <Button Theme="{StaticResource DockerIconButton}" IsVisible="{Binding CanPickFiles}"
+                  ToolTip.Tip="上传本地文件到这个目录…" Command="{Binding UploadCommand}">
+            <ui:Glyph Key="Icon.upload" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+          </Button>
+          <Button Theme="{StaticResource DockerIconButton}"
+                  ToolTip.Tip="重新列一次" Command="{Binding RefreshCommand}">
+            <ui:Glyph Key="Icon.refresh-cw" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Border DockPanel.Dock="Top" IsVisible="{Binding HasError}" Padding="12,8"
+            Background="{DynamicResource VelaShellRedDim}">
+      <StackPanel Orientation="Horizontal" Spacing="7">
+        <ui:Glyph Key="Icon.triangle-alert" Size="13" Brush="{DynamicResource VelaError}" />
+        <TextBlock Text="{Binding Error}" FontSize="{DynamicResource VelaFontSize11}"
+                   Foreground="{DynamicResource VelaError}" TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <!-- 编辑器 -->
+    <Grid IsVisible="{Binding HasOpenFile}">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" Height="36" Padding="12,0"
+                Background="{DynamicResource VelaBgContentHeader}"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+            <ui:Glyph Grid.Column="0" Key="Docker.file-code" Size="13" VerticalAlignment="Center"
+                      Brush="{DynamicResource VelaWarning}" />
+            <TextBlock Grid.Column="1" Text="{Binding OpenFileDirectory}" Classes="meta" Margin="7,0,0,0" />
+            <TextBlock Grid.Column="2" Text="{Binding OpenFileName}" Classes="cell" FontWeight="SemiBold"
+                       Foreground="{DynamicResource VelaTextPrimary}" />
+            <Border Grid.Column="3" Classes="chip" Height="16" Margin="8,0,0,0"
+                    IsVisible="{Binding IsModified}" Background="{DynamicResource DockerWarnDim}">
+              <TextBlock Text="{Binding ModifiedText}" FontSize="{DynamicResource VelaFontSize9}"
+                         Foreground="{DynamicResource VelaWarning}" VerticalAlignment="Center" />
+            </Border>
+            <!-- 编辑 / 差异:差异比的是**这次编辑前后**,不是相对镜像 -->
+            <Border Grid.Column="4" HorizontalAlignment="Right" Margin="0,0,8,0" CornerRadius="4" Padding="2"
+                    Background="{DynamicResource VelaBgInput}"
+                    BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="editmode"
+                             IsChecked="{Binding EditMode, Mode=OneWay}" Command="{Binding ShowEditCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <ui:Glyph Key="Icon.pencil" Size="11" Brush="{Binding $parent[RadioButton].Foreground}" />
+                    <TextBlock Text="编辑" FontSize="{DynamicResource VelaFontSize11}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </StackPanel>
+                </RadioButton>
+                <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="editmode"
+                             IsChecked="{Binding DiffMode, Mode=OneWay}" Command="{Binding ShowDiffCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <ui:Glyph Key="Docker.git-compare" Size="11" Brush="{Binding $parent[RadioButton].Foreground}" />
+                    <TextBlock Text="差异" FontSize="{DynamicResource VelaFontSize11}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </StackPanel>
+                </RadioButton>
+              </StackPanel>
+            </Border>
+            <Button Grid.Column="5" Theme="{StaticResource DockerIconButton}" Command="{Binding CloseFileCommand}">
+              <ui:Glyph Key="Icon.x" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+            </Button>
+          </Grid>
+        </Border>
+
+        <!-- 页脚:覆盖容器内文件属于会丢数据的操作 -->
+        <Border DockPanel.Dock="Bottom" Height="44" Padding="12,0"
+                Background="{DynamicResource VelaBgContentHeader}"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,1,0,0">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+            <ui:Glyph Grid.Column="0" Key="Docker.shield-alert" Size="12" VerticalAlignment="Center"
+                      Brush="{DynamicResource VelaWarning}" />
+            <TextBlock Grid.Column="1" Text="覆盖容器内文件会丢数据 —— 保存需手打 save" Classes="meta"
+                       Margin="6,0,0,0" Foreground="{DynamicResource VelaWarning}" />
+            <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Height="26" Margin="0,0,8,0"
+                    IsEnabled="{Binding IsModified}" Command="{Binding RevertCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Docker.undo-2" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+                <TextBlock Text="撤销" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="4" Theme="{StaticResource DockerToolButton}" Height="26"
+                    Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
+                    IsEnabled="{Binding IsModified}" Command="{Binding SaveCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Icon.save" Size="12" Brush="{DynamicResource VelaAccentForeground}" />
+                <TextBlock Text="保存到容器…" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                           Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </Grid>
+        </Border>
+
+        <!-- 编辑器底部状态条:位置、改了几行、编码、换行符、语言 -->
+        <Border DockPanel.Dock="Bottom" Height="22" Padding="12,0"
+                Background="{DynamicResource VelaBgSurface}"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,1,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <TextBlock Text="{Binding CaretText}" Classes="meta" />
+            <TextBlock Text="{Binding ModifiedLinesText}" Classes="meta" />
+            <Border Classes="vdivider" />
+            <TextBlock Text="UTF-8" Classes="meta" />
+            <TextBlock Text="{Binding LineEnding}" Classes="meta" />
+            <TextBlock Text="{Binding Language}" Classes="meta" />
+          </StackPanel>
+        </Border>
+
+        <!-- 右侧属性栏:文件属性 + 写回方式 + 重载 + 本面板写入历史 -->
+        <Border DockPanel.Dock="Right" Width="240" Padding="0"
+                Background="{DynamicResource VelaBgSurface}"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
+          <ScrollViewer>
+            <StackPanel Margin="12,10" Spacing="12">
+              <TextBlock Text="文件" Classes="h3" />
+              <ItemsControl ItemsSource="{Binding FileProperties}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="pages:DetailField">
+                    <Grid ColumnDefinitions="76,*" Margin="0,2">
+                      <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label" />
+                      <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" TextWrapping="Wrap"
+                                 Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <Border Classes="divider" />
+              <TextBlock Text="写回方式" Classes="h3" />
+              <TextBlock Text="PUT /containers/{id}/archive" Classes="code" FontSize="10" TextWrapping="Wrap" />
+              <TextBlock Classes="hint" TextWrapping="Wrap"
+                         Text="整个文件以 tar 流写回容器可写层。不经过 shell,不受登录 shell 与引用规则影响。" />
+
+              <!-- 猜得出重载命令才显示这一段:给一个会失败的默认命令比不给更糟 -->
+              <StackPanel Spacing="6" IsVisible="{Binding HasReloadCommand}">
+                <Border Classes="divider" />
+                <TextBlock Text="保存后" Classes="h3" />
+                <TextBlock Classes="hint" TextWrapping="Wrap"
+                           Text="多数服务不会自动重载配置 —— 写回去之后还得让它重新读一遍。" />
+                <CheckBox Classes="compact" IsChecked="{Binding ReloadAfterSave}">
+                  <TextBlock Text="{Binding ReloadCommand, StringFormat='保存后执行 {0}'}" Classes="cell"
+                             TextWrapping="Wrap" />
+                </CheckBox>
+              </StackPanel>
+
+              <StackPanel Spacing="6" IsVisible="{Binding HasHistory}">
+                <Border Classes="divider" />
+                <TextBlock Text="本面板写入历史" Classes="h3" />
+                <ItemsControl ItemsSource="{Binding History}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="pages:FileWriteRecord">
+                      <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                        <TextBlock Grid.Column="0" Text="{Binding TimeText}" Classes="meta" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="cell" Margin="8,0"
+                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}" />
+                        <TextBlock Grid.Column="2" Text="{Binding Summary}" Classes="meta"
+                                   Foreground="{DynamicResource VelaWarning}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </Border>
+
+        <!-- 正文:编辑态是可写的 TextBox,差异态是逐行标记的只读列表 -->
+        <Border Classes="terminal">
+          <Grid>
+            <TextBox Name="Editor" IsVisible="{Binding EditMode}"
+                     Text="{Binding EditorText}" AcceptsReturn="True" AcceptsTab="True"
+                     Background="Transparent" BorderThickness="0" Padding="12,8"
+                     FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize11}"
+                     Foreground="{DynamicResource VelaShellWhite}"
+                     CaretBrush="{DynamicResource VelaAccent}"
+                     SelectionBrush="{DynamicResource VelaAccentDim}"
+                     TextWrapping="NoWrap" />
+            <ScrollViewer IsVisible="{Binding DiffMode}">
+              <ItemsControl ItemsSource="{Binding DiffLines}" Margin="0,8">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="pages:EditorLine">
+                    <Grid ColumnDefinitions="44,16,*" MinHeight="17"
+                          Background="{Binding Tone, Converter={x:Static ui:Converters.DiffBackground}}">
+                      <TextBlock Grid.Column="0" Text="{Binding Number}" TextAlignment="Right" Margin="0,0,8,0"
+                                 FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="10"
+                                 Foreground="{DynamicResource DockerCodeComment}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding Marker}" TextAlignment="Center"
+                                 FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="11" FontWeight="SemiBold"
+                                 VerticalAlignment="Center"
+                                 Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                      <SelectableTextBlock Grid.Column="2" Text="{Binding Text}" Margin="6,0,12,0"
+                                           FontFamily="{DynamicResource VelaUiMonoFont}"
+                                           FontSize="{DynamicResource VelaFontSize11}" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource VelaShellWhite}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Grid>
+        </Border>
+      </DockPanel>
+    </Grid>
+
+    <!-- 目录列表 -->
+    <ScrollViewer IsVisible="{Binding !HasOpenFile}">
+      <ItemsControl ItemsSource="{Binding Entries}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="pages:FileEntryItem">
+            <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="NaN" CornerRadius="0"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12,0"
+                    Command="{Binding $parent[ItemsControl].((pages:ContainerFilesViewModel)DataContext).OpenCommand}"
+                    CommandParameter="{Binding}">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Height="26" IsVisible="{Binding Visible}">
+                <ui:Glyph Grid.Column="0" Key="{Binding Icon}" Size="12" VerticalAlignment="Center"
+                          Brush="{DynamicResource VelaFileFolderIcon}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="8,0"
+                            VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Name}" Classes="cell"
+                             Foreground="{DynamicResource VelaTextPrimary}" />
+                  <TextBlock Text="{Binding LinkText}" Classes="meta" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding ChangeMarker}" IsVisible="{Binding HasChange}"
+                           FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize9}"
+                           FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"
+                           Foreground="{Binding ChangeTone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                <TextBlock Grid.Column="3" Text="{Binding SizeText}" Classes="meta" Width="70"
+                           TextAlignment="Right" />
+                <TextBlock Grid.Column="4" Text="{Binding Modified}" Classes="meta" Width="110"
+                           TextAlignment="Right" />
+                <!-- 目录取到本地是一个 tar,文件是原样 —— 两种都走这一个按钮 -->
+                <Button Grid.Column="5" Theme="{StaticResource DockerIconButton}" Width="22" Height="22"
+                        Margin="6,0,0,0"
+                        IsVisible="{Binding $parent[ItemsControl].((pages:ContainerFilesViewModel)DataContext).CanPickFiles}"
+                        ToolTip.Tip="取到本地…"
+                        Command="{Binding $parent[ItemsControl].((pages:ContainerFilesViewModel)DataContext).DownloadCommand}"
+                        CommandParameter="{Binding}">
+                  <ui:Glyph Key="Docker.arrow-down-to-line" Size="12"
+                            Brush="{DynamicResource VelaTextTertiary}" />
+                </Button>
+              </Grid>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/SolutionItems/">
+    <File Path="LICENSE.txt" />
+    <File Path="plan.md" />
+  </Folder>
   <Project Path="VelaShell.Plugin.DockerPanel.Tests/VelaShell.Plugin.DockerPanel.Tests.csproj" />
   <Project Path="VelaShell.Plugin.DockerPanel/VelaShell.Plugin.DockerPanel.csproj" />
 </Solution>

@@ -1,0 +1,237 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    面板通用版式。几何对齐宿主:40px 顶栏 / 32px 数据行 / 26px 列头 / 24px 状态条。
+
+    弱化文字一律 VelaTextTertiary,不用 VelaTextMuted —— 后者(#545B76)压在面板底
+    (#282A36)上只有约 2.5:1,而这个面板里的"淡字"(镜像名、端口、时长、层 id)
+    全是要读的信息,不是装饰。Muted 只留给分隔用的中点与真正的装饰。
+  -->
+
+  <!-- ── 文字 ───────────────────────────────────────────────────── -->
+
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize16}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextPrimary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize14}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextPrimary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.h3">
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize12}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextSecondary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 列头。 -->
+  <Style Selector="TextBlock.col">
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize10}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <!-- 数据单元格:等宽,因为它们是 id / 路径 / 数值,对齐了才好扫。 -->
+  <Style Selector="TextBlock.cell">
+    <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextSecondary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <!-- 行的主名字:用 UI 字体,它是这一行里唯一"读"而不是"扫"的东西。 -->
+  <Style Selector="TextBlock.name">
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize12}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextPrimary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <Style Selector="TextBlock.meta">
+    <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize10}" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.hint">
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize10}" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="LineHeight" Value="16" />
+  </Style>
+
+  <Style Selector="TextBlock.code">
+    <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaShellWhite}" />
+  </Style>
+
+  <!-- 语义色。行内直接加 class,不必到处写 DynamicResource。 -->
+  <Style Selector="TextBlock.ok">
+    <Setter Property="Foreground" Value="{DynamicResource VelaStatusConnected}" />
+  </Style>
+  <Style Selector="TextBlock.warn">
+    <Setter Property="Foreground" Value="{DynamicResource VelaWarning}" />
+  </Style>
+  <Style Selector="TextBlock.danger">
+    <Setter Property="Foreground" Value="{DynamicResource VelaError}" />
+  </Style>
+  <Style Selector="TextBlock.info">
+    <Setter Property="Foreground" Value="{DynamicResource VelaInfo}" />
+  </Style>
+  <Style Selector="TextBlock.accent">
+    <Setter Property="Foreground" Value="{DynamicResource VelaAccent}" />
+  </Style>
+  <Style Selector="TextBlock.project">
+    <Setter Property="Foreground" Value="{DynamicResource VelaShellMagenta}" />
+  </Style>
+  <Style Selector="TextBlock.dimmed">
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
+  </Style>
+
+  <!-- ── 容器 ───────────────────────────────────────────────────── -->
+
+  <Style Selector="Border.toolbar">
+    <Setter Property="Background" Value="{DynamicResource VelaBgContentHeader}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Padding" Value="12,0" />
+  </Style>
+
+  <Style Selector="Border.subbar">
+    <Setter Property="Background" Value="{DynamicResource VelaBgContentHeader}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="12,0" />
+  </Style>
+
+  <Style Selector="Border.header-row">
+    <Setter Property="Background" Value="{DynamicResource VelaBgPage}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Height" Value="26" />
+  </Style>
+
+  <Style Selector="Border.statusbar">
+    <Setter Property="Background" Value="{DynamicResource VelaBgContentHeader}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Padding" Value="12,0" />
+  </Style>
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource VelaBgSurface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+
+  <Style Selector="Border.input">
+    <Setter Property="Background" Value="{DynamicResource VelaBgInput}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="8,0" />
+  </Style>
+
+  <Style Selector="Border.divider">
+    <Setter Property="Background" Value="{DynamicResource VelaBorderPrimary}" />
+    <Setter Property="Height" Value="1" />
+  </Style>
+
+  <Style Selector="Border.vdivider">
+    <Setter Property="Background" Value="{DynamicResource VelaBorderPrimary}" />
+    <Setter Property="Width" Value="1" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 终端/日志/代码面板:亮色主题下也保持深底 —— 这些内容本来就是终端里的东西。 -->
+  <Style Selector="Border.terminal">
+    <Setter Property="Background" Value="{DynamicResource VelaBgTerminal}" />
+  </Style>
+
+  <!-- 徽章。 -->
+  <Style Selector="Border.chip">
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Height" Value="17" />
+    <Setter Property="Padding" Value="7,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- ── 输入 ───────────────────────────────────────────────────── -->
+
+  <!-- 面板里的 TextBox 一律去壳:边框由外层 Border.input 承担,与宿主 input-affix 同一路数。 -->
+  <Style Selector="TextBox.bare">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextPrimary}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource VelaAccent}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource VelaAccentDim}" />
+  </Style>
+
+  <Style Selector="TextBox.bare.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
+  </Style>
+
+  <Style Selector="CheckBox.compact">
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- ── 列表 ───────────────────────────────────────────────────── -->
+
+  <!-- 数据行:32px,选中态用 BgActive,悬停用 BgHover。 -->
+  <Style Selector="ListBoxItem.row">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
+  <Style Selector="ListBoxItem.row:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource VelaBgHover}" />
+  </Style>
+  <Style Selector="ListBoxItem.row:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource VelaBgActive}" />
+  </Style>
+
+  <!-- 面板里所有列表都不要 Fluent 默认的圆角与内边距。 -->
+  <Style Selector="ListBox.flat">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+</Styles>

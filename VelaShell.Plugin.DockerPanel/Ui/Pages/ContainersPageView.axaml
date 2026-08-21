@@ -1,0 +1,526 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:VelaShell.Plugin.DockerPanel.Ui"
+             xmlns:pages="clr-namespace:VelaShell.Plugin.DockerPanel.Ui.Pages"
+             xmlns:docker="clr-namespace:VelaShell.Plugin.DockerPanel.Docker"
+             x:Class="VelaShell.Plugin.DockerPanel.Ui.Pages.ContainersPageView"
+             x:DataType="pages:ContainersPageViewModel">
+
+  <!--
+    容器页:工具条 → 选中条 → 列头 → 列表,右侧是详情抽屉。
+    抽屉在右不在下:详情与列表同屏对照,而底部抽屉会把列表挤成三行 ——
+    偏偏那正是用户要在里面找东西的地方。
+  -->
+
+  <Grid ColumnDefinitions="*,Auto">
+
+    <!-- ── 日志模式:来源选择器 + 合并流,取代列表 ──────────────────────
+         取代而不是叠加:合并多条流时左边要放来源选择器,而那块地方原本就是列表的 -->
+    <Grid Grid.Column="0" ColumnDefinitions="240,Auto,*" IsVisible="{Binding IsLogsMode}">
+
+      <DockPanel Grid.Column="0" Background="{DynamicResource VelaBgSurface}">
+        <Border DockPanel.Dock="Top" Classes="subbar">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Grid.Column="0" Text="日志来源" Classes="h3" />
+            <Button Grid.Column="2" Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="6,0"
+                    ToolTip.Tip="全选 / 全不选" Command="{Binding ToggleAllSourcesCommand}">
+              <TextBlock Text="全选" FontSize="{DynamicResource VelaFontSize10}"
+                         Foreground="{DynamicResource VelaAccent}" />
+            </Button>
+          </Grid>
+        </Border>
+        <Border DockPanel.Dock="Top" Classes="input" Height="26" Margin="10,8">
+          <Grid ColumnDefinitions="Auto,*">
+            <ui:Glyph Grid.Column="0" Key="Icon.search" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+            <TextBox Grid.Column="1" Classes="bare" Margin="7,0,0,0" Text="{Binding LogSourceSearch}"
+                     PlaceholderText="过滤容器…" />
+          </Grid>
+        </Border>
+        <Border DockPanel.Dock="Bottom" Height="28" Padding="10,0"
+                Background="{DynamicResource VelaBgContentHeader}"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,1,0,0">
+          <TextBlock Text="{Binding MergedText}" Classes="meta" VerticalAlignment="Center"
+                     Foreground="{DynamicResource VelaAccent}" />
+        </Border>
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding LogSources}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="pages:LogSourceItem">
+                <Grid Height="30" ColumnDefinitions="Auto,Auto,*,Auto" Margin="10,0"
+                      IsVisible="{Binding Visible}">
+                  <CheckBox Grid.Column="0" Classes="compact" IsChecked="{Binding Selected}" />
+                  <!-- 来源色条:合并五条流时靠颜色分辨来源,比逐行读容器名快得多 -->
+                  <Border Grid.Column="1" Width="3" Height="14" CornerRadius="2" Margin="2,0,7,0"
+                          Background="{Binding Index, Converter={x:Static ui:Converters.SourceBrush}}" />
+                  <TextBlock Grid.Column="2" Text="{Binding Name}" Classes="cell"
+                             VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="3" Text="{Binding Status}" Classes="meta" VerticalAlignment="Center"
+                             Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+
+      <Border Grid.Column="1" Classes="vdivider" />
+
+      <DockPanel Grid.Column="2">
+        <Border DockPanel.Dock="Top" Classes="toolbar" Height="40">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+            <Button Grid.Column="0" Theme="{StaticResource DockerIconButton}"
+                    ToolTip.Tip="回到容器列表" Command="{Binding ExitLogsCommand}">
+              <ui:Glyph Key="Icon.chevron-left" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
+            </Button>
+            <TextBlock Grid.Column="1" Text="日志" Classes="h1" Margin="8,0,0,0" />
+            <ItemsControl Grid.Column="2" ItemsSource="{Binding MergedLogs.Sources}" Margin="12,0,0,0">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="pages:LogSource">
+                  <!-- chip 可以直接点掉,不必跑回左边面板取消勾选 -->
+                  <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="8,0"
+                          ToolTip.Tip="从合并流里移除"
+                          Command="{Binding $parent[ItemsControl].((pages:ContainersPageViewModel)DataContext).RemoveSourceCommand}"
+                          CommandParameter="{Binding}">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <TextBlock Text="{Binding Name}" FontSize="{DynamicResource VelaFontSize10}"
+                                 Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+                      <ui:Glyph Key="Icon.x" Size="10" Brush="{DynamicResource VelaTextTertiary}" />
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Grid>
+        </Border>
+        <ContentControl Content="{Binding MergedLogs}">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="pages:LogsViewModel">
+              <pages:LogsView />
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </DockPanel>
+    </Grid>
+
+    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*" IsVisible="{Binding !IsLogsMode}">
+
+      <!-- 工具条 -->
+      <Border Grid.Row="0" Classes="toolbar">
+        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
+          <TextBlock Grid.Column="0" Text="容器" Classes="h1" />
+          <TextBlock Grid.Column="1" Text="{Binding TotalCount}" Classes="meta" Margin="8,0,0,0" />
+
+          <!-- 筛选分段 -->
+          <Border Grid.Column="2" Margin="12,0,0,0" CornerRadius="4" Padding="2"
+                  Background="{DynamicResource VelaBgInput}"
+                  BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="cfilter"
+                           IsChecked="{Binding IsAll, Mode=OneWay}" Command="{Binding SetFilterCommand}"
+                           CommandParameter="{x:Static pages:ContainerFilter.All}">
+                <TextBlock Text="{Binding TotalCount, StringFormat='全部 {0}'}" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </RadioButton>
+              <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="cfilter"
+                           IsChecked="{Binding IsRunningFilter, Mode=OneWay}" Command="{Binding SetFilterCommand}"
+                           CommandParameter="{x:Static pages:ContainerFilter.Running}">
+                <TextBlock Text="{Binding RunningCount, StringFormat='运行中 {0}'}" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </RadioButton>
+              <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="cfilter"
+                           IsChecked="{Binding IsStoppedFilter, Mode=OneWay}" Command="{Binding SetFilterCommand}"
+                           CommandParameter="{x:Static pages:ContainerFilter.Stopped}">
+                <TextBlock Text="{Binding StoppedCount, StringFormat='已停止 {0}'}" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </RadioButton>
+              <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="cfilter"
+                           IsChecked="{Binding IsProblemFilter, Mode=OneWay}" Command="{Binding SetFilterCommand}"
+                           CommandParameter="{x:Static pages:ContainerFilter.Problem}">
+                <TextBlock Text="{Binding ProblemCount, StringFormat='异常 {0}'}" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </RadioButton>
+            </StackPanel>
+          </Border>
+
+          <!-- 搜索 -->
+          <Border Grid.Column="3" Classes="input" Width="220" Height="26" Margin="10,0,0,0">
+            <Grid ColumnDefinitions="Auto,*">
+              <ui:Glyph Grid.Column="0" Key="Icon.search" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+              <TextBox Grid.Column="1" Classes="bare" Margin="7,0,0,0" Text="{Binding Search}"
+                       PlaceholderText="按名字、镜像或项目过滤…" />
+            </Grid>
+          </Border>
+
+          <Button Grid.Column="5" Theme="{StaticResource DockerToolButton}" Margin="0,0,8,0"
+                  HorizontalAlignment="Right" ToolTip.Tip="去 Compose 页新建一个项目"
+                  Command="{Binding GoComposeCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <ui:Glyph Key="Docker.file-code" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
+              <TextBlock Text="新建 Compose" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="6" Theme="{StaticResource DockerToolButton}" Margin="0,0,8,0"
+                  Command="{Binding RefreshCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <ui:Glyph Key="Icon.refresh-cw" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
+              <TextBlock Text="刷新" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </Border>
+
+      <!-- 批量进行中:选中条原地变成这一条,位置不动、列表不动、选中不丢 -->
+      <Border Grid.Row="1" Height="32" Padding="12,0" IsVisible="{Binding HasBatchProgress}"
+              Background="{DynamicResource VelaAccentDim}"
+              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,Auto,140,Auto,*,Auto" VerticalAlignment="Center">
+          <ui:Glyph Grid.Column="0" Key="Icon.refresh-cw" Size="13" Brush="{DynamicResource VelaAccent}" />
+          <TextBlock Grid.Column="1" Text="{Binding BatchProgress.Title}" Margin="7,0,10,0"
+                     FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                     Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+          <ProgressBar Grid.Column="2" Height="4" Minimum="0" Maximum="1" VerticalAlignment="Center"
+                       Value="{Binding BatchProgress.Progress}"
+                       Foreground="{DynamicResource VelaAccent}"
+                       Background="{DynamicResource VelaGaugeTrack}" />
+          <TextBlock Grid.Column="3" Text="{Binding BatchProgress.CountText}" Classes="meta" Margin="8,0"
+                     Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="4" Text="{Binding BatchProgress.WaitText}" Classes="meta"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="5" Theme="{StaticResource DockerToolButton}" Height="22"
+                  Command="{Binding BatchProgress.CancelCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <ui:Glyph Key="Icon.x" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+              <TextBlock Text="取消剩余" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </Border>
+
+      <!-- 批量结果:只在**有失败**时留下,带「重试失败的 N 个」 -->
+      <Border Grid.Row="1" Padding="12,8" IsVisible="{Binding HasBatchSummary}"
+              Background="{DynamicResource VelaShellRedDim}"
+              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+            <ui:Glyph Grid.Column="0" Key="Icon.triangle-alert" Size="13" Brush="{DynamicResource VelaError}"
+                      VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding BatchSummary.Title}" Margin="7,0,0,0"
+                       FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                       Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
+            <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Height="22" Margin="0,0,6,0"
+                    Command="{Binding RetryFailedCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <ui:Glyph Key="Docker.rotate-cw" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+                <TextBlock Text="{Binding BatchSummary.RetryText}" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="4" Theme="{StaticResource DockerIconButton}" Width="22" Height="22"
+                    Command="{Binding DismissBatchCommand}">
+              <ui:Glyph Key="Icon.x" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+            </Button>
+          </Grid>
+          <!-- 只列失败的:成功的那些不需要用户做任何事 -->
+          <ItemsControl ItemsSource="{Binding BatchSummary.Failures}" Margin="20,0,0,0">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="docker:BatchOutcome">
+                <Grid ColumnDefinitions="150,*" Margin="0,1">
+                  <TextBlock Grid.Column="0" Text="{Binding Target}" Classes="cell" />
+                  <TextBlock Grid.Column="1" Text="{Binding Failure}" Classes="meta" TextWrapping="Wrap"
+                             Foreground="{DynamicResource VelaError}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{Binding BatchSummary.CollapsedText}" Classes="meta" Margin="20,0,0,0"
+                     IsVisible="{Binding BatchSummary.HasCollapsed}" />
+        </StackPanel>
+      </Border>
+
+      <!-- 选中条 -->
+      <Border Grid.Row="1" Height="32" Padding="12,0"
+              IsVisible="{Binding HasSelection}"
+              Background="{DynamicResource VelaAccentDim}"
+              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+          <ui:Glyph Key="Docker.check" Size="13" Brush="{DynamicResource VelaAccent}" />
+          <TextBlock Text="{Binding SelectionText}" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                     Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+          <Border Classes="vdivider" Margin="4,0" />
+          <!-- 合并日志:选中几个容器就把它们的流并成一条,按到达顺序 -->
+          <Button Theme="{StaticResource DockerToolButton}" Height="22" Command="{Binding ViewLogsCommand}"
+                  ToolTip.Tip="把选中容器的日志合并成一条流">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <ui:Glyph Key="Docker.scroll-text" Size="12" Brush="{DynamicResource VelaAccent}" />
+              <TextBlock Text="合并日志" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Theme="{StaticResource DockerToolButton}" Height="22" Command="{Binding StartCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <ui:Glyph Key="Icon.play" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+              <TextBlock Text="启动" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Theme="{StaticResource DockerToolButton}" Height="22" Command="{Binding StopCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <ui:Glyph Key="Icon.square" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+              <TextBlock Text="停止" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Theme="{StaticResource DockerToolButton}" Height="22" Command="{Binding RestartCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <ui:Glyph Key="Docker.rotate-cw" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+              <TextBlock Text="重启" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Theme="{StaticResource DockerToolButton}" Height="22" Command="{Binding PauseCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <ui:Glyph Key="Icon.pause" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+              <TextBlock Text="暂停" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Theme="{StaticResource DockerToolButton}" Height="22"
+                  BorderBrush="{DynamicResource VelaShellYellowDim}" Command="{Binding KillCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <ui:Glyph Key="Icon.zap" Size="12" Brush="{DynamicResource VelaWarning}" />
+              <TextBlock Text="强杀…" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaWarning}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Theme="{StaticResource DockerToolButton}" Height="22"
+                  BorderBrush="{DynamicResource VelaShellRedDim}" Command="{Binding RemoveCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <ui:Glyph Key="Icon.trash-2" Size="12" Brush="{DynamicResource VelaError}" />
+              <TextBlock Text="删除…" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="22" Padding="6,0"
+                  Command="{Binding ClearSelectionCommand}">
+            <TextBlock Text="取消选择" FontSize="{DynamicResource VelaFontSize11}"
+                       Foreground="{DynamicResource VelaTextTertiary}" />
+          </Button>
+        </StackPanel>
+      </Border>
+
+      <!-- 列头 -->
+      <Border Grid.Row="2" Classes="header-row">
+        <Grid ColumnDefinitions="3,26,*,190,120,110,86,80,96">
+          <TextBlock Grid.Column="2" Text="名称" Classes="col" Margin="2,0,0,0" />
+          <TextBlock Grid.Column="3" Text="镜像" Classes="col" />
+          <TextBlock Grid.Column="4" Text="端口" Classes="col" />
+          <TextBlock Grid.Column="5" Text="CPU" Classes="col" />
+          <TextBlock Grid.Column="6" Text="内存" Classes="col" />
+          <TextBlock Grid.Column="7" Text="运行时长" Classes="col" />
+        </Grid>
+      </Border>
+
+      <!-- 列表 -->
+      <Grid Grid.Row="3" Background="{DynamicResource VelaBgSurface}">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding View}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="ui:ContainerRow">
+                <Border Background="Transparent">
+                  <!--
+                    右键菜单:带省略号的项 = 还会再弹一次确认闸门;不带的立即执行。
+                    停止 / 重启可逆,不设闸门;删除、强杀不可逆,设。
+                  -->
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="查看日志" InputGesture="Ctrl+L"
+                                Command="{Binding Owner.RowLogsCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="进入终端" InputGesture="Ctrl+OemTilde"
+                                Command="{Binding Owner.RowTerminalCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="浏览文件"
+                                Command="{Binding Owner.RowFilesCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="实时统计"
+                                Command="{Binding Owner.RowStatsCommand}"
+                                CommandParameter="{Binding}" />
+                      <Separator />
+                      <MenuItem Header="启动" IsEnabled="{Binding !IsRunning}"
+                                Command="{Binding Owner.StartCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="停止" InputGesture="Ctrl+OemPeriod" IsEnabled="{Binding IsRunning}"
+                                Command="{Binding Owner.StopCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="重启" InputGesture="Ctrl+R"
+                                Command="{Binding Owner.RestartCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="暂停" IsEnabled="{Binding IsRunning}"
+                                Command="{Binding Owner.PauseCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="恢复" IsEnabled="{Binding IsPaused}"
+                                Command="{Binding Owner.UnpauseCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="强制杀死…" IsEnabled="{Binding IsRunning}"
+                                Command="{Binding Owner.KillCommand}"
+                                CommandParameter="{Binding}" />
+                      <Separator />
+                      <MenuItem Header="重命名…"
+                                Command="{Binding Owner.RowRenameCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="修改重启策略…"
+                                Command="{Binding Owner.RowRestartPolicyCommand}"
+                                CommandParameter="{Binding}" />
+                      <Separator />
+                      <MenuItem Header="复制容器 ID"
+                                Command="{Binding Owner.RowCopyIdCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="复制 docker run 命令"
+                                Command="{Binding Owner.RowCopyRunCommand}"
+                                CommandParameter="{Binding}" />
+                      <Separator />
+                      <MenuItem Header="删除…"
+                                Command="{Binding Owner.RemoveCommand}"
+                                CommandParameter="{Binding}" />
+                    </ContextMenu>
+                  </Border.ContextMenu>
+                  <StackPanel>
+                    <!-- 进行中的行:2px 顶部进度条。BusyProgress 为 0 才退化成不确定型 ——
+                         知道分母却画成来回跑的条,等于把已有的信息扔掉 -->
+                    <ProgressBar IsVisible="{Binding Busy}" Height="2"
+                                 Minimum="0" Maximum="1" Value="{Binding BusyProgress}"
+                                 IsIndeterminate="{Binding BusyProgress, Converter={x:Static ui:Converters.IsZero}}"
+                                 Foreground="{DynamicResource VelaAccent}"
+                                 Background="{DynamicResource VelaBgActive}" />
+                    <Grid Height="32" ColumnDefinitions="3,26,*,190,120,110,86,80,96">
+                      <!-- 左侧状态色条 -->
+                      <Border Grid.Column="0" Background="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                      <CheckBox Grid.Column="1" Classes="compact" IsChecked="{Binding Selected}"
+                                HorizontalAlignment="Center" />
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7" Margin="2,0"
+                                  VerticalAlignment="Center">
+                        <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                 Fill="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                        <TextBlock Text="{Binding Name}" Classes="name" />
+                        <Border Classes="chip" Height="16" IsVisible="{Binding HasProject}"
+                                Background="{DynamicResource VelaShellMagentaDim}">
+                          <TextBlock Text="{Binding Project}" FontSize="{DynamicResource VelaFontSize9}"
+                                     Foreground="{DynamicResource VelaShellMagenta}" VerticalAlignment="Center" />
+                        </Border>
+                      </StackPanel>
+                      <TextBlock Grid.Column="3" Text="{Binding Image}" Classes="cell" />
+                      <TextBlock Grid.Column="4" Text="{Binding Ports}" Classes="cell"
+                                 Foreground="{DynamicResource VelaInfo}" />
+                      <!-- 行内 sparkline + 百分比 -->
+                      <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <ItemsControl ItemsSource="{Binding CpuSamples}" Height="16" VerticalAlignment="Center">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Bottom" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:Double">
+                              <Border Width="3" CornerRadius="1" VerticalAlignment="Bottom"
+                                      Height="{Binding Converter={x:Static ui:Converters.SampleHeight}}"
+                                      Background="{DynamicResource VelaAccent}" />
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{Binding CpuText}" Classes="cell" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="6" Text="{Binding MemText}" Classes="cell" />
+                      <TextBlock Grid.Column="7" Text="{Binding Uptime}" Classes="cell" />
+                      <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="1" HorizontalAlignment="Right"
+                                  Margin="0,0,6,0" VerticalAlignment="Center">
+                        <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22"
+                                ToolTip.Tip="停止 / 启动"
+                                Command="{Binding $parent[ItemsControl].((pages:ContainersPageViewModel)DataContext).StopCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding IsRunning}">
+                          <ui:Glyph Key="Icon.square" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                        </Button>
+                        <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22"
+                                ToolTip.Tip="启动"
+                                Command="{Binding $parent[ItemsControl].((pages:ContainersPageViewModel)DataContext).StartCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding !IsRunning}">
+                          <ui:Glyph Key="Icon.play" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                        </Button>
+                        <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22"
+                                ToolTip.Tip="重启"
+                                Command="{Binding $parent[ItemsControl].((pages:ContainersPageViewModel)DataContext).RestartCommand}"
+                                CommandParameter="{Binding}">
+                          <ui:Glyph Key="Docker.rotate-cw" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                        </Button>
+                        <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22"
+                                ToolTip.Tip="详情"
+                                Command="{Binding $parent[ItemsControl].((pages:ContainersPageViewModel)DataContext).OpenDetailCommand}"
+                                CommandParameter="{Binding}">
+                          <ui:Glyph Key="Icon.chevron-right" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                        </Button>
+                      </StackPanel>
+                    </Grid>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <!-- 空列表也要给出下一步,而不是一片留白 -->
+        <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Spacing="12" Width="380">
+          <Border Width="44" Height="44" CornerRadius="22" HorizontalAlignment="Center"
+                  Background="{DynamicResource VelaBgActive}">
+            <ui:Glyph Key="Docker.box" Size="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Brush="{DynamicResource VelaTextTertiary}" />
+          </Border>
+          <TextBlock Text="这台机器上还没有任何容器" Classes="h2" HorizontalAlignment="Center" />
+          <TextBlock Text="空列表也要给出下一步,而不是一片留白。" Classes="hint" TextAlignment="Center" />
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+            <Button Theme="{StaticResource DockerToolButton}" Height="28"
+                    Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
+                    Command="{Binding $parent[UserControl].((pages:ContainersPageViewModel)DataContext).RunFromImagesCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Icon.play" Size="12" Brush="{DynamicResource VelaAccentForeground}" />
+                <TextBlock Text="运行容器…" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                           Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Theme="{StaticResource DockerToolButton}" Height="28"
+                    Command="{Binding $parent[UserControl].((pages:ContainersPageViewModel)DataContext).GoComposeCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Docker.file-code" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+                <TextBlock Text="从 compose 起一套" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </StackPanel>
+
+        <TextBlock IsVisible="{Binding NoMatch}" Text="没有匹配的容器 —— 换个词,或把筛选切回「全部」。"
+                   Classes="hint" VerticalAlignment="Center" HorizontalAlignment="Center" />
+      </Grid>
+    </Grid>
+
+    <!-- 详情抽屉 -->
+    <Border Grid.Column="1" Width="{Binding Detail.DrawerWidth}" IsVisible="{Binding HasDetail}"
+            Background="{DynamicResource VelaBgSurface}"
+            BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
+      <ContentControl Content="{Binding Detail}">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="pages:ContainerDetailViewModel">
+            <pages:ContainerDetailView />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </Border>
+  </Grid>
+</UserControl>

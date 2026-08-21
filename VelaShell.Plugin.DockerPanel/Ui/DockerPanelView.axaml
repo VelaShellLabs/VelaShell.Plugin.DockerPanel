@@ -1,897 +1,629 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:VelaShell.Plugin.DockerPanel.Ui"
+             xmlns:ui="clr-namespace:VelaShell.Plugin.DockerPanel.Ui"
+             xmlns:pages="clr-namespace:VelaShell.Plugin.DockerPanel.Ui.Pages"
              x:Class="VelaShell.Plugin.DockerPanel.Ui.DockerPanelView"
-             x:DataType="vm:DockerPanelViewModel">
+             x:DataType="ui:DockerPanelViewModel">
 
   <!--
-    Docker 面板。几何对齐宿主(DESIGN.md):36px 文档头 / 28px 页签条 / 28px 工具条 /
-    26px 列头 / 28px 数据行 / 24px 状态条;配色一律走 {DynamicResource VelaXxx},
-    明暗切换即时跟随 —— 插件面板本就该长得像宿主的一部分,而不是一个贴上来的窗口。
+    面板外壳:40px 顶栏 / 52px 左导航栏 / 内容区 / 24px 状态条,几何对齐宿主。
+    配色一律走 Vela* 令牌 —— 强调色是 Dracula 的紫,不是 Docker 蓝;
+    Docker 蓝只留给左上角那枚品牌标。
 
-    布局是"列表在上、抽屉在下"而不是左右分栏:容器/镜像的行本身就宽(名字 + 镜像 +
-    端口 + 状态),再切一半给详情,两边都不够看。抽屉里放 inspect / 日志 / 进程 /
-    执行记录 —— 那正是用户在终端里 `docker inspect | less` 之后要看的东西。
-
-    确认框与表单**贴在这个面板上**,不飘在屏幕中央:同时开着生产与测试两台机器的
-    Docker 面板时,一个不写清主机的"确定删除 3 个卷吗"是这个插件能犯的最贵的错误。
+    确认闸门、表单与对话框都**贴在这个面板上**,不飘在屏幕中央:
+    同时开着生产与测试两个 Docker 面板时,一个居中的对话框说不清自己属于哪台机器。
   -->
 
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://VelaShell.Plugin.DockerPanel/Ui/DockerTheme.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+
   <UserControl.Styles>
-    <!-- ── 文字 ────────────────────────────────────────────────────── -->
-    <Style Selector="TextBlock.col">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize10}" />
-      <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextMuted}" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    </Style>
-    <Style Selector="TextBlock.cell">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
-      <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextSecondary}" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    </Style>
-    <Style Selector="TextBlock.cell.name">
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextPrimary}" />
-    </Style>
-    <Style Selector="TextBlock.meta">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize9}" />
-      <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    </Style>
-    <Style Selector="TextBlock.hint">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize9}" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
-      <Setter Property="TextWrapping" Value="Wrap" />
-    </Style>
-    <Style Selector="TextBlock.title">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize12}" />
-      <Setter Property="FontWeight" Value="Medium" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextPrimary}" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-
-    <!-- ── 按钮 ────────────────────────────────────────────────────── -->
-    <Style Selector="Button.tool">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize10}" />
-      <Setter Property="Padding" Value="9,3" />
-      <Setter Property="Height" Value="22" />
-      <Setter Property="CornerRadius" Value="3" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextSecondary}" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="Button.tool:pointerover">
-      <Setter Property="Background" Value="{DynamicResource VelaBgHover}" />
-    </Style>
-    <Style Selector="Button.tool:disabled">
-      <Setter Property="Opacity" Value="0.35" />
-    </Style>
-    <Style Selector="Button.tool.accent">
-      <Setter Property="Background" Value="{DynamicResource VelaAccentDim}" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaAccent}" />
-    </Style>
-    <!-- 危险动作单独染色:删除与"停止"排在同一条工具条上,颜色是唯一来得及被扫到的区别。 -->
-    <Style Selector="Button.tool.danger">
-      <Setter Property="Foreground" Value="{DynamicResource VelaError}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource VelaError}" />
-    </Style>
-
-    <!-- 页签:选中态给一条顶部强调条,与 VelaDock 的标签同语言。 -->
-    <Style Selector="Button.tab">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
-      <Setter Property="Padding" Value="14,0" />
-      <Setter Property="Height" Value="28" />
-      <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextMuted}" />
-    </Style>
-    <Style Selector="Button.tab:pointerover">
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextSecondary}" />
-    </Style>
-    <Style Selector="Button.tab.on">
-      <Setter Property="Background" Value="{DynamicResource VelaBgSurface}" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextPrimary}" />
-      <Setter Property="BorderThickness" Value="0,2,0,0" />
-      <Setter Property="BorderBrush" Value="{DynamicResource VelaAccent}" />
-    </Style>
-
-    <!-- 抽屉页签:比主页签矮一档,免得两条页签条看起来同权。 -->
-    <Style Selector="Button.sub">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize10}" />
-      <Setter Property="Padding" Value="10,0" />
-      <Setter Property="Height" Value="22" />
-      <Setter Property="CornerRadius" Value="3" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextMuted}" />
-    </Style>
-    <Style Selector="Button.sub.on">
-      <Setter Property="Background" Value="{DynamicResource VelaAccentDim}" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaAccent}" />
-    </Style>
-    <Style Selector="Button.sub:disabled">
-      <Setter Property="Opacity" Value="0.3" />
-    </Style>
-
-    <!-- 工具条:间距靠子元素外边距而不是 WrapPanel 的间距属性 ——
-         那两个属性是新近才有的,而这个插件要能对着任何一版宿主的 Avalonia 编译。 -->
-    <Style Selector="WrapPanel.bar > :is(Control)">
-      <Setter Property="Margin" Value="0,0,6,0" />
-    </Style>
-
-    <!-- ── 输入 ────────────────────────────────────────────────────── -->
-    <Style Selector="TextBox.field">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
-      <Setter Property="Background" Value="{DynamicResource VelaBgInput}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
-      <Setter Property="CornerRadius" Value="3" />
-      <Setter Property="Padding" Value="6,3" />
-      <Setter Property="MinHeight" Value="24" />
-      <Setter Property="VerticalContentAlignment" Value="Center" />
-    </Style>
-    <Style Selector="TextBox.mono">
-      <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
-      <Setter Property="VerticalContentAlignment" Value="Top" />
-    </Style>
-    <Style Selector="ComboBox.field">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
-      <Setter Property="Background" Value="{DynamicResource VelaBgInput}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
-      <Setter Property="CornerRadius" Value="3" />
-      <Setter Property="MinHeight" Value="24" />
-      <Setter Property="Padding" Value="6,2" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="CheckBox.opt">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize10}" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaTextSecondary}" />
-      <Setter Property="MinHeight" Value="20" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-
-    <!-- ── 列表 ────────────────────────────────────────────────────── -->
-    <Style Selector="ListBox.rows">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="0" />
-    </Style>
-    <Style Selector="ListBox.rows ListBoxItem">
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="MinHeight" Value="0" />
-      <Setter Property="CornerRadius" Value="0" />
-    </Style>
-    <!-- 悬停 VelaBgHover、选中 VelaBgActive:与宿主资源管理器同一对令牌。
-         Fluent 自带的选中色是另一套,不压掉就会和宿主两个样。 -->
-    <Style Selector="ListBox.rows ListBoxItem:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource VelaBgHover}" />
-    </Style>
-    <Style Selector="ListBox.rows ListBoxItem:selected /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource VelaBgActive}" />
-    </Style>
-    <Style Selector="ListBox.rows ListBoxItem:selected:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource VelaBgActive}" />
-    </Style>
-    <Style Selector="ListBox.rows ListBoxItem:selected TextBlock.name">
-      <Setter Property="Foreground" Value="{DynamicResource VelaAccent}" />
-      <Setter Property="FontWeight" Value="Medium" />
-    </Style>
-
-    <!-- ── 状态条(容器行最左那道竖杠)────────────────────────────────
-         用一道 3px 的色条而不是一个圆点:圆点在 28px 的行里要占一整格,
-         而这一列的信息量只有"在跑 / 停了 / 暂停 / 不健康"四种。 -->
-    <Style Selector="Border.state">
-      <Setter Property="Width" Value="3" />
-      <Setter Property="Background" Value="{DynamicResource VelaStatusDisconnected}" />
-    </Style>
-    <Style Selector="Border.state.running">
-      <Setter Property="Background" Value="{DynamicResource VelaStatusConnected}" />
-    </Style>
-    <Style Selector="Border.state.paused">
-      <Setter Property="Background" Value="{DynamicResource VelaWarning}" />
-    </Style>
-    <Style Selector="Border.state.unhealthy">
-      <Setter Property="Background" Value="{DynamicResource VelaError}" />
-    </Style>
-
-    <!-- ── 徽章 ────────────────────────────────────────────────────── -->
-    <Style Selector="Border.badge">
-      <Setter Property="CornerRadius" Value="2" />
-      <Setter Property="Padding" Value="5,1" />
-      <Setter Property="Background" Value="{DynamicResource VelaAccentDim}" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="Border.badge > TextBlock">
-      <Setter Property="FontSize" Value="{DynamicResource VelaFontSize9}" />
-      <Setter Property="FontWeight" Value="Medium" />
-      <Setter Property="Foreground" Value="{DynamicResource VelaAccent}" />
-    </Style>
-    <!-- "实时"徽章借会话已连接那一档的绿色:面板里"接着一条活的流"与"会话连着"是同一种状态。 -->
-    <Style Selector="Border.badge.live">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="BorderBrush" Value="{DynamicResource VelaStatusConnected}" />
-    </Style>
-    <Style Selector="Border.badge.live > TextBlock">
-      <Setter Property="Foreground" Value="{DynamicResource VelaStatusConnected}" />
-    </Style>
-
-    <!-- 面板内的卡片(确认框 / 表单)。 -->
-    <Style Selector="Border.card">
-      <Setter Property="Background" Value="{DynamicResource VelaBgSurface}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Padding" Value="16" />
-      <Setter Property="MaxWidth" Value="620" />
-      <Setter Property="HorizontalAlignment" Value="Center" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
+    <StyleInclude Source="avares://VelaShell.Plugin.DockerPanel/Ui/DockerStyles.axaml" />
   </UserControl.Styles>
 
-  <Panel Background="{DynamicResource VelaBgDockDocument}">
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="pages:OverviewPageViewModel">
+      <pages:OverviewPageView />
+    </DataTemplate>
+    <DataTemplate DataType="pages:ContainersPageViewModel">
+      <pages:ContainersPageView />
+    </DataTemplate>
+    <DataTemplate DataType="pages:ImagesPageViewModel">
+      <pages:ImagesPageView />
+    </DataTemplate>
+    <DataTemplate DataType="pages:VolumesPageViewModel">
+      <pages:VolumesPageView />
+    </DataTemplate>
+    <DataTemplate DataType="pages:NetworksPageViewModel">
+      <pages:NetworksPageView />
+    </DataTemplate>
+    <DataTemplate DataType="pages:ComposePageViewModel">
+      <pages:ComposePageView />
+    </DataTemplate>
+    <DataTemplate DataType="pages:SystemPageViewModel">
+      <pages:SystemPageView />
+    </DataTemplate>
+  </UserControl.DataTemplates>
 
-    <Grid x:Name="RootGrid">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="36" />
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="28" />
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="*" MinHeight="80" />
-        <RowDefinition Height="Auto" />
-        <!-- 抽屉那一行的高度双向绑到视图模型:用户拖分割条改的就是它,
-             收起时它被压成 0(而不是留一个看不见的空行)。 -->
-        <RowDefinition MinHeight="0" />   <!-- 抽屉:高度由代码后置双向绑到 DrawerHeight,见 .axaml.cs -->
-        <RowDefinition Height="24" />
-      </Grid.RowDefinitions>
+  <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource VelaBgDockDocument}">
 
-      <!-- ══ 文档头:会话 · 引擎状态 · 计数 · 刷新 ══════════════════════ -->
-      <Border Grid.Row="0"
-              Background="{DynamicResource VelaBgContentHeader}"
-              BorderBrush="{DynamicResource VelaBorderPrimary}"
-              BorderThickness="0,0,0,1"
-              Padding="10,0">
-        <Grid ColumnDefinitions="Auto,220,Auto,*,Auto,Auto,Auto,Auto">
-          <TextBlock Grid.Column="0" Classes="col" Text="{Binding Text[Header_Session]}" Margin="0,0,8,0" />
-          <ComboBox Grid.Column="1"
-                    Classes="field"
-                    ItemsSource="{Binding Sessions}"
-                    SelectedItem="{Binding SelectedSession}"
-                    PlaceholderText="{Binding Text[Header_NoSessions]}"
-                    HorizontalAlignment="Stretch" />
+    <!-- ── 顶栏 ──────────────────────────────────────────────── -->
+    <Border Grid.Row="0" Classes="toolbar">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
 
-          <!-- 引擎状态。可用时是一枚强调色徽章;不可用时是一整句能照着做的话
-               (加进 docker 组 / 打开 sudo / daemon 没起),而不是一个红叉。 -->
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0" VerticalAlignment="Center">
-            <Border Classes="badge" IsVisible="{Binding IsEngineReady}">
-              <TextBlock Text="{Binding EngineText}" />
-            </Border>
-            <!-- 接上 docker 事件流时亮起:面板此刻是事件驱动的,右边那个定时刷新只是退路。 -->
-            <Border Classes="badge live" IsVisible="{Binding IsLive}" ToolTip.Tip="{Binding Text[Engine_LiveHint]}">
-              <TextBlock Text="{Binding Text[Engine_Live]}" />
-            </Border>
-            <TextBlock Classes="meta" Text="{Binding EngineDetail}" IsVisible="{Binding HasEngineDetail}" />
-            <TextBlock Classes="cell"
-                       Foreground="{DynamicResource VelaWarning}"
-                       Text="{Binding EngineText}"
-                       IsVisible="{Binding !IsEngineReady}" />
-          </StackPanel>
-
-          <TextBlock Grid.Column="3" Classes="meta" Text="{Binding CountsText}" Margin="12,0" HorizontalAlignment="Right" />
-
-          <TextBlock Grid.Column="4" Classes="col" Text="{Binding Text[Header_AutoRefresh]}" Margin="0,0,6,0" />
-          <ComboBox Grid.Column="5"
-                    Classes="field"
-                    Width="86"
-                    ItemsSource="{Binding RefreshChoices}"
-                    SelectedItem="{Binding SelectedRefreshChoice}" />
-          <Button Grid.Column="6"
-                  Classes="tool"
-                  Margin="8,0,0,0"
-                  Content="{Binding Text[Header_Refresh]}"
-                  Command="{Binding RefreshCommand}" />
-          <Button Grid.Column="7"
-                  Classes="tool"
-                  Margin="6,0,0,0"
-                  Content="{Binding Text[Header_Settings]}"
-                  Command="{Binding ToggleSettingsCommand}" />
-        </Grid>
-      </Border>
-
-      <!-- ══ 设置行(默认收起)════════════════════════════════════════ -->
-      <Border Grid.Row="1"
-              IsVisible="{Binding IsSettingsOpen}"
-              Background="{DynamicResource VelaBgSurface}"
-              BorderBrush="{DynamicResource VelaBorderPrimary}"
-              BorderThickness="0,0,0,1"
-              Padding="12,10">
-        <StackPanel Spacing="8">
-          <CheckBox Classes="opt" IsChecked="{Binding UseSudo}" Content="{Binding Text[Header_Sudo]}" />
-          <TextBlock Classes="hint" Text="{Binding Text[Header_SudoHint]}" />
-          <Grid ColumnDefinitions="120,*,120,*" RowDefinitions="Auto,Auto">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="col" Text="{Binding Text[Header_DockerHost]}" />
-            <TextBox Grid.Row="0" Grid.Column="1" Classes="field" Margin="0,0,12,0"
-                     Text="{Binding DockerHostValue}" PlaceholderText="unix:///var/run/docker.sock" />
-            <TextBlock Grid.Row="0" Grid.Column="2" Classes="col" Text="{Binding Text[Header_DockerContext]}" />
-            <TextBox Grid.Row="0" Grid.Column="3" Classes="field" Text="{Binding DockerContextValue}" />
-            <TextBlock Grid.Row="1" Grid.Column="1" Classes="hint" Margin="0,4,12,0" Text="{Binding Text[Header_DockerHostHint]}" />
-            <TextBlock Grid.Row="1" Grid.Column="3" Classes="hint" Margin="0,4,0,0" Text="{Binding Text[Header_DockerContextHint]}" />
-          </Grid>
-          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-            <Button Classes="tool accent" Content="{Binding Text[Header_Apply]}" Command="{Binding ApplySettingsCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Header_Close]}" Command="{Binding ToggleSettingsCommand}" />
-          </StackPanel>
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+          <ui:Glyph Key="Docker.whale" Size="17" Brush="{DynamicResource DockerBrand}" />
+          <TextBlock Text="Docker" FontSize="{DynamicResource VelaFontSize13}" FontWeight="SemiBold"
+                     Foreground="{DynamicResource VelaTextPrimary}" VerticalAlignment="Center" />
         </StackPanel>
-      </Border>
 
-      <!-- ══ 页签条 ══════════════════════════════════════════════════ -->
-      <Border Grid.Row="2"
-              Background="{DynamicResource VelaBgPage}"
-              BorderBrush="{DynamicResource VelaBorderPrimary}"
-              BorderThickness="0,0,0,1">
-        <Grid ColumnDefinitions="Auto,*,Auto">
-          <StackPanel Grid.Column="0" Orientation="Horizontal">
-            <Button Classes="tab" Classes.on="{Binding IsContainersTab}"
-                    Content="{Binding Text[Tab_Containers]}"
-                    Command="{Binding SelectTabCommand}" CommandParameter="Containers" />
-            <Button Classes="tab" Classes.on="{Binding IsImagesTab}"
-                    Content="{Binding Text[Tab_Images]}"
-                    Command="{Binding SelectTabCommand}" CommandParameter="Images" />
-            <Button Classes="tab" Classes.on="{Binding IsVolumesTab}"
-                    Content="{Binding Text[Tab_Volumes]}"
-                    Command="{Binding SelectTabCommand}" CommandParameter="Volumes" />
-            <Button Classes="tab" Classes.on="{Binding IsNetworksTab}"
-                    Content="{Binding Text[Tab_Networks]}"
-                    Command="{Binding SelectTabCommand}" CommandParameter="Networks" />
-            <Button Classes="tab" Classes.on="{Binding IsComposeTab}"
-                    Content="{Binding Text[Tab_Compose]}"
-                    Command="{Binding SelectTabCommand}" CommandParameter="Compose" />
-            <Button Classes="tab" Classes.on="{Binding IsSystemTab}"
-                    Content="{Binding Text[Tab_System]}"
-                    Command="{Binding SelectTabCommand}" CommandParameter="System" />
+        <Border Grid.Column="1" Classes="vdivider" Margin="10,0" />
+
+        <!-- 主机切换器。写清楚"这条请求发给谁"是这个面板最要紧的一件事。 -->
+        <Button Grid.Column="2" Theme="{StaticResource DockerToolButton}" Padding="9,0"
+                Command="{Binding ToggleEndpointMenuCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <ui:Glyph Key="Docker.server" Size="13"
+                      Brush="{Binding IsReady, Converter={x:Static ui:Converters.FeedbackBrush}, ConverterParameter=ok}" />
+            <TextBlock Text="{Binding EndpointName}" FontSize="{DynamicResource VelaFontSize12}" FontWeight="Medium"
+                       Foreground="{DynamicResource VelaTextPrimary}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding EndpointDetail}" Classes="meta" />
+            <ui:Glyph Key="Icon.chevron-down" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
           </StackPanel>
-          <TextBox Grid.Column="2"
-                   Classes="field"
-                   Width="220"
-                   Margin="8,2"
-                   IsVisible="{Binding ShowsList}"
-                   Text="{Binding Filter}"
-                   PlaceholderText="{Binding Text[Common_Filter]}" />
-        </Grid>
-      </Border>
+        </Button>
 
-      <!-- ══ 工具条(按页签换一整排)══════════════════════════════════ -->
-      <Border Grid.Row="3"
-              Background="{DynamicResource VelaBgPage}"
-              BorderBrush="{DynamicResource VelaBorderPrimary}"
-              BorderThickness="0,0,0,1"
-              Padding="10,5">
-        <Panel>
-          <!-- 容器 -->
-          <WrapPanel Classes="bar" IsVisible="{Binding IsContainersTab}">
-            <Button Classes="tool" Content="{Binding Text[Container_Start]}" Command="{Binding StartContainersCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Container_Stop]}" Command="{Binding StopContainersCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Container_Restart]}" Command="{Binding RestartContainersCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Container_Pause]}" Command="{Binding PauseContainersCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Container_Unpause]}" Command="{Binding UnpauseContainersCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Container_Kill]}" Command="{Binding KillContainersCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Container_Remove]}" Command="{Binding RemoveContainersCommand}" />
-            <Border Width="1" Height="18" Background="{DynamicResource VelaBorderPrimary}" Margin="4,0" />
-            <Button Classes="tool accent" Content="{Binding Text[Container_Terminal]}" Command="{Binding ShellContainerCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Container_Rename]}" Command="{Binding RenameContainerCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Container_RestartPolicy]}" Command="{Binding RestartPolicyCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Common_CopyId]}" Command="{Binding CopyContainerIdCommand}" />
-            <Border Width="1" Height="18" Background="{DynamicResource VelaBorderPrimary}" Margin="4,0" />
-            <CheckBox Classes="opt" IsChecked="{Binding ShowAllContainers}"
-                      Content="{Binding Text[Common_ShowAll]}" ToolTip.Tip="{Binding Text[Common_ShowAllHint]}" />
-            <CheckBox Classes="opt" IsChecked="{Binding ShowStats}" Content="CPU / MEM" Margin="8,0,0,0" />
-            <CheckBox Classes="opt" IsChecked="{Binding ShowContainerSize}"
-                      Content="{Binding Text[Common_WithSize]}" ToolTip.Tip="{Binding Text[Common_WithSizeHint]}" Margin="8,0,0,0" />
-          </WrapPanel>
-
-          <!-- 镜像 -->
-          <WrapPanel Classes="bar" IsVisible="{Binding IsImagesTab}">
-            <Button Classes="tool accent" Content="{Binding Text[Image_Pull]}" Command="{Binding PullImageCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Image_RunFrom]}" Command="{Binding RunImageCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Image_Tag]}" Command="{Binding TagImageCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Image_Push]}" Command="{Binding PushImageCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Image_Remove]}" Command="{Binding RemoveImagesCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Image_PruneDangling]}" Command="{Binding PruneDanglingCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Common_CopyId]}" Command="{Binding CopyImageIdCommand}" />
-            <Border Width="1" Height="18" Background="{DynamicResource VelaBorderPrimary}" Margin="4,0" />
-            <CheckBox Classes="opt" IsChecked="{Binding ShowAllImages}"
-                      Content="{Binding Text[Common_ShowAll]}" ToolTip.Tip="{Binding Text[Common_ShowAllImagesHint]}" />
-          </WrapPanel>
-
-          <!-- 卷 -->
-          <WrapPanel Classes="bar" IsVisible="{Binding IsVolumesTab}">
-            <Button Classes="tool accent" Content="{Binding Text[Volume_Create]}" Command="{Binding CreateVolumeCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Volume_Remove]}" Command="{Binding RemoveVolumesCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Volume_Prune]}" Command="{Binding PruneVolumesCommand}" />
-          </WrapPanel>
-
-          <!-- 网络 -->
-          <WrapPanel Classes="bar" IsVisible="{Binding IsNetworksTab}">
-            <Button Classes="tool accent" Content="{Binding Text[Network_Create]}" Command="{Binding CreateNetworkCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Network_Connect]}" Command="{Binding ConnectNetworkCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Network_Disconnect]}" Command="{Binding DisconnectNetworkCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Network_Remove]}" Command="{Binding RemoveNetworksCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Network_Prune]}" Command="{Binding PruneNetworksCommand}" />
-          </WrapPanel>
-
-          <!-- Compose -->
-          <WrapPanel Classes="bar" IsVisible="{Binding IsComposeTab}">
-            <Button Classes="tool accent" Content="{Binding Text[Compose_Up]}" Command="{Binding ComposeUpCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Compose_Start]}" Command="{Binding ComposeStartCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Compose_Stop]}" Command="{Binding ComposeStopCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Compose_Restart]}" Command="{Binding ComposeRestartCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Compose_Pull]}" Command="{Binding ComposePullCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Compose_Build]}" Command="{Binding ComposeBuildCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Compose_Down]}" Command="{Binding ComposeDownCommand}" />
-            <Border Width="1" Height="18" Background="{DynamicResource VelaBorderPrimary}" Margin="4,0" />
-            <Button Classes="tool" Content="{Binding Text[Compose_Edit]}" Command="{Binding ComposeEditCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Compose_AddFile]}" Command="{Binding ComposeOpenFileCommand}" />
-          </WrapPanel>
-
-          <!-- 系统 -->
-          <WrapPanel Classes="bar" IsVisible="{Binding IsSystemTab}">
-            <TextBlock Classes="col" Text="{Binding Text[System_Prune]}" Margin="0,0,8,0" />
-            <Button Classes="tool" Content="{Binding Text[Prune_Containers]}" Command="{Binding PruneContainersCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Prune_Images]}" Command="{Binding PruneImagesCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Prune_ImagesAll]}" Command="{Binding PruneAllImagesCommand}" />
-            <Button Classes="tool" Content="{Binding Text[Prune_BuildCache]}" Command="{Binding PruneBuildCacheCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Prune_All]}" Command="{Binding PruneEverythingCommand}" />
-            <Button Classes="tool danger" Content="{Binding Text[Prune_AllWithVolumes]}" Command="{Binding PruneEverythingWithVolumesCommand}" />
-          </WrapPanel>
-        </Panel>
-      </Border>
-
-      <!-- ══ 内容区 ══════════════════════════════════════════════════ -->
-      <Panel Grid.Row="4">
-
-        <!-- ── 容器 ─────────────────────────────────────────────────── -->
-        <Grid IsVisible="{Binding IsContainersTab}" RowDefinitions="26,*">
-          <Border Grid.Row="0" Background="{DynamicResource VelaBgPage}" Padding="10,0">
-            <Grid ColumnDefinitions="6,2*,2*,150,2*,66,110,100">
-              <TextBlock Grid.Column="1" Classes="col" Text="{Binding Text[Col_Name]}" />
-              <TextBlock Grid.Column="2" Classes="col" Text="{Binding Text[Col_Image]}" />
-              <TextBlock Grid.Column="3" Classes="col" Text="{Binding Text[Col_Status]}" />
-              <TextBlock Grid.Column="4" Classes="col" Text="{Binding Text[Col_Ports]}" />
-              <TextBlock Grid.Column="5" Classes="col" Text="{Binding Text[Col_Cpu]}" />
-              <TextBlock Grid.Column="6" Classes="col" Text="{Binding Text[Col_Mem]}" />
-              <TextBlock Grid.Column="7" Classes="col" Text="{Binding Text[Col_Created]}" />
-            </Grid>
-          </Border>
-          <ListBox Grid.Row="1"
-                   Name="ContainerList"
-                   Classes="rows"
-                   SelectionMode="Multiple"
-                   ItemsSource="{Binding Containers}"
-                   SelectionChanged="OnContainerSelectionChanged">
-            <ListBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:ContainerRow">
-                <Border Height="28" Padding="10,0">
-                  <Grid ColumnDefinitions="6,2*,2*,150,2*,66,110,100">
-                    <Border Grid.Column="0" Classes="state"
-                            Classes.running="{Binding Model.IsRunning}"
-                            Classes.paused="{Binding Model.IsPaused}"
-                            Classes.unhealthy="{Binding Model.IsUnhealthy}"
-                            HorizontalAlignment="Left" Margin="0,5" />
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
-                      <TextBlock Classes="cell name" Text="{Binding Model.Name}" />
-                      <TextBlock Classes="meta" Text="{Binding Model.ComposeProject}"
-                                 IsVisible="{Binding Model.HasComposeProject}" />
-                    </StackPanel>
-                    <TextBlock Grid.Column="2" Classes="cell" Text="{Binding Model.Image}" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="3" Classes="cell" Text="{Binding Model.Status}" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="4" Classes="cell" Text="{Binding Model.PortsDisplay}" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="5" Classes="cell" Text="{Binding Cpu}" />
-                    <TextBlock Grid.Column="6" Classes="cell" Text="{Binding Memory}" />
-                    <TextBlock Grid.Column="7" Classes="meta" Text="{Binding Model.RunningFor}" />
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <TextBlock Grid.Row="1" Classes="hint" Margin="14,10" VerticalAlignment="Top"
-                     Text="{Binding Text[Common_Empty]}" IsVisible="{Binding !HasContainers}" />
-        </Grid>
-
-        <!-- ── 镜像 ─────────────────────────────────────────────────── -->
-        <Grid IsVisible="{Binding IsImagesTab}" RowDefinitions="26,*">
-          <Border Grid.Row="0" Background="{DynamicResource VelaBgPage}" Padding="10,0">
-            <Grid ColumnDefinitions="6,3*,2*,130,100,120">
-              <TextBlock Grid.Column="1" Classes="col" Text="{Binding Text[Col_Repository]}" />
-              <TextBlock Grid.Column="2" Classes="col" Text="{Binding Text[Col_Tag]}" />
-              <TextBlock Grid.Column="3" Classes="col" Text="{Binding Text[Col_ImageId]}" />
-              <TextBlock Grid.Column="4" Classes="col" Text="{Binding Text[Col_Size]}" />
-              <TextBlock Grid.Column="5" Classes="col" Text="{Binding Text[Col_Created]}" />
-            </Grid>
-          </Border>
-          <ListBox Grid.Row="1"
-                   Name="ImageList"
-                   Classes="rows"
-                   SelectionMode="Multiple"
-                   ItemsSource="{Binding Images}"
-                   SelectionChanged="OnImageSelectionChanged">
-            <ListBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:ImageRow">
-                <Border Height="28" Padding="10,0">
-                  <Grid ColumnDefinitions="6,3*,2*,130,100,120">
-                    <Border Grid.Column="0" Classes="state"
-                            Classes.running="{Binding !Model.IsDangling}"
-                            HorizontalAlignment="Left" Margin="0,5" />
-                    <TextBlock Grid.Column="1" Classes="cell name" Text="{Binding Model.Repository}" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="2" Classes="cell" Text="{Binding Model.Tag}" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="3" Classes="meta" Text="{Binding Model.ShortId}" />
-                    <TextBlock Grid.Column="4" Classes="cell" Text="{Binding Model.Size}" />
-                    <TextBlock Grid.Column="5" Classes="meta" Text="{Binding Model.CreatedSince}" />
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <TextBlock Grid.Row="1" Classes="hint" Margin="14,10" VerticalAlignment="Top"
-                     Text="{Binding Text[Common_Empty]}" IsVisible="{Binding !HasImages}" />
-        </Grid>
-
-        <!-- ── 卷 ───────────────────────────────────────────────────── -->
-        <Grid IsVisible="{Binding IsVolumesTab}" RowDefinitions="26,*">
-          <Border Grid.Row="0" Background="{DynamicResource VelaBgPage}" Padding="10,0">
-            <Grid ColumnDefinitions="6,3*,110,4*,90">
-              <TextBlock Grid.Column="1" Classes="col" Text="{Binding Text[Col_VolumeName]}" />
-              <TextBlock Grid.Column="2" Classes="col" Text="{Binding Text[Col_Driver]}" />
-              <TextBlock Grid.Column="3" Classes="col" Text="{Binding Text[Col_Mountpoint]}" />
-              <TextBlock Grid.Column="4" Classes="col" Text="{Binding Text[Col_Scope]}" />
-            </Grid>
-          </Border>
-          <ListBox Grid.Row="1"
-                   Name="VolumeList"
-                   Classes="rows"
-                   SelectionMode="Multiple"
-                   ItemsSource="{Binding Volumes}"
-                   SelectionChanged="OnVolumeSelectionChanged">
-            <ListBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:VolumeRow">
-                <Border Height="28" Padding="10,0">
-                  <Grid ColumnDefinitions="6,3*,110,4*,90">
-                    <TextBlock Grid.Column="1" Classes="cell name" Text="{Binding Model.Name}" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="2" Classes="cell" Text="{Binding Model.Driver}" />
-                    <TextBlock Grid.Column="3" Classes="meta" Text="{Binding Model.Mountpoint}" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="4" Classes="cell" Text="{Binding Model.Scope}" />
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <TextBlock Grid.Row="1" Classes="hint" Margin="14,10" VerticalAlignment="Top"
-                     Text="{Binding Text[Common_Empty]}" IsVisible="{Binding !HasVolumes}" />
-        </Grid>
-
-        <!-- ── 网络 ─────────────────────────────────────────────────── -->
-        <Grid IsVisible="{Binding IsNetworksTab}" RowDefinitions="26,*">
-          <Border Grid.Row="0" Background="{DynamicResource VelaBgPage}" Padding="10,0">
-            <Grid ColumnDefinitions="6,3*,130,120,90,80,80">
-              <TextBlock Grid.Column="1" Classes="col" Text="{Binding Text[Col_NetworkName]}" />
-              <TextBlock Grid.Column="2" Classes="col" Text="ID" />
-              <TextBlock Grid.Column="3" Classes="col" Text="{Binding Text[Col_Driver]}" />
-              <TextBlock Grid.Column="4" Classes="col" Text="{Binding Text[Col_Scope]}" />
-              <TextBlock Grid.Column="5" Classes="col" Text="{Binding Text[Col_Internal]}" />
-              <TextBlock Grid.Column="6" Classes="col" Text="{Binding Text[Col_IPv6]}" />
-            </Grid>
-          </Border>
-          <ListBox Grid.Row="1"
-                   Name="NetworkList"
-                   Classes="rows"
-                   SelectionMode="Multiple"
-                   ItemsSource="{Binding Networks}"
-                   SelectionChanged="OnNetworkSelectionChanged">
-            <ListBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:NetworkRow">
-                <Border Height="28" Padding="10,0">
-                  <Grid ColumnDefinitions="6,3*,130,120,90,80,80">
-                    <TextBlock Grid.Column="1" Classes="cell name" Text="{Binding Model.Name}" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="2" Classes="meta" Text="{Binding Model.ShortId}" />
-                    <TextBlock Grid.Column="3" Classes="cell" Text="{Binding Model.Driver}" />
-                    <TextBlock Grid.Column="4" Classes="cell" Text="{Binding Model.Scope}" />
-                    <TextBlock Grid.Column="5" Classes="meta" Text="{Binding Model.Internal}" />
-                    <TextBlock Grid.Column="6" Classes="meta" Text="{Binding Model.IPv6}" />
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <TextBlock Grid.Row="1" Classes="hint" Margin="14,10" VerticalAlignment="Top"
-                     Text="{Binding Text[Common_Empty]}" IsVisible="{Binding !HasNetworks}" />
-        </Grid>
-
-        <!-- ── Compose ──────────────────────────────────────────────── -->
-        <Grid IsVisible="{Binding IsComposeTab}" RowDefinitions="26,*,Auto">
-          <Border Grid.Row="0" Background="{DynamicResource VelaBgPage}" Padding="10,0">
-            <Grid ColumnDefinitions="6,2*,160,4*">
-              <TextBlock Grid.Column="1" Classes="col" Text="{Binding Text[Col_Project]}" />
-              <TextBlock Grid.Column="2" Classes="col" Text="{Binding Text[Col_ProjectStatus]}" />
-              <TextBlock Grid.Column="3" Classes="col" Text="{Binding Text[Col_ConfigFiles]}" />
-            </Grid>
-          </Border>
-          <ListBox Grid.Row="1"
-                   Name="ComposeList"
-                   Classes="rows"
-                   SelectionMode="Single"
-                   ItemsSource="{Binding ComposeProjects}"
-                   SelectedItem="{Binding SelectedCompose}">
-            <ListBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:ComposeRow">
-                <Border Height="28" Padding="10,0">
-                  <Grid ColumnDefinitions="6,2*,160,4*">
-                    <Border Grid.Column="0" Classes="state"
-                            Classes.running="{Binding Model.IsRunning}"
-                            HorizontalAlignment="Left" Margin="0,5" />
-                    <TextBlock Grid.Column="1" Classes="cell name" Text="{Binding Model.Name}" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="2" Classes="cell" Text="{Binding Model.Status}" />
-                    <TextBlock Grid.Column="3" Classes="meta" Text="{Binding Model.ConfigFiles}" />
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <TextBlock Grid.Row="1" Classes="hint" Margin="14,10" VerticalAlignment="Top"
-                     Text="{Binding Text[Compose_Unavailable]}" IsVisible="{Binding !IsComposeAvailable}" />
-          <TextBlock Grid.Row="2" Classes="hint" Margin="14,6" Text="{Binding Text[Compose_Hint]}" />
-        </Grid>
-
-        <!-- ── 系统 ─────────────────────────────────────────────────── -->
-        <ScrollViewer IsVisible="{Binding IsSystemTab}" Padding="12">
-          <StackPanel Spacing="14">
-            <StackPanel Spacing="4">
-              <TextBlock Classes="title" Text="{Binding Text[System_DiskUsage]}" />
-              <Border Background="{DynamicResource VelaBgTerminal}" CornerRadius="4" Padding="10">
-                <SelectableTextBlock FontFamily="{DynamicResource VelaUiMonoFont}"
-                                     FontSize="{DynamicResource VelaFontSize11}"
-                                     Foreground="{DynamicResource VelaTextSecondary}"
-                                     Text="{Binding SystemDiskText}" />
-              </Border>
-            </StackPanel>
-            <StackPanel Spacing="4">
-              <TextBlock Classes="title" Text="{Binding Text[System_Version]}" />
-              <Border Background="{DynamicResource VelaBgTerminal}" CornerRadius="4" Padding="10">
-                <SelectableTextBlock FontFamily="{DynamicResource VelaUiMonoFont}"
-                                     FontSize="{DynamicResource VelaFontSize11}"
-                                     Foreground="{DynamicResource VelaTextSecondary}"
-                                     Text="{Binding SystemVersionText}" />
-              </Border>
-            </StackPanel>
-            <StackPanel Spacing="4">
-              <TextBlock Classes="title" Text="{Binding Text[System_Info]}" />
-              <Border Background="{DynamicResource VelaBgTerminal}" CornerRadius="4" Padding="10">
-                <SelectableTextBlock FontFamily="{DynamicResource VelaUiMonoFont}"
-                                     FontSize="{DynamicResource VelaFontSize11}"
-                                     Foreground="{DynamicResource VelaTextSecondary}"
-                                     Text="{Binding SystemInfoText}" />
-              </Border>
-            </StackPanel>
-          </StackPanel>
-        </ScrollViewer>
-      </Panel>
-
-      <!-- ══ 分割条 ══════════════════════════════════════════════════ -->
-      <GridSplitter Grid.Row="5"
-                    Height="4"
-                    IsVisible="{Binding IsDrawerOpen}"
-                    ResizeDirection="Rows"
-                    Background="{DynamicResource VelaBorderPrimary}" />
-
-      <!-- ══ 抽屉 ════════════════════════════════════════════════════ -->
-      <Border Grid.Row="6"
-              IsVisible="{Binding IsDrawerOpen}"
-              Background="{DynamicResource VelaBgSurface}">
-        <Grid RowDefinitions="26,*">
-          <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="8,2">
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
-              <Button Classes="sub" Classes.on="{Binding IsDetailsDrawer}"
-                      Content="{Binding Text[Drawer_Details]}"
-                      IsEnabled="{Binding CanShowDetails}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="Details" />
-              <Button Classes="sub" Classes.on="{Binding IsLogsDrawer}"
-                      Content="{Binding Text[Drawer_Logs]}"
-                      IsEnabled="{Binding CanShowLogs}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="Logs"
-                      IsVisible="{Binding IsContainersTab}" />
-              <Button Classes="sub" Classes.on="{Binding IsTopDrawer}" Content="{Binding Text[Drawer_Top]}"
-                      IsEnabled="{Binding CanShowContainerExtras}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="Top"
-                      IsVisible="{Binding IsContainersTab}" />
-              <Button Classes="sub" Classes.on="{Binding IsDiffDrawer}" Content="{Binding Text[Drawer_Diff]}"
-                      IsEnabled="{Binding CanShowContainerExtras}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="Diff"
-                      IsVisible="{Binding IsContainersTab}" />
-              <Button Classes="sub" Classes.on="{Binding IsPortsDrawer}" Content="{Binding Text[Drawer_Ports]}"
-                      IsEnabled="{Binding CanShowContainerExtras}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="Ports"
-                      IsVisible="{Binding IsContainersTab}" />
-              <Button Classes="sub" Classes.on="{Binding IsHistoryDrawer}" Content="{Binding Text[Drawer_History]}"
-                      IsEnabled="{Binding CanShowHistory}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="History"
-                      IsVisible="{Binding IsImagesTab}" />
-              <Button Classes="sub" Classes.on="{Binding IsServicesDrawer}" Content="{Binding Text[Drawer_Services]}"
-                      IsEnabled="{Binding CanShowComposeExtras}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="Services"
-                      IsVisible="{Binding IsComposeTab}" />
-              <Button Classes="sub" Classes.on="{Binding IsLogsDrawer}" Content="{Binding Text[Drawer_Logs]}"
-                      IsEnabled="{Binding CanShowComposeExtras}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="Logs"
-                      IsVisible="{Binding IsComposeTab}" />
-              <Button Classes="sub" Classes.on="{Binding IsConfigDrawer}" Content="{Binding Text[Drawer_Config]}"
-                      IsEnabled="{Binding CanShowComposeExtras}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="Config"
-                      IsVisible="{Binding IsComposeTab}" />
-              <Button Classes="sub" Classes.on="{Binding IsFileDrawer}"
-                      Content="{Binding Text[Drawer_File]}"
-                      IsEnabled="{Binding CanShowComposeExtras}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="File"
-                      IsVisible="{Binding IsComposeTab}" />
-              <Border Width="1" Height="14" Background="{DynamicResource VelaBorderPrimary}" Margin="6,0" />
-              <Button Classes="sub" Classes.on="{Binding IsOutputDrawer}"
-                      Content="{Binding Text[Drawer_Output]}"
-                      Command="{Binding SelectDrawerCommand}" CommandParameter="Output" />
-              <TextBlock Classes="meta" Text="{Binding DrawerTitle}" Margin="10,0,0,0" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
-              <!-- 日志专属:行数 / 时间戳 / 跟随 / 本地过滤。跟随不是 -f,理由见视图模型。 -->
-              <ComboBox Classes="field" Width="80" IsVisible="{Binding IsLogsDrawer}"
-                        ItemsSource="{Binding LogTailChoices}" SelectedItem="{Binding SelectedLogTailChoice}"
-                        ToolTip.Tip="{Binding Text[Drawer_Tail]}" />
-              <CheckBox Classes="opt" IsVisible="{Binding IsLogsDrawer}"
-                        IsChecked="{Binding LogTimestamps}" Content="{Binding Text[Drawer_Timestamps]}" />
-              <CheckBox Classes="opt" IsVisible="{Binding IsLogsDrawer}"
-                        IsChecked="{Binding LogFollow}" Content="{Binding Text[Drawer_Follow]}"
-                        ToolTip.Tip="{Binding Text[Drawer_FollowHint]}" />
-              <TextBox Classes="field" Width="160" IsVisible="{Binding IsLogsDrawer}"
-                       Text="{Binding LogFilter}" PlaceholderText="{Binding Text[Drawer_LogFilter]}" />
-              <CheckBox Classes="opt" IsChecked="{Binding DrawerWrap}" Content="{Binding Text[Drawer_Wrap]}" />
-              <Button Classes="tool accent" IsVisible="{Binding IsFileDrawer}"
-                      Content="{Binding Text[Drawer_Save]}" Command="{Binding SaveDrawerCommand}" />
-              <Button Classes="tool" Content="{Binding Text[Drawer_Reload]}" Command="{Binding ReloadDrawerCommand}" />
-              <Button Classes="tool" Content="{Binding Text[Drawer_CopyAll]}" Command="{Binding CopyDrawerCommand}" />
-              <Button Classes="tool" IsVisible="{Binding IsOutputDrawer}"
-                      Content="{Binding Text[Drawer_Clear]}" Command="{Binding ClearDrawerCommand}" />
-              <Button Classes="tool" Content="{Binding Text[Drawer_Hide]}" Command="{Binding HideDrawerCommand}" />
-            </StackPanel>
+        <!-- 全局搜索:点开就是命令面板。Ctrl+K 是同一个入口。 -->
+        <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Width="300" Height="26"
+                Margin="12,0" HorizontalAlignment="Left" HorizontalContentAlignment="Stretch"
+                Background="{DynamicResource VelaBgInput}"
+                IsEnabled="{Binding IsReady}" Command="{Binding OpenPaletteCommand}">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <ui:Glyph Grid.Column="0" Key="Icon.search" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+            <TextBlock Grid.Column="1" Text="搜索容器、镜像、卷、网络…" Margin="7,0,0,0"
+                       FontSize="{DynamicResource VelaFontSize11}"
+                       Foreground="{DynamicResource VelaTextTertiary}" VerticalAlignment="Center" />
+            <Border Grid.Column="2" Classes="chip" Height="16" Background="{DynamicResource VelaBgActive}">
+              <TextBlock Text="Ctrl K" FontFamily="{DynamicResource VelaUiMonoFont}"
+                         FontSize="{DynamicResource VelaFontSize9}"
+                         Foreground="{DynamicResource VelaTextTertiary}" VerticalAlignment="Center" />
+            </Border>
           </Grid>
+        </Button>
 
-          <!-- 正文。用 TextBox 而不是 SelectableTextBlock:compose 文件那一档要能编辑,
-               而两套控件切换会让滚动位置、选中态在切档时莫名其妙地跳。 -->
-          <TextBox Grid.Row="1"
-                   Classes="mono"
-                   Text="{Binding DrawerText}"
-                   IsReadOnly="{Binding !IsDrawerEditable}"
-                   AcceptsReturn="True"
-                   TextWrapping="{Binding DrawerTextWrapping}"
-                   Background="{DynamicResource VelaBgTerminal}"
-                   BorderThickness="0"
-                   CornerRadius="0"
-                   FontSize="{DynamicResource VelaFontSize11}"
-                   Foreground="{DynamicResource VelaTextSecondary}"
-                   Padding="10,6" />
-        </Grid>
+        <!-- 任务中心的收起态:一枚环形进度 + 任务数。 -->
+        <Button Grid.Column="4" Theme="{StaticResource DockerToolButton}"
+                Background="{DynamicResource VelaAccentDim}" BorderBrush="Transparent"
+                IsVisible="{Binding Tasks.HasRunning}" Command="{Binding ToggleTaskCenterCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <ui:Glyph Key="Icon.refresh-cw" Size="13" Brush="{DynamicResource VelaAccent}" />
+            <TextBlock Text="{Binding Tasks.IndicatorText}" FontSize="{DynamicResource VelaFontSize11}"
+                       FontWeight="Medium" Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Tasks.IndicatorPercent}" Classes="meta"
+                       Foreground="{DynamicResource VelaAccent}" />
+          </StackPanel>
+        </Button>
+
+        <!-- 「实时」徽章:亮着才代表事件流真的接上了。 -->
+        <Border Grid.Column="5" Classes="chip" Margin="8,0,0,0"
+                Background="{Binding EventsConnected, Converter={x:Static ui:Converters.FeedbackBrush}, ConverterParameter=dim}">
+          <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+            <Ellipse Width="5" Height="5" VerticalAlignment="Center"
+                     Fill="{Binding EventsConnected, Converter={x:Static ui:Converters.FeedbackBrush}}" />
+            <TextBlock Text="实时" FontSize="{DynamicResource VelaFontSize10}"
+                       Foreground="{Binding EventsConnected, Converter={x:Static ui:Converters.FeedbackBrush}}" />
+          </StackPanel>
+        </Border>
+
+        <Button Grid.Column="6" Theme="{StaticResource DockerIconButton}" Margin="6,0,0,0"
+                ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
+          <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
+        </Button>
+        <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}"
+                ToolTip.Tip="设置" Command="{Binding ToggleSettingsCommand}">
+          <ui:Glyph Key="Icon.settings" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <!-- ── 主体 ──────────────────────────────────────────────── -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+
+      <!-- 左导航栏 -->
+      <Border Grid.Column="0" Width="52" Background="{DynamicResource VelaBgPage}"
+              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,1,0">
+        <DockPanel LastChildFill="False">
+          <StackPanel DockPanel.Dock="Top" Margin="0,6,0,0">
+            <RadioButton Theme="{StaticResource DockerRailButton}" GroupName="rail"
+                         IsChecked="{Binding IsOverview, Mode=OneWay}"
+                         Command="{Binding SelectPageCommand}"
+                         CommandParameter="{x:Static ui:PanelPage.Overview}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <ui:Glyph Key="Docker.layout-dashboard" Size="17" HorizontalAlignment="Center"
+                          Brush="{Binding $parent[RadioButton].Foreground}" />
+                <TextBlock Text="总览" FontSize="{DynamicResource VelaFontSize9}" HorizontalAlignment="Center"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Theme="{StaticResource DockerRailButton}" GroupName="rail"
+                         IsChecked="{Binding IsContainers, Mode=OneWay}"
+                         Command="{Binding SelectPageCommand}"
+                         CommandParameter="{x:Static ui:PanelPage.Containers}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <ui:Glyph Key="Docker.box" Size="17" HorizontalAlignment="Center"
+                          Brush="{Binding $parent[RadioButton].Foreground}" />
+                <TextBlock Text="容器" FontSize="{DynamicResource VelaFontSize9}" HorizontalAlignment="Center"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Theme="{StaticResource DockerRailButton}" GroupName="rail"
+                         IsChecked="{Binding IsImages, Mode=OneWay}"
+                         Command="{Binding SelectPageCommand}"
+                         CommandParameter="{x:Static ui:PanelPage.Images}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <ui:Glyph Key="Icon.layers" Size="17" HorizontalAlignment="Center"
+                          Brush="{Binding $parent[RadioButton].Foreground}" />
+                <TextBlock Text="镜像" FontSize="{DynamicResource VelaFontSize9}" HorizontalAlignment="Center"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Theme="{StaticResource DockerRailButton}" GroupName="rail"
+                         IsChecked="{Binding IsVolumes, Mode=OneWay}"
+                         Command="{Binding SelectPageCommand}"
+                         CommandParameter="{x:Static ui:PanelPage.Volumes}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <ui:Glyph Key="Icon.hard-drive" Size="17" HorizontalAlignment="Center"
+                          Brush="{Binding $parent[RadioButton].Foreground}" />
+                <TextBlock Text="卷" FontSize="{DynamicResource VelaFontSize9}" HorizontalAlignment="Center"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Theme="{StaticResource DockerRailButton}" GroupName="rail"
+                         IsChecked="{Binding IsNetworks, Mode=OneWay}"
+                         Command="{Binding SelectPageCommand}"
+                         CommandParameter="{x:Static ui:PanelPage.Networks}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <ui:Glyph Key="Icon.network" Size="17" HorizontalAlignment="Center"
+                          Brush="{Binding $parent[RadioButton].Foreground}" />
+                <TextBlock Text="网络" FontSize="{DynamicResource VelaFontSize9}" HorizontalAlignment="Center"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Theme="{StaticResource DockerRailButton}" GroupName="rail"
+                         IsChecked="{Binding IsCompose, Mode=OneWay}"
+                         IsEnabled="{Binding ComposeAvailable}"
+                         ToolTip.Tip="本机端点没有 Compose 页 —— compose 是远端 CLI 上的东西"
+                         Command="{Binding SelectPageCommand}"
+                         CommandParameter="{x:Static ui:PanelPage.Compose}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <ui:Glyph Key="Docker.boxes" Size="17" HorizontalAlignment="Center"
+                          Brush="{Binding $parent[RadioButton].Foreground}" />
+                <TextBlock Text="Compose" FontSize="{DynamicResource VelaFontSize9}" HorizontalAlignment="Center"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Theme="{StaticResource DockerRailButton}" GroupName="rail"
+                         IsChecked="{Binding IsSystem, Mode=OneWay}"
+                         Command="{Binding SelectPageCommand}"
+                         CommandParameter="{x:Static ui:PanelPage.System}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <ui:Glyph Key="Icon.gauge" Size="17" HorizontalAlignment="Center"
+                          Brush="{Binding $parent[RadioButton].Foreground}" />
+                <TextBlock Text="系统" FontSize="{DynamicResource VelaFontSize9}" HorizontalAlignment="Center"
+                           Foreground="{Binding $parent[RadioButton].Foreground}" />
+              </StackPanel>
+            </RadioButton>
+          </StackPanel>
+        </DockPanel>
       </Border>
 
-      <!-- ══ 状态条 ══════════════════════════════════════════════════ -->
-      <Border Grid.Row="7"
-              Background="{DynamicResource VelaBgContentHeader}"
-              BorderBrush="{DynamicResource VelaBorderPrimary}"
-              BorderThickness="0,1,0,0"
-              Padding="10,0">
-        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-          <ProgressBar Grid.Column="0" IsIndeterminate="True" IsVisible="{Binding IsBusy}"
-                       Width="60" Height="2" Margin="0,0,10,0" VerticalAlignment="Center" />
-          <TextBlock Grid.Column="1" Classes="meta" Text="{Binding SelectionSummary}" Margin="0,0,10,0" />
-          <TextBlock Grid.Column="2" Classes="meta" Text="{Binding Status}" />
-        </Grid>
+      <!-- 内容区:连上了才显示页面,否则是状态页(未选会话 / 建立中 / 连不上)。 -->
+      <Grid Grid.Column="1">
+        <ContentControl Content="{Binding ActivePage}" IsVisible="{Binding IsReady}" />
+
+        <!-- 建立通道中:骨架屏保留真实列宽,数据到达时不跳版。 -->
+        <StackPanel IsVisible="{Binding IsConnecting}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Spacing="14" Width="420">
+          <!-- 骨架屏保留真实列宽,数据到达时不跳版。 -->
+          <StackPanel Spacing="9">
+            <Grid ColumnDefinitions="*,10,Auto">
+              <Border Grid.Column="0" Height="9" CornerRadius="4" Background="{DynamicResource VelaBgActive}" />
+              <Border Grid.Column="2" Width="70" Height="9" CornerRadius="4"
+                      Background="{DynamicResource VelaBgHover}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,10,Auto" Width="360" HorizontalAlignment="Left">
+              <Border Grid.Column="0" Height="9" CornerRadius="4" Background="{DynamicResource VelaBgActive}" />
+              <Border Grid.Column="2" Width="70" Height="9" CornerRadius="4"
+                      Background="{DynamicResource VelaBgHover}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,10,Auto" Width="400" HorizontalAlignment="Left">
+              <Border Grid.Column="0" Height="9" CornerRadius="4" Background="{DynamicResource VelaBgActive}" />
+              <Border Grid.Column="2" Width="70" Height="9" CornerRadius="4"
+                      Background="{DynamicResource VelaBgHover}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,10,Auto" Width="300" HorizontalAlignment="Left">
+              <Border Grid.Column="0" Height="9" CornerRadius="4" Background="{DynamicResource VelaBgActive}" />
+              <Border Grid.Column="2" Width="70" Height="9" CornerRadius="4"
+                      Background="{DynamicResource VelaBgHover}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,10,Auto" Width="380" HorizontalAlignment="Left">
+              <Border Grid.Column="0" Height="9" CornerRadius="4" Background="{DynamicResource VelaBgActive}" />
+              <Border Grid.Column="2" Width="70" Height="9" CornerRadius="4"
+                      Background="{DynamicResource VelaBgHover}" />
+            </Grid>
+          </StackPanel>
+          <TextBlock Text="{Binding ErrorHint}" Classes="hint" HorizontalAlignment="Center" />
+          <TextBlock Text="正在打开到 docker.sock 的通道…" Classes="label" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <!-- 未选会话 / 连不上:图标 + 一句话 + **出路**,而不是一个红叉。 -->
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12" Width="480">
+          <StackPanel.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.Or}">
+              <Binding Path="NeedsEndpoint" />
+              <Binding Path="IsFailed" />
+            </MultiBinding>
+          </StackPanel.IsVisible>
+          <Border Width="46" Height="46" CornerRadius="23" HorizontalAlignment="Center"
+                  Background="{DynamicResource VelaAccentDim}">
+            <ui:Glyph Key="{Binding ErrorIcon}" Size="21" HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Brush="{DynamicResource VelaAccent}" />
+          </Border>
+          <TextBlock Text="{Binding ErrorTitle}" Classes="h2" HorizontalAlignment="Center" TextAlignment="Center" />
+          <TextBlock Text="{Binding ErrorDetail}" Classes="hint" TextAlignment="Center" />
+          <ItemsControl ItemsSource="{Binding RecoveryActions}" HorizontalAlignment="Center">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="ui:RecoveryAction">
+                <Button Theme="{StaticResource DockerToolButton}" Height="28"
+                        Click="OnRecoveryClick" Tag="{Binding}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <ui:Glyph Key="{Binding Icon}" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
+                    <TextBlock Text="{Binding Label}" FontSize="{DynamicResource VelaFontSize11}"
+                               Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{Binding ErrorHint}" Classes="meta" TextAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+      </Grid>
+    </Grid>
+
+    <!-- ── 状态条:永远说最后一件事的结果 ──────────────────────── -->
+    <Border Grid.Row="2" Classes="statusbar">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+        <ui:Glyph Grid.Column="0" Key="{Binding Feedback.StatusIcon}" Size="11" VerticalAlignment="Center"
+                  Brush="{Binding Feedback.StatusKind, Converter={x:Static ui:Converters.FeedbackBrush}}" />
+        <TextBlock Grid.Column="1" Text="{Binding Feedback.StatusText}" Classes="meta" Margin="7,0,0,0"
+                   Foreground="{DynamicResource VelaTextTertiary}" />
+        <TextBlock Grid.Column="3" Text="{Binding ApiVersion}" Classes="meta" Margin="0,0,14,0" />
+        <TextBlock Grid.Column="4" Text="{Binding EngineVersion}" Classes="meta" Margin="0,0,14,0" />
+        <TextBlock Grid.Column="5" Text="{Binding CountsText}" Classes="meta" Margin="0,0,14,0" />
+        <TextBlock Grid.Column="6" Text="{Binding EventsText}" Classes="meta"
+                   Foreground="{Binding EventsConnected, Converter={x:Static ui:Converters.FeedbackBrush}}" />
+      </Grid>
+    </Border>
+
+    <!-- ── 覆盖层:主机切换弹层 / 任务中心 / 设置 / 闸门 / 表单 / 对话框 / toast ── -->
+    <Grid Grid.Row="1" IsHitTestVisible="{Binding EndpointMenuOpen}">
+      <Border IsVisible="{Binding EndpointMenuOpen}" Background="#01000000">
+        <Border.GestureRecognizers />
+      </Border>
+      <Border IsVisible="{Binding EndpointMenuOpen}" HorizontalAlignment="Left" VerticalAlignment="Top"
+              Margin="100,4,0,0" Width="360" CornerRadius="6"
+              Background="{DynamicResource VelaBgSurface}"
+              BorderBrush="{DynamicResource VelaBorderSecondary}" BorderThickness="1"
+              BoxShadow="{DynamicResource VelaShadowWindow}">
+        <StackPanel>
+          <ItemsControl ItemsSource="{Binding Endpoints}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="ui:EndpointItem">
+                <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="NaN"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                        CornerRadius="0" Padding="11,0" IsEnabled="{Binding Available}"
+                        Command="{Binding $parent[ItemsControl].((ui:DockerPanelViewModel)DataContext).SelectEndpointCommand}"
+                        CommandParameter="{Binding}">
+                  <Grid ColumnDefinitions="Auto,*,Auto" Height="40">
+                    <ui:Glyph Grid.Column="0" Key="{Binding Icon}" Size="14" VerticalAlignment="Center"
+                              Brush="{DynamicResource VelaTextTertiary}" />
+                    <StackPanel Grid.Column="1" Margin="9,0" VerticalAlignment="Center" Spacing="1">
+                      <TextBlock Text="{Binding DisplayName}" Classes="name" />
+                      <TextBlock Text="{Binding Detail}" Classes="meta" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding StateText}" Classes="meta" VerticalAlignment="Center"
+                               Foreground="{Binding StateKind, Converter={x:Static ui:Converters.FeedbackBrush}}" />
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Border Classes="divider" />
+          <TextBlock Text="只列出宿主已连接的会话 —— 面板不发起连接" Classes="meta" Margin="12,8" />
+        </StackPanel>
       </Border>
     </Grid>
 
-    <!-- ══ 确认闸门 ══════════════════════════════════════════════════
-         盖住整个面板,而不是飘在屏幕上:标题里带着这条会话,用户不会删错主机。 -->
-    <Border IsVisible="{Binding Confirm.IsOpen}" Background="#99000000">
-      <Border Classes="card">
-        <StackPanel Spacing="10">
-          <TextBlock Text="{Binding Confirm.Title}"
-                     FontSize="{DynamicResource VelaFontSize14}"
-                     FontWeight="SemiBold"
-                     Foreground="{DynamicResource VelaTextPrimary}"
-                     TextWrapping="Wrap" />
-          <TextBlock Text="{Binding Confirm.Message}"
-                     FontSize="{DynamicResource VelaFontSize11}"
-                     Foreground="{DynamicResource VelaTextSecondary}"
-                     TextWrapping="Wrap" />
-          <Border Background="{DynamicResource VelaBgTerminal}" CornerRadius="4" Padding="10,8">
-            <SelectableTextBlock Text="{Binding Confirm.Detail}"
-                                 FontFamily="{DynamicResource VelaUiMonoFont}"
-                                 FontSize="{DynamicResource VelaFontSize11}"
-                                 Foreground="{DynamicResource VelaTextPrimary}"
-                                 TextWrapping="Wrap" />
-          </Border>
-          <CheckBox Classes="opt" IsVisible="{Binding Confirm.HasOption}"
-                    IsChecked="{Binding Confirm.OptionValue}" Content="{Binding Confirm.OptionLabel}" />
-          <StackPanel Spacing="4" IsVisible="{Binding Confirm.RequiresTyping}">
-            <TextBlock Classes="hint" Text="{Binding Confirm.TypePrompt}" />
-            <TextBox Classes="field" Text="{Binding Confirm.TypedText}" />
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-            <Button Classes="tool" Content="{Binding Confirm.CancelLabel}" Command="{Binding Confirm.CancelCommand}" />
-            <Button Classes="tool danger" Content="{Binding Confirm.ConfirmLabel}" Command="{Binding Confirm.ConfirmCommand}" />
-          </StackPanel>
-        </StackPanel>
-      </Border>
+    <!-- 任务中心弹层 -->
+    <Border Grid.Row="1" IsVisible="{Binding TaskCenterOpen}" HorizontalAlignment="Right" VerticalAlignment="Top"
+            Margin="0,4,12,0" Width="400" MaxHeight="460" CornerRadius="6"
+            Background="{DynamicResource VelaBgSurface}"
+            BorderBrush="{DynamicResource VelaBorderSecondary}" BorderThickness="1"
+            BoxShadow="{DynamicResource VelaShadowWindow}">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto" Height="34" Margin="12,0">
+          <TextBlock Grid.Column="0" Text="任务" Classes="h3" />
+          <TextBlock Grid.Column="1" Classes="meta" Margin="8,0,0,0">
+            <TextBlock.Text>
+              <MultiBinding StringFormat="{}{0} 进行中 · {1} 已完成">
+                <Binding Path="Tasks.RunningCount" />
+                <Binding Path="Tasks.FinishedCount" />
+              </MultiBinding>
+            </TextBlock.Text>
+          </TextBlock>
+          <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" Width="NaN" Padding="6,0"
+                  Command="{Binding ClearFinishedTasksCommand}">
+            <TextBlock Text="清空已完成" FontSize="{DynamicResource VelaFontSize10}"
+                       Foreground="{DynamicResource VelaAccent}" />
+          </Button>
+        </Grid>
+        <Border DockPanel.Dock="Top" Classes="divider" />
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Tasks.Tasks}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="ui:PanelTask">
+                <StackPanel Spacing="6" Margin="12,10">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                    <ui:Glyph Grid.Column="0" Key="{Binding Icon}" Size="13" VerticalAlignment="Center"
+                              Brush="{DynamicResource VelaTextTertiary}" />
+                    <StackPanel Grid.Column="1" Margin="8,0" Spacing="1">
+                      <TextBlock Text="{Binding Title}" Classes="name" />
+                      <TextBlock Text="{Binding Detail}" Classes="meta" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding RightText}" Classes="meta" VerticalAlignment="Center" />
+                    <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" Width="20" Height="20"
+                            Margin="6,0,0,0" IsVisible="{Binding CanCancel}" Click="OnCancelTask" Tag="{Binding}">
+                      <ui:Glyph Key="Icon.x" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+                    </Button>
+                  </Grid>
+                  <ProgressBar IsVisible="{Binding IsRunning}" Height="4" Minimum="0" Maximum="1"
+                               Value="{Binding Progress}" IsIndeterminate="{Binding Indeterminate}"
+                               Foreground="{DynamicResource VelaAccent}"
+                               Background="{DynamicResource VelaBgActive}" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
     </Border>
 
-    <!-- ══ 表单层 ══════════════════════════════════════════════════════
-         八种"几个输入框 + 一个按钮"的操作共用这一份声明式表单。
-         顶上永远有一条命令预览 —— 用户按下"执行"之前就能看到那条会在生产机上跑的命令。 -->
-    <Border IsVisible="{Binding Form.IsOpen}" Background="#99000000">
-      <Border Classes="card" MaxHeight="560">
-        <DockPanel LastChildFill="True">
-          <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,10">
-            <TextBlock Text="{Binding Form.Title}"
-                       FontSize="{DynamicResource VelaFontSize14}"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource VelaTextPrimary}"
-                       TextWrapping="Wrap" />
-            <TextBlock Classes="hint" Text="{Binding Form.Description}" IsVisible="{Binding Form.HasDescription}" />
-          </StackPanel>
-
-          <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,10,0,0">
-            <StackPanel Spacing="3" IsVisible="{Binding Form.HasPreview}">
-              <TextBlock Classes="col" Text="{Binding Form.PreviewLabel}" />
-              <Border Background="{DynamicResource VelaBgTerminal}" CornerRadius="4" Padding="10,8">
-                <SelectableTextBlock Text="{Binding Form.PreviewText}"
-                                     FontFamily="{DynamicResource VelaUiMonoFont}"
-                                     FontSize="{DynamicResource VelaFontSize11}"
-                                     Foreground="{DynamicResource VelaAccentText}"
-                                     TextWrapping="Wrap" />
+    <!-- 设置抽屉 -->
+    <Border Grid.Row="1" IsVisible="{Binding SettingsOpen}" HorizontalAlignment="Right" Width="380"
+            Background="{DynamicResource VelaBgSurface}"
+            BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto" Height="40" Margin="14,0">
+          <ui:Glyph Grid.Column="0" Key="Icon.settings" Size="15" VerticalAlignment="Center"
+                    Brush="{DynamicResource VelaTextSecondary}" />
+          <TextBlock Grid.Column="1" Text="设置" Classes="h2" Margin="8,0,0,0" />
+          <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" Command="{Binding ToggleSettingsCommand}">
+            <ui:Glyph Key="Icon.x" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
+          </Button>
+        </Grid>
+        <Border DockPanel.Dock="Top" Classes="divider" />
+        <ScrollViewer>
+          <StackPanel Margin="14,12" Spacing="14">
+            <!-- 连接:「找不到 docker.sock」的补救动作就落在这儿,不能是一堵墙 -->
+            <TextBlock Text="连接" Classes="h3" IsVisible="{Binding HasEndpoint}" />
+            <StackPanel Spacing="6" IsVisible="{Binding HasEndpoint}">
+              <TextBlock Text="{Binding EndpointName, StringFormat='{}{0} 的 socket 路径'}" Classes="label"
+                         Foreground="{DynamicResource VelaTextPrimary}" />
+              <Border Classes="input">
+                <TextBox Classes="bare mono" Text="{Binding SocketPathInput}"
+                         PlaceholderText="/var/run/docker.sock" />
               </Border>
+              <TextBlock Classes="hint" TextWrapping="Wrap"
+                         Text="rootless Docker 在 $XDG_RUNTIME_DIR/docker.sock;Colima、OrbStack 各有各的位置。按主机记住,重连生效。" />
+              <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
+                         Text="这里填的是**路径**,不是 DOCKER_HOST 那种 URL —— 面板只经 SSH 隧道连 unix socket,不走 TCP。远端的 DOCKER_CONTEXT 面板不读:上下文是 CLI 的概念,daemon 不认。" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Theme="{StaticResource DockerToolButton}" Content="保存并重连"
+                        Command="{Binding ApplySocketPathCommand}" />
+                <Button Theme="{StaticResource DockerToolButton}" Content="恢复默认"
+                        IsEnabled="{Binding SocketPathChanged}"
+                        Command="{Binding ResetSocketPathCommand}" />
+              </StackPanel>
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-              <Button Classes="tool" Content="{Binding Form.CancelLabel}" Command="{Binding Form.CancelCommand}" />
-              <Button Classes="tool accent" Content="{Binding Form.SubmitLabel}" Command="{Binding Form.SubmitCommand}" />
+            <Border Classes="divider" IsVisible="{Binding HasEndpoint}" />
+            <TextBlock Text="显示" Classes="h3" />
+            <Grid ColumnDefinitions="Auto,*">
+              <ToggleButton Grid.Column="0" Theme="{StaticResource DockerSwitch}"
+                            IsChecked="{Binding Settings.CompactRows}" />
+              <StackPanel Grid.Column="1" Margin="9,0" Spacing="2">
+                <TextBlock Text="紧凑行高(32px)" Classes="label"
+                           Foreground="{DynamicResource VelaTextPrimary}" />
+                <TextBlock Text="关掉是 40px,每行能放下两行信息。" Classes="hint" />
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*">
+              <ToggleButton Grid.Column="0" Theme="{StaticResource DockerSwitch}"
+                            IsChecked="{Binding Settings.ShowStopped}" />
+              <StackPanel Grid.Column="1" Margin="9,0" Spacing="2">
+                <TextBlock Text="显示已停止的容器" Classes="label"
+                           Foreground="{DynamicResource VelaTextPrimary}" />
+                <TextBlock Text="关掉后列表只留运行中的。" Classes="hint" />
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*">
+              <ToggleButton Grid.Column="0" Theme="{StaticResource DockerSwitch}"
+                            IsChecked="{Binding Settings.InlineSparklines}" />
+              <StackPanel Grid.Column="1" Margin="9,0" Spacing="2">
+                <TextBlock Text="实时 CPU / 内存采样" Classes="label"
+                           Foreground="{DynamicResource VelaTextPrimary}" />
+                <TextBlock TextWrapping="Wrap" Classes="hint"
+                           Text="每 5 秒一轮快照,并发压在 3。列表行内的 sparkline 与总览页的 CPU / 内存两张卡都吃这份数据 —— 关掉可省一点远端开销,代价是那几处会显示「已关闭」。" />
+              </StackPanel>
+            </Grid>
+            <Border Classes="divider" />
+            <TextBlock Text="日志" Classes="h3" />
+            <Grid ColumnDefinitions="Auto,*">
+              <ToggleButton Grid.Column="0" Theme="{StaticResource DockerSwitch}"
+                            IsChecked="{Binding Settings.LogTimestamps}" />
+              <StackPanel Grid.Column="1" Margin="9,0" Spacing="2">
+                <TextBlock Text="带时间戳" Classes="label" Foreground="{DynamicResource VelaTextPrimary}" />
+                <TextBlock Text="时间戳单独一列,不混进正文被搜索命中。" Classes="hint" />
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*">
+              <ToggleButton Grid.Column="0" Theme="{StaticResource DockerSwitch}"
+                            IsChecked="{Binding Settings.LogWrap}" />
+              <StackPanel Grid.Column="1" Margin="9,0" Spacing="2">
+                <TextBlock Text="自动换行" Classes="label" Foreground="{DynamicResource VelaTextPrimary}" />
+              </StackPanel>
+            </Grid>
+            <StackPanel Spacing="6">
+              <TextBlock Text="默认补多少行历史" Classes="label" Foreground="{DynamicResource VelaTextPrimary}" />
+              <Border CornerRadius="4" Padding="2" HorizontalAlignment="Left"
+                      Background="{DynamicResource VelaBgInput}"
+                      BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="logtail"
+                               IsChecked="{Binding Settings.LogTailIs100, Mode=OneWay}"
+                               Command="{Binding SetLogTailCommand}" CommandParameter="100">
+                    <TextBlock Text="100" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </RadioButton>
+                  <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="logtail"
+                               IsChecked="{Binding Settings.LogTailIs500, Mode=OneWay}"
+                               Command="{Binding SetLogTailCommand}" CommandParameter="500">
+                    <TextBlock Text="500" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </RadioButton>
+                  <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="logtail"
+                               IsChecked="{Binding Settings.LogTailIs2000, Mode=OneWay}"
+                               Command="{Binding SetLogTailCommand}" CommandParameter="2000">
+                    <TextBlock Text="2000" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </RadioButton>
+                  <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="logtail"
+                               IsChecked="{Binding Settings.LogTailIsAll, Mode=OneWay}"
+                               Command="{Binding SetLogTailCommand}" CommandParameter="all">
+                    <TextBlock Text="全部" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{Binding $parent[RadioButton].Foreground}" />
+                  </RadioButton>
+                </StackPanel>
+              </Border>
+              <TextBlock Classes="hint" TextWrapping="Wrap"
+                         Text="「全部」在刷屏的容器上会一次拉回几十万行 —— 缓冲仍钉在 512 KB,多出来的会从最旧的开始丢。" />
             </StackPanel>
+            <Border Classes="divider" />
+            <TextBlock Text="行为" Classes="h3" />
+            <Grid ColumnDefinitions="Auto,*">
+              <ToggleButton Grid.Column="0" Theme="{StaticResource DockerSwitch}"
+                            IsChecked="{Binding Settings.AutoRefreshFallback}" />
+              <StackPanel Grid.Column="1" Margin="9,0" Spacing="2">
+                <TextBlock Text="事件流断掉时退化为 30s 轮询" Classes="label"
+                           Foreground="{DynamicResource VelaTextPrimary}" />
+                <TextBlock Text="一块静止的、看起来正常的面板,比明说「没连上」更糟。" Classes="hint" />
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" Opacity="0.5">
+              <ToggleButton Grid.Column="0" Theme="{StaticResource DockerSwitch}" IsChecked="True" IsEnabled="False" />
+              <StackPanel Grid.Column="1" Margin="9,0" Spacing="2">
+                <TextBlock Text="破坏性操作需确认" Classes="label"
+                           Foreground="{DynamicResource VelaTextPrimary}" />
+                <TextBlock Text="不可关闭。删除、强杀、prune 一律走面板内确认框。" Classes="hint" />
+              </StackPanel>
+            </Grid>
           </StackPanel>
-
-          <ScrollViewer>
-            <ItemsControl ItemsSource="{Binding Form.Fields}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:FormField">
-                  <StackPanel Spacing="3" Margin="0,0,0,10">
-                    <TextBlock Classes="col" Text="{Binding Label}" IsVisible="{Binding !IsBoolean}" />
-                    <TextBox Classes="field" IsVisible="{Binding IsText}"
-                             Text="{Binding Value}" PlaceholderText="{Binding Placeholder}" />
-                    <TextBox Classes="field mono" IsVisible="{Binding IsMultiline}"
-                             Text="{Binding Value}" PlaceholderText="{Binding Placeholder}"
-                             AcceptsReturn="True" Height="{Binding Height}" />
-                    <CheckBox Classes="opt" IsVisible="{Binding IsBoolean}"
-                              IsChecked="{Binding BoolValue}" Content="{Binding Label}" />
-                    <ComboBox Classes="field" IsVisible="{Binding IsChoice}"
-                              HorizontalAlignment="Stretch"
-                              ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" />
-                    <TextBlock Classes="hint" Text="{Binding Hint}" IsVisible="{Binding HasHint}" />
-                  </StackPanel>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </ScrollViewer>
-        </DockPanel>
-      </Border>
+        </ScrollViewer>
+      </DockPanel>
     </Border>
-  </Panel>
 
+    <!-- 命令面板:压在内容之上、闸门之下 —— 它触发的动作往往还要再弹一次闸门 -->
+    <Grid Grid.Row="1" IsVisible="{Binding Palette.IsOpen}">
+      <Border Background="#9905070A" />
+      <ui:CommandPaletteView DataContext="{Binding Palette}"
+                             VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,80,0,0" />
+    </Grid>
+
+    <!-- 确认闸门 -->
+    <Grid Grid.Row="1" IsVisible="{Binding Confirm.IsOpen}">
+      <Border Background="#CC05070A" />
+      <ui:ConfirmGateView DataContext="{Binding Confirm}" MaxWidth="560" VerticalAlignment="Center"
+                          HorizontalAlignment="Center" />
+    </Grid>
+
+    <!-- 表单弹窗 -->
+    <Grid Grid.Row="1" IsVisible="{Binding HasForm}">
+      <Border Background="#CC05070A" />
+      <ui:PanelFormView MaxWidth="480" VerticalAlignment="Center" HorizontalAlignment="Center" />
+    </Grid>
+
+    <!-- 自定义对话框(拉取镜像) -->
+    <Grid Grid.Row="1" IsVisible="{Binding HasDialog}">
+      <Border Background="#CC05070A" />
+      <ContentControl Content="{Binding ActiveDialog}" MaxWidth="460" VerticalAlignment="Center"
+                      HorizontalAlignment="Center">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="pages:PullImageViewModel">
+            <pages:PullImageView />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </Grid>
+
+    <!-- toast:贴在面板右下角,不飘在屏幕中央 -->
+    <ItemsControl Grid.Row="1" ItemsSource="{Binding Feedback.Toasts}" HorizontalAlignment="Right"
+                  VerticalAlignment="Bottom" Margin="0,0,16,16" Width="380" IsHitTestVisible="True">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="ui:Toast">
+          <Border Margin="0,8,0,0" CornerRadius="6" Padding="12,11"
+                  Background="{DynamicResource VelaBgSurface}"
+                  BorderThickness="1"
+                  BorderBrush="{Binding Kind, Converter={x:Static ui:Converters.FeedbackBrush}}"
+                  BoxShadow="{DynamicResource VelaShadowWindow}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <ui:Glyph Grid.Column="0" Key="{Binding Icon}" Size="15" VerticalAlignment="Top"
+                        Brush="{Binding Kind, Converter={x:Static ui:Converters.FeedbackBrush}}" />
+              <StackPanel Grid.Column="1" Margin="9,0" Spacing="4">
+                <TextBlock Text="{Binding Title}" Classes="name" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Detail}" Classes="hint" />
+                <ItemsControl ItemsSource="{Binding Actions}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="12" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="ui:ToastAction">
+                      <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="18" Padding="0"
+                              Click="OnToastAction" Tag="{Binding}">
+                        <TextBlock Text="{Binding Label}" FontSize="{DynamicResource VelaFontSize10}"
+                                   FontWeight="Medium" Foreground="{DynamicResource VelaAccent}" />
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <Button Grid.Column="2" Theme="{StaticResource DockerIconButton}" Width="20" Height="20"
+                      VerticalAlignment="Top" Click="OnDismissToast" Tag="{Binding}">
+                <ui:Glyph Key="Icon.x" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+              </Button>
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </Grid>
 </UserControl>
