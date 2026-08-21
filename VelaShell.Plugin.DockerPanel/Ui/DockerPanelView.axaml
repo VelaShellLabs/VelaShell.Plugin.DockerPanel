@@ -214,6 +214,15 @@
       <Setter Property="FontWeight" Value="Medium" />
       <Setter Property="Foreground" Value="{DynamicResource VelaAccent}" />
     </Style>
+    <!-- "实时"徽章借会话已连接那一档的绿色:面板里"接着一条活的流"与"会话连着"是同一种状态。 -->
+    <Style Selector="Border.badge.live">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource VelaStatusConnected}" />
+    </Style>
+    <Style Selector="Border.badge.live > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource VelaStatusConnected}" />
+    </Style>
 
     <!-- 面板内的卡片(确认框 / 表单)。 -->
     <Style Selector="Border.card">
@@ -264,6 +273,10 @@
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0" VerticalAlignment="Center">
             <Border Classes="badge" IsVisible="{Binding IsEngineReady}">
               <TextBlock Text="{Binding EngineText}" />
+            </Border>
+            <!-- 接上 docker 事件流时亮起:面板此刻是事件驱动的,右边那个定时刷新只是退路。 -->
+            <Border Classes="badge live" IsVisible="{Binding IsLive}" ToolTip.Tip="{Binding Text[Engine_LiveHint]}">
+              <TextBlock Text="{Binding Text[Engine_Live]}" />
             </Border>
             <TextBlock Classes="meta" Text="{Binding EngineDetail}" IsVisible="{Binding HasEngineDetail}" />
             <TextBlock Classes="cell"

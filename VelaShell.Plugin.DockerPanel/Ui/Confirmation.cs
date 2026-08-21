@@ -219,7 +219,7 @@ public sealed class Confirmation : ObservableObject
 
     private void Close(ConfirmAnswer answer)
     {
-        TaskCompletionSource<ConfirmAnswer>? pending = _pending;
+        var pending = _pending;
         _pending = null;
         IsOpen = false;
         pending?.TrySetResult(answer);

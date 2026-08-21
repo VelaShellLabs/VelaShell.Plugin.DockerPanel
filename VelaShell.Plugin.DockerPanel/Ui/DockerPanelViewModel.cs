@@ -1,8 +1,9 @@
+using Avalonia.Threading;
 using System.Collections.ObjectModel;
 using System.Globalization;
-using Avalonia.Threading;
 using VelaShell.Plugin.DockerPanel.Docker;
 using VelaShell.PluginSdk;
+using VelaShell.PluginSdk.RemoteExec;
 using VelaShell.PluginSdk.Sessions;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
@@ -327,7 +328,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
                ?? RefreshChoices[0];
         set
         {
-            if (value is not null && int.TryParse(value.Value, out int seconds))
+            if (value is not null && int.TryParse(value.Value, out var seconds))
             {
                 AutoRefreshSeconds = seconds;
                 RaisePropertyChanged();
@@ -423,6 +424,9 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             return;
         }
         _disposed = true;
+        // 先收掉两条长驻流:它们各占一个 SSH 通道,不取消就要挂到宿主的死线才散。
+        StopEventStream();
+        StopLogStream();
         _context.Events.SessionConnected -= _onSessionConnected;
         _context.Events.SessionDisconnected -= _onSessionDisconnected;
         Confirm.Dismiss();
@@ -457,14 +461,14 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         {
             return;
         }
-        string? keep = SelectedSession?.SessionId;
+        var keep = SelectedSession?.SessionId;
         Sessions.Clear();
-        foreach (SessionInfo session in sessions.Where(static s => s.State is SessionState.Connected))
+        foreach (var session in sessions.Where(static s => s.State is SessionState.Connected))
         {
-            string user = session.Username.Length > 0 ? $"{session.Username}@" : string.Empty;
+            var user = session.Username.Length > 0 ? $"{session.Username}@" : string.Empty;
             Sessions.Add(new(session.SessionId, $"{user}{session.Host}:{session.Port}", session.Host));
         }
-        SessionOption? next = Sessions.FirstOrDefault(s => s.SessionId == keep) ?? Sessions.FirstOrDefault();
+        var next = Sessions.FirstOrDefault(s => s.SessionId == keep) ?? Sessions.FirstOrDefault();
         if (!ReferenceEquals(next, SelectedSession))
         {
             SelectedSession = next;
@@ -540,7 +544,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         EngineText = _loc["Engine_Probing"];
         EngineDetail = string.Empty;
         IsEngineReady = false;
-        DockerProbe probe = await GuardAsync(token => api.Engine.ProbeAsync(token)).ConfigureAwait(true);
+        var probe = await GuardAsync(token => api.Engine.ProbeAsync(token)).ConfigureAwait(true);
         if (probe.IsUsable)
         {
             IsEngineReady = true;
@@ -548,9 +552,13 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             EngineDetail = probe.HasCompose
                 ? _loc.Format("Engine_Compose", probe.ComposeVersion)
                 : _loc["Engine_ComposeMissing"];
+            // 接上 daemon 的事件流:此后容器起停、镜像拉取都由事件驱动刷新,
+            // 定时器只是接不上事件时的退路(§9:能用事件就不用定时器)。
+            StartEventStream();
             await RefreshActiveAsync(true).ConfigureAwait(true);
             return;
         }
+        StopEventStream();
         IsEngineReady = false;
         EngineText = probe.Diagnostic switch
         {
@@ -566,6 +574,8 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
 
     private void SetEngineUnavailable()
     {
+        StopEventStream();
+        StopLogStream();
         IsEngineReady = false;
         EngineText = _loc["Engine_NoSession"];
         EngineDetail = string.Empty;
@@ -628,7 +638,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            int seconds = AutoRefreshSeconds;
+            var seconds = AutoRefreshSeconds;
             try
             {
                 if (seconds <= 0)
@@ -656,14 +666,8 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             {
                 // 刷新会改绑定着的集合,整段必须在 UI 线程上跑。等待远端的那几百毫秒
                 // 是 await 出去的,不会冻界面 —— 冻界面的是同步阻塞,不是在 UI 线程上 await。
-                await Dispatcher.UIThread.InvokeAsync(async () =>
-                {
-                    await RefreshActiveAsync(true).ConfigureAwait(true);
-                    if (LogFollow && DrawerContent is DrawerTab.Logs)
-                    {
-                        await AppendLogTailAsync().ConfigureAwait(true);
-                    }
-                }).ConfigureAwait(false);
+                // 日志不在这里管了:跟随是一条真正的 `docker logs -f` 流,自己会推。
+                await Dispatcher.UIThread.InvokeAsync(() => RefreshActiveAsync(true)).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -714,30 +718,30 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// <param name="outcomes">逐个目标的结果。</param>
     private void ReportBatch(string label, IReadOnlyList<BatchOutcome> outcomes)
     {
-        int ok = outcomes.Count(static o => o.Ok);
-        int failed = outcomes.Count - ok;
+        var ok = outcomes.Count(static o => o.IsSuccess);
+        var failed = outcomes.Count - ok;
         if (failed == 0)
         {
             Status = _loc.Format("Status_BatchOk", label, ok);
             return;
         }
         // 只报第一条失败原因:十个容器同一个原因失败时,把十条一样的话拼进状态栏毫无用处。
-        string reason = outcomes.First(static o => !o.Ok).Output;
+        var reason = outcomes.First(static o => !o.IsSuccess).Output;
         Status = _loc.Format("Status_Batch", label, ok, failed, FirstLine(reason));
     }
 
-    private void ReportResult(string label, DockerResult result)
+    private void ReportResult(string label, ExecResult result)
     {
-        Status = result.Ok
+        Status = result.IsSuccess
             ? _loc.Format("Status_Done", label)
             : _loc.Format("Status_Failed", label, FirstLine(result.FailureText));
     }
 
     private static string FirstLine(string text)
     {
-        foreach (string line in text.Split('\n'))
+        foreach (var line in text.Split('\n'))
         {
-            string trimmed = line.Trim();
+            var trimmed = line.Trim();
             if (trimmed.Length > 0)
             {
                 return trimmed.Length > 240 ? trimmed[..240] + "…" : trimmed;
@@ -865,12 +869,12 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// <returns>是否留下。</returns>
     private bool Matches(params string?[] parts)
     {
-        string needle = Filter.Trim();
+        var needle = Filter.Trim();
         if (needle.Length == 0)
         {
             return true;
         }
-        foreach (string? part in parts)
+        foreach (var part in parts)
         {
             if (part is not null && part.Contains(needle, StringComparison.OrdinalIgnoreCase))
             {
@@ -889,7 +893,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             ShowStats = !await _context.Storage.GetAsync<bool>("statsOff", _lifetime.Token).ConfigureAwait(true);
             ShowAllImages = await _context.Storage.GetAsync<bool>("showAllImages", _lifetime.Token).ConfigureAwait(true);
             ShowContainerSize = await _context.Storage.GetAsync<bool>("showContainerSize", _lifetime.Token).ConfigureAwait(true);
-            int tail = await _context.Storage.GetAsync<int>("logTail", _lifetime.Token).ConfigureAwait(true);
+            var tail = await _context.Storage.GetAsync<int>("logTail", _lifetime.Token).ConfigureAwait(true);
             if (tail > 0)
             {
                 LogTail = tail;

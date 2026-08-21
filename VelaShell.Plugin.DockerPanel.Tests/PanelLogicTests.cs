@@ -22,7 +22,7 @@ public sealed class PanelLogicTests
     {
         System.Collections.ObjectModel.ObservableCollection<ContainerRow> rows = [];
         RowSync.Apply(rows, [Container("a", "web")], static c => c.Id, static c => new ContainerRow(c));
-        ContainerRow first = rows[0];
+        var first = rows[0];
 
         // 刷新时 Status 天天在变(Up 1 minute → Up 2 minutes)。换掉行实例的话,
         // 用户正选着的那一行每几秒就会被 ListBox 丢掉一次选中态。
@@ -40,7 +40,7 @@ public sealed class PanelLogicTests
         System.Collections.ObjectModel.ObservableCollection<ContainerRow> rows = [];
         RowSync.Apply(rows, [Container("a", "web"), Container("b", "db")],
             static c => c.Id, static c => new ContainerRow(c));
-        ContainerRow db = rows[1];
+        var db = rows[1];
 
         // 顺序反过来 + 多一个 + 少一个。
         RowSync.Apply(rows, [Container("b", "db"), Container("c", "cache")],
@@ -69,14 +69,14 @@ public sealed class PanelLogicTests
     public async Task Confirmation_ReturnsTheAnswerAndTheOptionCheckbox()
     {
         Confirmation confirm = new();
-        Task<ConfirmAnswer> pending = confirm.AskAsync(
+        var pending = confirm.AskAsync(
             "Remove 2 containers?", "…", "docker rm a b", "Remove", "Cancel", true, optionLabel: "with volumes");
         Assert.IsTrue(confirm.IsOpen);
         Assert.IsTrue(confirm.HasOption);
         confirm.OptionValue = true;
         confirm.ConfirmCommand.Execute(null);
 
-        ConfirmAnswer answer = await pending;
+        var answer = await pending;
         Assert.IsTrue(answer.Confirmed);
         Assert.IsTrue(answer.Option);
         Assert.IsFalse(confirm.IsOpen);
@@ -86,7 +86,7 @@ public sealed class PanelLogicTests
     public async Task Confirmation_RequiresTheTypedPhraseForDataLosingActions()
     {
         Confirmation confirm = new();
-        Task<ConfirmAnswer> pending = confirm.AskAsync(
+        var pending = confirm.AskAsync(
             "Delete 3 volumes?", "…", "docker volume rm …", "Delete", "Cancel", true, "delete", "Type delete to confirm");
         Assert.IsTrue(confirm.RequiresTyping);
         Assert.IsFalse(confirm.CanConfirm);
@@ -106,8 +106,8 @@ public sealed class PanelLogicTests
     public async Task Confirmation_RefusesASecondQuestionWhileOneIsStillOnScreen()
     {
         Confirmation confirm = new();
-        Task<ConfirmAnswer> first = confirm.AskAsync("A?", "", "", "OK", "Cancel");
-        ConfirmAnswer second = await confirm.AskAsync("B?", "", "", "OK", "Cancel");
+        var first = confirm.AskAsync("A?", "", "", "OK", "Cancel");
+        var second = await confirm.AskAsync("B?", "", "", "OK", "Cancel");
         // 排队会让用户在第一个框上点完"确认"之后,莫名其妙地被问第二个他早已忘了的问题 ——
         // 而这里的每个问题都关乎删东西。
         Assert.IsFalse(second.Confirmed);
@@ -119,9 +119,9 @@ public sealed class PanelLogicTests
     public async Task PanelForm_CollectsValuesAndKeepsThePreviewLive()
     {
         PanelForm form = new();
-        FormField image = PanelForm.Text("image", "Image", "nginx");
-        FormField all = PanelForm.Boolean("allTags", "All tags");
-        Task<IReadOnlyDictionary<string, string>?> pending = form.AskAsync(
+        var image = PanelForm.Text("image", "Image", "nginx");
+        var all = PanelForm.Boolean("allTags", "All tags");
+        var pending = form.AskAsync(
             "Pull", string.Empty, [image, all], "Pull", "Cancel", "Will run",
             v => $"docker pull{(v.Flag("allTags") ? " -a" : "")} {v.Text("image")}");
 
@@ -132,7 +132,7 @@ public sealed class PanelLogicTests
         Assert.AreEqual("docker pull -a redis:7", form.PreviewText);
 
         form.SubmitCommand.Execute(null);
-        IReadOnlyDictionary<string, string>? values = await pending;
+        var values = await pending;
         Assert.IsNotNull(values);
         Assert.AreEqual("redis:7", values.Text("image"));
         Assert.IsTrue(values.Flag("allTags"));
@@ -142,7 +142,7 @@ public sealed class PanelLogicTests
     public async Task PanelForm_CancelReturnsNullSoCallersCanTellItApartFromEmptyInput()
     {
         PanelForm form = new();
-        Task<IReadOnlyDictionary<string, string>?> pending =
+        var pending =
             form.AskAsync("Rename", string.Empty, [PanelForm.Text("name", "Name")], "OK", "Cancel");
         form.CancelCommand.Execute(null);
         Assert.IsNull(await pending);
@@ -151,7 +151,7 @@ public sealed class PanelLogicTests
     [TestMethod]
     public void FormField_ChoiceStartsOnItsDefaultAndWritesBackTheValue()
     {
-        FormField policy = PanelForm.Choice("policy", "Policy",
+        var policy = PanelForm.Choice("policy", "Policy",
         [
             new("no", "no"),
             new("always", "always")

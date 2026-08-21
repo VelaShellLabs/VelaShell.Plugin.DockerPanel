@@ -176,17 +176,17 @@ public static class RowSync
         where TRow : Row<TModel>
         where TModel : class
     {
-        for (int i = 0; i < models.Count; i++)
+        for (var i = 0; i < models.Count; i++)
         {
-            TModel model = models[i];
-            string key = keyOf(model);
+            var model = models[i];
+            var key = keyOf(model);
             if (i < target.Count && target[i].Key == key)
             {
                 target[i].Update(model);
                 continue;
             }
-            int existing = -1;
-            for (int j = i + 1; j < target.Count; j++)
+            var existing = -1;
+            for (var j = i + 1; j < target.Count; j++)
             {
                 if (target[j].Key == key)
                 {
@@ -196,7 +196,7 @@ public static class RowSync
             }
             if (existing >= 0)
             {
-                TRow row = target[existing];
+                var row = target[existing];
                 row.Update(model);
                 target.Move(existing, i);
                 continue;

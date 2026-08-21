@@ -93,9 +93,9 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        (IReadOnlyList<ImageItem> items, DockerResult result) =
+        (var items, var result) =
             await GuardAsync(token => api.ListImagesAsync(ShowAllImages, token)).ConfigureAwait(true);
-        if (!result.Ok && items.Count == 0)
+        if (!result.IsSuccess && items.Count == 0)
         {
             Status = _loc.Format("Status_Failed", _loc["Tab_Images"], FirstLine(result.FailureText));
             return;
@@ -107,7 +107,7 @@ public sealed partial class DockerPanelViewModel
     private void PublishImages()
     {
         List<ImageItem> visible = [];
-        foreach (ImageItem item in _allImages)
+        foreach (var item in _allImages)
         {
             if (Matches(item.Repository, item.Tag, item.ShortId, item.Display))
             {
@@ -132,7 +132,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc["Form_Pull_Title"],
             string.Empty,
             [
@@ -147,13 +147,13 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        string reference = values.Text("image");
+        var reference = values.Text("image");
         if (reference.Length == 0)
         {
             return;
         }
         Status = _loc.Format("Status_Working", _loc["Image_Pull"]);
-        DockerResult result = await GuardAsync(
+        var result = await GuardAsync(
             token => api.PullImageAsync(reference, values.Flag("allTags"), values.Text("platform"), token)).ConfigureAwait(true);
         ReportResult(_loc["Image_Pull"], result);
         // 拉取的输出值得看(层复用、摘要、警告),摆进抽屉而不是只留状态栏一行。
@@ -168,7 +168,7 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         Status = _loc.Format("Status_Working", _loc["Image_Push"]);
-        DockerResult result = await GuardAsync(token => api.PushImageAsync(row.Model.Reference, token)).ConfigureAwait(true);
+        var result = await GuardAsync(token => api.PushImageAsync(row.Model.Reference, token)).ConfigureAwait(true);
         ReportResult(_loc["Image_Push"], result);
         ShowDrawerText(DrawerTab.Output, $"$ {_loc["Image_Push"]} {row.Model.Reference}\n{result.Output}");
     }
@@ -180,7 +180,7 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         IReadOnlyList<string> references = [.. _selectedImages.Select(static r => r.Model.Reference)];
-        ConfirmAnswer answer = await Confirm.AskAsync(
+        var answer = await Confirm.AskAsync(
             _loc.Format("Confirm_RemoveImages", references.Count),
             _loc["Confirm_RemoveImagesBody"],
             DescribeTargets(_selectedImages.Select(static r => r.Model.Display)),
@@ -194,7 +194,7 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        IReadOnlyList<BatchOutcome> outcomes = await GuardAsync(
+        var outcomes = await GuardAsync(
             token => api.RemoveImagesAsync(references, answer.Option, token)).ConfigureAwait(true);
         ReportBatch(_loc["Image_Remove"], outcomes);
         SetImageSelection([]);
@@ -207,7 +207,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc.Format("Form_Tag_Title", row.Model.Display),
             string.Empty,
             [PanelForm.Text("target", _loc["Form_Tag_Target"], string.Empty, "registry.example.com/app:1.0")],
@@ -218,12 +218,12 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        string target = values.Text("target");
+        var target = values.Text("target");
         if (target.Length == 0)
         {
             return;
         }
-        DockerResult result = await GuardAsync(token => api.TagImageAsync(row.Model.Reference, target, token)).ConfigureAwait(true);
+        var result = await GuardAsync(token => api.TagImageAsync(row.Model.Reference, target, token)).ConfigureAwait(true);
         ReportResult(_loc["Image_Tag"], result);
         await LoadImagesAsync().ConfigureAwait(true);
     }
@@ -234,13 +234,13 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        string image = row.Model.Reference;
+        var image = row.Model.Reference;
         IReadOnlyList<FormChoice> networks =
         [
             new(string.Empty, "(default)"),
             .. Networks.Select(static n => new FormChoice(n.Model.Name, n.Model.Name))
         ];
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc.Format("Form_Run_Title", image),
             string.Empty,
             [
@@ -264,12 +264,12 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        RunSpec spec = SpecFrom(values, image);
+        var spec = SpecFrom(values, image);
         Status = _loc.Format("Status_Working", _loc["Common_Run"]);
-        DockerResult result = await GuardAsync(token => api.RunContainerAsync(spec, token)).ConfigureAwait(true);
+        var result = await GuardAsync(token => api.RunContainerAsync(spec, token)).ConfigureAwait(true);
         ReportResult(_loc["Common_Run"], result);
         ShowDrawerText(DrawerTab.Output, $"$ {api.BuildRunCommand(spec)}\n{result.Output}");
-        if (result.Ok)
+        if (result.IsSuccess)
         {
             ActiveTab = DockerTab.Containers;
             await LoadContainersAsync().ConfigureAwait(true);

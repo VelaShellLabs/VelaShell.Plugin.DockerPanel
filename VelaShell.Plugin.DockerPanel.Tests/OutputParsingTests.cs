@@ -13,7 +13,7 @@ public sealed class OutputParsingTests
             {"ID":"abc","Names":"web","State":"running"}
             {"ID":"def","Names":"db","State":"exited"}
             """;
-        IReadOnlyList<IReadOnlyDictionary<string, string>> rows = DockerJson.ParseLines(output);
+        var rows = DockerJson.ParseLines(output);
         Assert.AreEqual(2, rows.Count);
         Assert.AreEqual("web", DockerJson.Str(rows[0], "Names"));
         Assert.AreEqual("exited", DockerJson.Str(rows[1], "State"));
@@ -22,8 +22,9 @@ public sealed class OutputParsingTests
     [TestMethod]
     public void ParseLines_SkipsWarningsMixedIntoTheStream()
     {
-        // 我们把 stderr 并进了 stdout,docker 的 WARNING 行因此会混进来。
-        // 遇到一行不认识就整批放弃,等于在某些机器上永远列不出容器。
+        // 探测走的是分段执行,那一条路上仍然合并两条流(分段靠在一条流里插哨兵);
+        // 而且 docker 有时把 WARNING 直接写在 stdout 上。遇到一行不认识就整批放弃,
+        // 等于在某些机器上永远列不出容器。
         const string output = """
             WARNING: No swap limit support
             {"ID":"abc","Names":"web"}
@@ -43,7 +44,7 @@ public sealed class OutputParsingTests
         const string output = """
             [{"Name":"app","Status":"running(3)","ConfigFiles":"/srv/app/docker-compose.yml"}]
             """;
-        IReadOnlyList<IReadOnlyDictionary<string, string>> rows = DockerJson.ParseArray(output);
+        var rows = DockerJson.ParseArray(output);
         Assert.AreEqual(1, rows.Count);
         Assert.AreEqual("app", DockerJson.Str(rows[0], "Name"));
     }
@@ -66,43 +67,20 @@ public sealed class OutputParsingTests
     public void Collapse_KeepsOnlyTheLastRepaintOfAProgressLine()
     {
         // docker pull 的进度条靠 \r 在同一行反复重画;不折叠就是几百 KB 的残影。
-        string collapsed = OutputText.Collapse("Downloading 10%\rDownloading 50%\rDownloading 100%\ndone");
+        var collapsed = OutputText.Collapse("Downloading 10%\rDownloading 50%\rDownloading 100%\ndone");
         Assert.AreEqual("Downloading 100%\ndone", collapsed);
     }
 
     [TestMethod]
     public void Tail_TruncatesAndSaysSo()
     {
-        string text = string.Join('\n', Enumerable.Range(1, 100).Select(static i => $"line{i}"));
-        string tail = OutputText.Tail(text, 10);
+        var text = string.Join('\n', Enumerable.Range(1, 100).Select(static i => $"line{i}"));
+        var tail = OutputText.Tail(text, 10);
         StringAssert.StartsWith(tail, "… 90 earlier line(s) omitted …");
         StringAssert.Contains(tail, "line100");
         Assert.IsFalse(tail.Contains("line50\n", StringComparison.Ordinal));
     }
 
-    [TestMethod]
-    public void LastTimestamp_FindsTheRfc3339Prefix()
-    {
-        const string log = """
-            2024-05-01T09:12:33.123456789Z starting
-            2024-05-01T09:12:35.000000000Z ready
-            """;
-        Assert.AreEqual("2024-05-01T09:12:35.000000000Z", OutputText.LastTimestamp(log));
-        Assert.AreEqual(string.Empty, OutputText.LastTimestamp("no timestamps here"));
-    }
-
-    [TestMethod]
-    public void DropUpTo_RemovesTheOverlapThatSinceReturnsAgain()
-    {
-        // `docker logs --since <ts>` 的边界是闭区间:传上一条的时间戳,那一条会再回来一次。
-        // 不去重的话,每次增量刷新都在尾部多一条重复。
-        const string fresh = """
-            2024-05-01T09:12:35.000000000Z ready
-            2024-05-01T09:12:40.000000000Z serving
-            """;
-        string trimmed = OutputText.DropUpTo(fresh, "2024-05-01T09:12:35.000000000Z");
-        Assert.AreEqual("2024-05-01T09:12:40.000000000Z serving", trimmed);
-    }
 
     [TestMethod]
     public void ContainerItem_ProjectsComposeLabelsAndPorts()

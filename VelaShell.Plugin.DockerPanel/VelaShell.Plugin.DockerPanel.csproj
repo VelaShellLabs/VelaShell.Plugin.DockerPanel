@@ -27,7 +27,7 @@
          plugin.json 处理、清单校验与 `dotnet build -t:PackVpx` 都随它到位。
          本插件**没有任何第三方依赖** —— 远端一侧靠的是服务器自带的 docker CLI,
          本地一侧只用 BCL 的 System.Text.Json。 -->
-    <PackageReference Include="VelaShell.PluginSdk.Build" Version="1.0.1" />
+    <PackageReference Include="VelaShell.PluginSdk.Build" Version="1.1.0" />
   </ItemGroup>
 
   <ItemGroup>

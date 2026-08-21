@@ -108,8 +108,8 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        (IReadOnlyList<VolumeItem> items, DockerResult result) = await GuardAsync(api.ListVolumesAsync).ConfigureAwait(true);
-        if (!result.Ok && items.Count == 0)
+        (var items, var result) = await GuardAsync(api.ListVolumesAsync).ConfigureAwait(true);
+        if (!result.IsSuccess && items.Count == 0)
         {
             Status = _loc.Format("Status_Failed", _loc["Tab_Volumes"], FirstLine(result.FailureText));
             return;
@@ -121,7 +121,7 @@ public sealed partial class DockerPanelViewModel
     private void PublishVolumes()
     {
         List<VolumeItem> visible = [];
-        foreach (VolumeItem item in _allVolumes)
+        foreach (var item in _allVolumes)
         {
             if (Matches(item.Name, item.Driver, item.Mountpoint, item.ComposeProject))
             {
@@ -146,8 +146,8 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        (IReadOnlyList<NetworkItem> items, DockerResult result) = await GuardAsync(api.ListNetworksAsync).ConfigureAwait(true);
-        if (!result.Ok && items.Count == 0)
+        (var items, var result) = await GuardAsync(api.ListNetworksAsync).ConfigureAwait(true);
+        if (!result.IsSuccess && items.Count == 0)
         {
             Status = _loc.Format("Status_Failed", _loc["Tab_Networks"], FirstLine(result.FailureText));
             return;
@@ -159,7 +159,7 @@ public sealed partial class DockerPanelViewModel
     private void PublishNetworks()
     {
         List<NetworkItem> visible = [];
-        foreach (NetworkItem item in _allNetworks)
+        foreach (var item in _allNetworks)
         {
             if (Matches(item.Name, item.Driver, item.ShortId, item.Scope, item.ComposeProject))
             {
@@ -184,7 +184,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc["Form_Volume_Title"],
             string.Empty,
             [
@@ -200,7 +200,7 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        DockerResult result = await GuardAsync(token => api.CreateVolumeAsync(
+        var result = await GuardAsync(token => api.CreateVolumeAsync(
             values.Text("name"), values.Text("driver"), values.Lines("options"), values.Lines("labels"), token)).ConfigureAwait(true);
         ReportResult(_loc["Volume_Create"], result);
         await LoadVolumesAsync().ConfigureAwait(true);
@@ -215,7 +215,7 @@ public sealed partial class DockerPanelViewModel
         IReadOnlyList<string> names = [.. _selectedVolumes.Select(static r => r.Model.Name)];
         // 删卷是这个面板里唯一"删完就没了、且删的是数据"的常规动作(prune --volumes 是另一个)。
         // 手打确认串,与删仓库同款护栏。
-        ConfirmAnswer answer = await Confirm.AskAsync(
+        var answer = await Confirm.AskAsync(
             _loc.Format("Confirm_RemoveVolumes", names.Count),
             _loc["Confirm_RemoveVolumesBody"],
             DescribeTargets(names),
@@ -230,7 +230,7 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        IReadOnlyList<BatchOutcome> outcomes = await GuardAsync(
+        var outcomes = await GuardAsync(
             token => api.RemoveVolumesAsync(names, answer.Option, token)).ConfigureAwait(true);
         ReportBatch(_loc["Volume_Remove"], outcomes);
         SetVolumeSelection([]);
@@ -243,7 +243,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc["Form_Network_Title"],
             string.Empty,
             [
@@ -268,12 +268,12 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        string name = values.Text("name");
+        var name = values.Text("name");
         if (name.Length == 0)
         {
             return;
         }
-        DockerResult result = await GuardAsync(token => api.CreateNetworkAsync(
+        var result = await GuardAsync(token => api.CreateNetworkAsync(
             name, values.Text("driver"), values.Text("subnet"), values.Text("gateway"),
             values.Flag("internal"), values.Flag("ipv6"), token)).ConfigureAwait(true);
         ReportResult(_loc["Network_Create"], result);
@@ -287,7 +287,7 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         IReadOnlyList<string> names = [.. _selectedNetworks.Select(static r => r.Model.Name)];
-        ConfirmAnswer answer = await Confirm.AskAsync(
+        var answer = await Confirm.AskAsync(
             _loc.Format("Confirm_RemoveNetworks", names.Count),
             _loc["Confirm_RemoveNetworksBody"],
             DescribeTargets(names),
@@ -299,7 +299,7 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        IReadOnlyList<BatchOutcome> outcomes = await GuardAsync(token => api.RemoveNetworksAsync(names, token)).ConfigureAwait(true);
+        var outcomes = await GuardAsync(token => api.RemoveNetworksAsync(names, token)).ConfigureAwait(true);
         ReportBatch(_loc["Network_Remove"], outcomes);
         SetNetworkSelection([]);
         await LoadNetworksAsync().ConfigureAwait(true);
@@ -311,7 +311,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc.Format("Form_Connect_Title", row.Model.Name),
             string.Empty,
             [
@@ -325,12 +325,12 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        string container = values.Text("container");
+        var container = values.Text("container");
         if (container.Length == 0)
         {
             return;
         }
-        DockerResult result = await GuardAsync(
+        var result = await GuardAsync(
             token => api.ConnectNetworkAsync(row.Model.Name, container, values.Text("alias"), token)).ConfigureAwait(true);
         ReportResult(_loc["Network_Connect"], result);
     }
@@ -341,7 +341,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc.Format("Form_Disconnect_Title", row.Model.Name),
             string.Empty,
             [PanelForm.Choice("container", _loc["Form_Connect_Container"], ContainerChoices())],
@@ -352,12 +352,12 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        string container = values.Text("container");
+        var container = values.Text("container");
         if (container.Length == 0)
         {
             return;
         }
-        DockerResult result = await GuardAsync(token => api.DisconnectNetworkAsync(row.Model.Name, container, token)).ConfigureAwait(true);
+        var result = await GuardAsync(token => api.DisconnectNetworkAsync(row.Model.Name, container, token)).ConfigureAwait(true);
         ReportResult(_loc["Network_Disconnect"], result);
     }
 

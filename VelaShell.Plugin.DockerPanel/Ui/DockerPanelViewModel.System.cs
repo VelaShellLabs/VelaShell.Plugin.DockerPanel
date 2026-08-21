@@ -64,7 +64,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        SystemSnapshot snapshot = await GuardAsync(api.SystemSnapshotAsync).ConfigureAwait(true);
+        var snapshot = await GuardAsync(api.SystemSnapshotAsync).ConfigureAwait(true);
         SystemVersionText = snapshot.Version;
         SystemInfoText = snapshot.Info;
         SystemDiskText = snapshot.DiskUsage;
@@ -91,8 +91,8 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        bool losesData = withVolumes || kind is PruneKind.Volumes;
-        ConfirmAnswer answer = await Confirm.AskAsync(
+        var losesData = withVolumes || kind is PruneKind.Volumes;
+        var answer = await Confirm.AskAsync(
             _loc.Format("Confirm_Prune", label),
             losesData ? _loc["Confirm_PruneVolumesBody"] : _loc["Confirm_PruneBody"],
             api.BuildPruneCommand(kind, allImages, withVolumes),
@@ -107,7 +107,7 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         Status = _loc.Format("Status_Working", label);
-        DockerResult result = await GuardAsync(token => api.PruneAsync(kind, allImages, withVolumes, token)).ConfigureAwait(true);
+        var result = await GuardAsync(token => api.PruneAsync(kind, allImages, withVolumes, token)).ConfigureAwait(true);
         ReportResult(label, result);
         // prune 的输出末尾是"Total reclaimed space: 3.2GB" —— 那正是用户按下它想知道的数字。
         ShowDrawerText(DrawerTab.Output, $"$ {api.BuildPruneCommand(kind, allImages, withVolumes)}\n{result.Output}");

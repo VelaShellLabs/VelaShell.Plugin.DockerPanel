@@ -151,7 +151,7 @@ public sealed partial class DockerPanelViewModel
         }
         // 列表 + 计数 + 统计一次往返拿回来。分三次调用在本机看不出差别,
         // 在一条 200ms 往返的链路上就是每次刷新多卡半秒。
-        ContainerSnapshot snapshot = await GuardAsync(
+        var snapshot = await GuardAsync(
             token => api.SnapshotContainersAsync(ShowAllContainers, ShowContainerSize, ShowStats, token)).ConfigureAwait(true);
         _allContainers = snapshot.Containers;
         PublishContainers();
@@ -166,17 +166,17 @@ public sealed partial class DockerPanelViewModel
 
     private void ApplyStats(IReadOnlyDictionary<string, StatsItem> stats)
     {
-        foreach (ContainerRow row in Containers)
+        foreach (var row in Containers)
         {
             // stats 回短 id,ps --no-trunc 回长 id:按短 id 对齐。
-            row.ApplyStats(stats.TryGetValue(row.Model.ShortId, out StatsItem? item) ? item : null);
+            row.ApplyStats(stats.TryGetValue(row.Model.ShortId, out var item) ? item : null);
         }
     }
 
     private void PublishContainers()
     {
         List<ContainerItem> visible = [];
-        foreach (ContainerItem item in _allContainers)
+        foreach (var item in _allContainers)
         {
             if (Matches(item.Name, item.Image, item.ShortId, item.State, item.Status, item.Ports, item.ComposeProject))
             {
@@ -219,7 +219,7 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         Status = _loc.Format("Status_Working", label);
-        IReadOnlyList<BatchOutcome> outcomes = await GuardAsync(
+        var outcomes = await GuardAsync(
             token => api.ContainerActionAsync(action, SelectedContainerIds, token)).ConfigureAwait(true);
         ReportBatch(label, outcomes);
         await LoadContainersAsync().ConfigureAwait(true);
@@ -231,7 +231,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        ConfirmAnswer answer = await Confirm.AskAsync(
+        var answer = await Confirm.AskAsync(
             _loc.Format("Confirm_Kill", _selectedContainers.Count),
             _loc["Confirm_KillBody"],
             DescribeTargets(_selectedContainers.Select(static r => r.Model.Name)),
@@ -244,7 +244,7 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         Status = _loc.Format("Status_Working", _loc["Container_Kill"]);
-        IReadOnlyList<BatchOutcome> outcomes = await GuardAsync(
+        var outcomes = await GuardAsync(
             token => api.ContainerActionAsync("kill", SelectedContainerIds, token)).ConfigureAwait(true);
         ReportBatch(_loc["Container_Kill"], outcomes);
         await LoadContainersAsync().ConfigureAwait(true);
@@ -256,8 +256,8 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        bool anyRunning = _selectedContainers.Any(static r => r.Model.IsRunning);
-        ConfirmAnswer answer = await Confirm.AskAsync(
+        var anyRunning = _selectedContainers.Any(static r => r.Model.IsRunning);
+        var answer = await Confirm.AskAsync(
             _loc.Format("Confirm_RemoveContainers", _selectedContainers.Count),
             _loc["Confirm_RemoveContainersBody"],
             DescribeTargets(_selectedContainers.Select(static r => r.Model.Name)),
@@ -271,7 +271,7 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         Status = _loc.Format("Status_Working", _loc["Container_Remove"]);
-        IReadOnlyList<BatchOutcome> outcomes = await GuardAsync(
+        var outcomes = await GuardAsync(
             token => api.RemoveContainersAsync(SelectedContainerIds, anyRunning, answer.Option, token)).ConfigureAwait(true);
         ReportBatch(_loc["Container_Remove"], outcomes);
         SetContainerSelection([]);
@@ -284,7 +284,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc.Format("Form_Rename_Title", row.Model.Name),
             string.Empty,
             [PanelForm.Text("name", _loc["Form_Rename_Name"], row.Model.Name)],
@@ -295,12 +295,12 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        string name = values.Text("name");
+        var name = values.Text("name");
         if (name.Length == 0 || name == row.Model.Name)
         {
             return;
         }
-        DockerResult result = await GuardAsync(token => api.RenameContainerAsync(row.Model.Id, name, token)).ConfigureAwait(true);
+        var result = await GuardAsync(token => api.RenameContainerAsync(row.Model.Id, name, token)).ConfigureAwait(true);
         ReportResult(_loc["Container_Rename"], result);
         await LoadContainersAsync().ConfigureAwait(true);
     }
@@ -311,7 +311,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc["Form_Policy_Title"],
             DescribeTargets(_selectedContainers.Select(static r => r.Model.Name)),
             [PanelForm.Choice("policy", _loc["Form_Policy_Value"], RestartPolicies, "unless-stopped")],
@@ -322,7 +322,7 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        IReadOnlyList<BatchOutcome> outcomes = await GuardAsync(
+        var outcomes = await GuardAsync(
             token => api.UpdateRestartPolicyAsync(SelectedContainerIds, values.Text("policy", "no"), token)).ConfigureAwait(true);
         ReportBatch(_loc["Container_RestartPolicy"], outcomes);
         await LoadContainersAsync().ConfigureAwait(true);
@@ -334,7 +334,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc.Format("Form_Exec_Title", row.Model.Name),
             _loc["Container_TerminalHint"],
             [
@@ -370,7 +370,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        (int containers, int running, int images, int volumes) = await GuardAsync(api.CountsAsync).ConfigureAwait(true);
+        (var containers, var running, var images, var volumes) = await GuardAsync(api.CountsAsync).ConfigureAwait(true);
         ApplyCounts(new(containers, running, images, volumes));
     }
 

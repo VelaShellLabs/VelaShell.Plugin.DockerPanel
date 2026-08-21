@@ -90,7 +90,7 @@ public sealed partial class DockerPanelView : UserControl
             return [];
         }
         List<T> rows = [];
-        foreach (object? item in list.Items)
+        foreach (var item in list.Items)
         {
             if (item is T typed && selected.Contains(item))
             {

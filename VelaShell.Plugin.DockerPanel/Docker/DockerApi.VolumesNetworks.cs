@@ -1,3 +1,5 @@
+using VelaShell.PluginSdk.RemoteExec;
+
 namespace VelaShell.Plugin.DockerPanel.Docker;
 
 internal sealed partial class DockerApi
@@ -5,11 +7,11 @@ internal sealed partial class DockerApi
     /// <summary>列出卷。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>卷列表与原始结果。</returns>
-    public async Task<(IReadOnlyList<VolumeItem> Items, DockerResult Result)> ListVolumesAsync(CancellationToken cancellationToken)
+    public async Task<(IReadOnlyList<VolumeItem> Items, ExecResult Result)> ListVolumesAsync(CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} volume ls --format '{{{{json .}}}}'", null, cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync($"{D} volume ls --format '{{{{json .}}}}'", null, cancellationToken).ConfigureAwait(false);
         List<VolumeItem> items = [];
-        foreach (IReadOnlyDictionary<string, string> row in DockerJson.ParseLines(result.Output))
+        foreach (var row in DockerJson.ParseLines(result.Output))
         {
             items.Add(new()
             {
@@ -32,19 +34,19 @@ internal sealed partial class DockerApi
     /// <param name="labels">标签,一行一条 <c>key=value</c>。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public Task<DockerResult> CreateVolumeAsync(
+    public Task<ExecResult> CreateVolumeAsync(
         string name, string driver, string options, string labels, CancellationToken cancellationToken)
     {
-        string command = $"{D} volume create";
+        var command = $"{D} volume create";
         if (driver.Length > 0)
         {
             command += $" -d {Sh.Quote(driver)}";
         }
-        foreach (string option in SplitLines(options))
+        foreach (var option in SplitLines(options))
         {
             command += $" -o {Sh.Quote(option)}";
         }
-        foreach (string label in SplitLines(labels))
+        foreach (var label in SplitLines(labels))
         {
             command += $" --label {Sh.Quote(label)}";
         }
@@ -62,7 +64,7 @@ internal sealed partial class DockerApi
     /// <returns>逐个卷的结果。</returns>
     public Task<IReadOnlyList<BatchOutcome>> RemoveVolumesAsync(
         IReadOnlyList<string> names, bool force, CancellationToken cancellationToken) =>
-        RunBatchAsync(names, n => $"{D} volume rm{(force ? " -f" : "")} {Sh.Quote(n)}", LifecycleTimeout, cancellationToken);
+        RunBatchAsync(names, all => $"{D} volume rm{(force ? " -f" : "")} {Sh.QuoteAll(all)}", LifecycleTimeout, cancellationToken);
 
     /// <summary>卷详情。</summary>
     /// <param name="name">卷名。</param>
@@ -70,20 +72,20 @@ internal sealed partial class DockerApi
     /// <returns>格式化后的 JSON,或错误文本。</returns>
     public async Task<string> InspectVolumeAsync(string name, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} volume inspect {Sh.Quote(name)}", null, cancellationToken).ConfigureAwait(false);
-        return result.Ok ? DockerJson.Pretty(result.Output) : result.Output;
+        var result = await Engine.RunAsync($"{D} volume inspect {Sh.Quote(name)}", null, cancellationToken).ConfigureAwait(false);
+        return result.IsSuccess ? DockerJson.Pretty(result.Output) : result.Output;
     }
 
     /// <summary>列出网络。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>网络列表与原始结果。</returns>
-    public async Task<(IReadOnlyList<NetworkItem> Items, DockerResult Result)> ListNetworksAsync(CancellationToken cancellationToken)
+    public async Task<(IReadOnlyList<NetworkItem> Items, ExecResult Result)> ListNetworksAsync(CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine
+        var result = await Engine
                                     .RunAsync($"{D} network ls --no-trunc --format '{{{{json .}}}}'", null, cancellationToken)
                                     .ConfigureAwait(false);
         List<NetworkItem> items = [];
-        foreach (IReadOnlyDictionary<string, string> row in DockerJson.ParseLines(result.Output))
+        foreach (var row in DockerJson.ParseLines(result.Output))
         {
             items.Add(new()
             {
@@ -109,10 +111,10 @@ internal sealed partial class DockerApi
     /// <param name="ipv6">启用 IPv6。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public Task<DockerResult> CreateNetworkAsync(
+    public Task<ExecResult> CreateNetworkAsync(
         string name, string driver, string subnet, string gateway, bool isInternal, bool ipv6, CancellationToken cancellationToken)
     {
-        string command = $"{D} network create";
+        var command = $"{D} network create";
         if (driver.Length > 0)
         {
             command += $" -d {Sh.Quote(driver)}";
@@ -142,7 +144,7 @@ internal sealed partial class DockerApi
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>逐个网络的结果。</returns>
     public Task<IReadOnlyList<BatchOutcome>> RemoveNetworksAsync(IReadOnlyList<string> names, CancellationToken cancellationToken) =>
-        RunBatchAsync(names, n => $"{D} network rm {Sh.Quote(n)}", LifecycleTimeout, cancellationToken);
+        RunBatchAsync(names, all => $"{D} network rm {Sh.QuoteAll(all)}", LifecycleTimeout, cancellationToken);
 
     /// <summary>网络详情。</summary>
     /// <param name="name">网络名或 id。</param>
@@ -150,8 +152,8 @@ internal sealed partial class DockerApi
     /// <returns>格式化后的 JSON,或错误文本。</returns>
     public async Task<string> InspectNetworkAsync(string name, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} network inspect {Sh.Quote(name)}", null, cancellationToken).ConfigureAwait(false);
-        return result.Ok ? DockerJson.Pretty(result.Output) : result.Output;
+        var result = await Engine.RunAsync($"{D} network inspect {Sh.Quote(name)}", null, cancellationToken).ConfigureAwait(false);
+        return result.IsSuccess ? DockerJson.Pretty(result.Output) : result.Output;
     }
 
     /// <summary>把容器接进网络。</summary>
@@ -160,9 +162,9 @@ internal sealed partial class DockerApi
     /// <param name="alias">网络内别名;为空不设。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public Task<DockerResult> ConnectNetworkAsync(string network, string container, string alias, CancellationToken cancellationToken)
+    public Task<ExecResult> ConnectNetworkAsync(string network, string container, string alias, CancellationToken cancellationToken)
     {
-        string command = $"{D} network connect";
+        var command = $"{D} network connect";
         if (alias.Length > 0)
         {
             command += $" --alias {Sh.Quote(alias)}";
@@ -176,6 +178,6 @@ internal sealed partial class DockerApi
     /// <param name="container">容器名或 id。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public Task<DockerResult> DisconnectNetworkAsync(string network, string container, CancellationToken cancellationToken) =>
+    public Task<ExecResult> DisconnectNetworkAsync(string network, string container, CancellationToken cancellationToken) =>
         Engine.RunAsync($"{D} network disconnect -f {Sh.Quote(network)} {Sh.Quote(container)}", null, cancellationToken);
 }

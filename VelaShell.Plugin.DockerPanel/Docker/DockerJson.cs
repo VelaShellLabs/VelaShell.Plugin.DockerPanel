@@ -33,14 +33,14 @@ internal static class DockerJson
         {
             return rows;
         }
-        foreach (string line in output.Split('\n'))
+        foreach (var line in output.Split('\n'))
         {
-            string trimmed = line.Trim();
+            var trimmed = line.Trim();
             if (trimmed.Length == 0 || trimmed[0] != '{')
             {
                 continue;
             }
-            if (TryParseObject(trimmed, out Dictionary<string, string> row))
+            if (TryParseObject(trimmed, out var row))
             {
                 rows.Add(row);
             }
@@ -54,25 +54,25 @@ internal static class DockerJson
     public static IReadOnlyList<IReadOnlyDictionary<string, string>> ParseArray(string output)
     {
         List<IReadOnlyDictionary<string, string>> rows = [];
-        int start = output.IndexOf('[');
+        var start = output.IndexOf('[');
         if (start < 0)
         {
             // compose 的某些版本在 --format json 下回的仍是 NDJSON,退回逐行解析。
             return ParseLines(output);
         }
-        int end = output.LastIndexOf(']');
+        var end = output.LastIndexOf(']');
         if (end <= start)
         {
             return rows;
         }
         try
         {
-            using JsonDocument document = JsonDocument.Parse(output[start..(end + 1)]);
+            using var document = JsonDocument.Parse(output[start..(end + 1)]);
             if (document.RootElement.ValueKind is not JsonValueKind.Array)
             {
                 return rows;
             }
-            foreach (JsonElement item in document.RootElement.EnumerateArray())
+            foreach (var item in document.RootElement.EnumerateArray())
             {
                 if (item.ValueKind is JsonValueKind.Object)
                 {
@@ -93,7 +93,43 @@ internal static class DockerJson
     /// <param name="fallback">回退值。</param>
     /// <returns>字段值。</returns>
     public static string Str(IReadOnlyDictionary<string, string> row, string key, string fallback = "") =>
-        row.TryGetValue(key, out string? value) && value.Length > 0 ? value : fallback;
+        row.TryGetValue(key, out var value) && value.Length > 0 ? value : fallback;
+
+    /// <summary>
+    /// 从一段 JSON 对象文本里按路径取一个字符串属性。
+    /// <para>
+    /// 给嵌套对象用(<c>docker events</c> 的 <c>Actor.Attributes.name</c>)——
+    /// <see cref="ParseLines" /> 把嵌套值原样留成 JSON 文本,这里再钻一层。
+    /// 为一处嵌套引入一整套 POCO 反序列化不值当。
+    /// </para>
+    /// </summary>
+    /// <param name="json">对象的 JSON 文本。</param>
+    /// <param name="path">属性路径(逐层)。</param>
+    /// <returns>属性值;任意一层缺失或不是字符串时返回空串。</returns>
+    public static string Property(string json, params string[] path)
+    {
+        if (string.IsNullOrWhiteSpace(json) || path.Length == 0)
+        {
+            return string.Empty;
+        }
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var current = document.RootElement;
+            foreach (var segment in path)
+            {
+                if (current.ValueKind is not JsonValueKind.Object || !current.TryGetProperty(segment, out current))
+                {
+                    return string.Empty;
+                }
+            }
+            return current.ValueKind is JsonValueKind.String ? current.GetString() ?? string.Empty : string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
 
     /// <summary>把一段 JSON 重新格式化成缩进形式;解析不了就原样返回。</summary>
     /// <param name="json">原始 JSON。</param>
@@ -104,14 +140,14 @@ internal static class DockerJson
         {
             return string.Empty;
         }
-        int start = json.IndexOfAny(['[', '{']);
+        var start = json.IndexOfAny(['[', '{']);
         if (start < 0)
         {
             return json;
         }
         try
         {
-            using JsonDocument document = JsonDocument.Parse(json[start..]);
+            using var document = JsonDocument.Parse(json[start..]);
             return JsonSerializer.Serialize(document.RootElement, PrettyOptions);
         }
         catch (JsonException)
@@ -124,7 +160,7 @@ internal static class DockerJson
     {
         try
         {
-            using JsonDocument document = JsonDocument.Parse(line);
+            using var document = JsonDocument.Parse(line);
             if (document.RootElement.ValueKind is JsonValueKind.Object)
             {
                 row = ToRow(document.RootElement);
@@ -141,8 +177,8 @@ internal static class DockerJson
 
     private static Dictionary<string, string> ToRow(JsonElement element)
     {
-        Dictionary<string, string> row = new(StringComparer.OrdinalIgnoreCase);
-        foreach (JsonProperty property in element.EnumerateObject())
+        Dictionary<string, string> row = [with(StringComparer.OrdinalIgnoreCase)];
+        foreach (var property in element.EnumerateObject())
         {
             row[property.Name] = AsText(property.Value);
         }

@@ -29,9 +29,9 @@ internal static class OutputText
             return raw;
         }
         StringBuilder builder = new(raw.Length);
-        foreach (string line in raw.Split('\n'))
+        foreach (var line in raw.Split('\n'))
         {
-            int carriage = line.LastIndexOf('\r');
+            var carriage = line.LastIndexOf('\r');
             builder.Append(carriage >= 0 ? line[(carriage + 1)..] : line).Append('\n');
         }
         return builder.ToString().TrimEnd('\n');
@@ -47,68 +47,12 @@ internal static class OutputText
         {
             return text;
         }
-        string[] lines = text.Split('\n');
+        var lines = text.Split('\n');
         if (lines.Length <= maxLines)
         {
             return text;
         }
-        int dropped = lines.Length - maxLines;
+        var dropped = lines.Length - maxLines;
         return $"… {dropped} earlier line(s) omitted …\n{string.Join('\n', lines[dropped..])}";
-    }
-
-    /// <summary>
-    /// 取一行日志前缀里的 RFC3339 时间戳(<c>docker logs --timestamps</c> 的格式)。
-    /// 增量拉日志时要用它当下一次的 <c>--since</c>。
-    /// </summary>
-    /// <param name="text">整段日志。</param>
-    /// <returns>最后一条日志的时间戳;找不到返回空串。</returns>
-    public static string LastTimestamp(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            return string.Empty;
-        }
-        string[] lines = text.Split('\n');
-        for (int i = lines.Length - 1; i >= 0; i--)
-        {
-            string line = lines[i].Trim();
-            // 2024-05-01T09:12:33.123456789Z rest-of-line
-            int space = line.IndexOf(' ');
-            ReadOnlySpan<char> candidate = space > 0 ? line.AsSpan(0, space) : line.AsSpan();
-            if (candidate.Length >= 20 && candidate[4] == '-' && candidate[7] == '-' && candidate[10] == 'T')
-            {
-                return candidate.ToString();
-            }
-        }
-        return string.Empty;
-    }
-
-    /// <summary>
-    /// 丢掉早于(含)某个时间戳的那些行。
-    /// <para>
-    /// <c>docker logs --since</c> 的边界是**闭区间**:传上一条日志的时间戳,那一条会再回来一次。
-    /// 不去重的话,每次增量刷新都在日志尾部多一条重复 —— 一分钟后就是十几条。
-    /// </para>
-    /// </summary>
-    /// <param name="text">新拉到的日志。</param>
-    /// <param name="timestamp">上次已经拿到的最后一个时间戳。</param>
-    /// <returns>去掉重叠部分后的日志。</returns>
-    public static string DropUpTo(string text, string timestamp)
-    {
-        if (string.IsNullOrEmpty(text) || timestamp.Length == 0)
-        {
-            return text;
-        }
-        string[] lines = text.Split('\n');
-        int keepFrom = 0;
-        for (int i = 0; i < lines.Length; i++)
-        {
-            string line = lines[i].TrimStart();
-            if (line.StartsWith(timestamp, StringComparison.Ordinal))
-            {
-                keepFrom = i + 1;
-            }
-        }
-        return keepFrom == 0 ? text : string.Join('\n', lines[keepFrom..]);
     }
 }

@@ -1,3 +1,5 @@
+using VelaShell.PluginSdk.RemoteExec;
+
 namespace VelaShell.Plugin.DockerPanel.Docker;
 
 /// <summary>系统页一次刷新拿到的三块文本。</summary>
@@ -35,7 +37,7 @@ internal sealed partial class DockerApi
     /// <returns>三块文本。</returns>
     public async Task<SystemSnapshot> SystemSnapshotAsync(CancellationToken cancellationToken)
     {
-        IReadOnlyList<string> sections = await Engine.RunSectionsAsync(
+        var sections = await Engine.RunSectionsAsync(
         [
             $"{D} version",
             $"{D} info",
@@ -52,7 +54,7 @@ internal sealed partial class DockerApi
     /// <returns><c>docker system df</c> 的表格文本。</returns>
     public async Task<string> DiskUsageAsync(CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} system df", TimeSpan.FromSeconds(60), cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync($"{D} system df", TimeSpan.FromSeconds(60), cancellationToken).ConfigureAwait(false);
         return result.Output;
     }
 
@@ -77,9 +79,9 @@ internal sealed partial class DockerApi
     /// <param name="withVolumes">连卷一起清。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public async Task<DockerResult> PruneAsync(PruneKind kind, bool allImages, bool withVolumes, CancellationToken cancellationToken)
+    public async Task<ExecResult> PruneAsync(PruneKind kind, bool allImages, bool withVolumes, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine
+        var result = await Engine
                                     .RunAsync(BuildPruneCommand(kind, allImages, withVolumes), LongTimeout, cancellationToken)
                                     .ConfigureAwait(false);
         return result with { Output = OutputText.Collapse(result.Output) };
@@ -93,7 +95,7 @@ internal sealed partial class DockerApi
     /// <returns>四个计数;取不到的为 -1。</returns>
     public async Task<(int Containers, int Running, int Images, int Volumes)> CountsAsync(CancellationToken cancellationToken)
     {
-        IReadOnlyList<string> sections = await Engine.RunSectionsAsync(
+        var sections = await Engine.RunSectionsAsync(
         [
             $"{D} ps -aq | wc -l",
             $"{D} ps -q | wc -l",
@@ -105,10 +107,10 @@ internal sealed partial class DockerApi
 
     private static int ParseCount(IReadOnlyList<string> sections, int index)
     {
-        string text = (sections.ElementAtOrDefault(index) ?? string.Empty).Trim();
-        foreach (string line in text.Split('\n'))
+        var text = (sections.ElementAtOrDefault(index) ?? string.Empty).Trim();
+        foreach (var line in text.Split('\n'))
         {
-            if (int.TryParse(line.Trim(), out int value))
+            if (int.TryParse(line.Trim(), out var value))
             {
                 return value;
             }

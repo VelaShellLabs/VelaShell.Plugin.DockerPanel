@@ -72,7 +72,7 @@ public sealed class FormField : ObservableObject
     /// <summary>勾选项绑定用的布尔视图。</summary>
     public bool BoolValue
     {
-        get => bool.TryParse(Value, out bool parsed) && parsed;
+        get => bool.TryParse(Value, out var parsed) && parsed;
         set => Value = value ? "true" : "false";
     }
 
@@ -251,7 +251,7 @@ public sealed class PanelForm : ObservableObject
         PreviewLabel = previewLabel;
         _preview = preview;
         Fields.Clear();
-        foreach (FormField field in fields)
+        foreach (var field in fields)
         {
             field.Changed = UpdatePreview;
             Fields.Add(field);
@@ -334,8 +334,8 @@ public sealed class PanelForm : ObservableObject
 
     private Dictionary<string, string> Snapshot()
     {
-        Dictionary<string, string> values = new(StringComparer.Ordinal);
-        foreach (FormField field in Fields)
+        Dictionary<string, string> values = [with(StringComparer.Ordinal)];
+        foreach (var field in Fields)
         {
             values[field.Key] = field.Value;
         }
@@ -344,11 +344,11 @@ public sealed class PanelForm : ObservableObject
 
     private void Close(IReadOnlyDictionary<string, string>? answer)
     {
-        TaskCompletionSource<IReadOnlyDictionary<string, string>?>? pending = _pending;
+        var pending = _pending;
         _pending = null;
         _preview = null;
         IsOpen = false;
-        foreach (FormField field in Fields)
+        foreach (var field in Fields)
         {
             // 断掉回调:表单项是一次性的,留着引用等于让已关闭的表单还能被旧控件唤醒。
             field.Changed = null;
@@ -366,14 +366,14 @@ public static class FormValues
     /// <param name="fallback">回退值。</param>
     /// <returns>值。</returns>
     public static string Text(this IReadOnlyDictionary<string, string> values, string key, string fallback = "") =>
-        values.TryGetValue(key, out string? value) && value.Trim().Length > 0 ? value.Trim() : fallback;
+        values.TryGetValue(key, out var value) && value.Trim().Length > 0 ? value.Trim() : fallback;
 
     /// <summary>取多行值(保留换行,只去首尾空白)。</summary>
     /// <param name="values">表单值。</param>
     /// <param name="key">键。</param>
     /// <returns>值。</returns>
     public static string Lines(this IReadOnlyDictionary<string, string> values, string key) =>
-        values.TryGetValue(key, out string? value) ? value.Trim() : string.Empty;
+        values.TryGetValue(key, out var value) ? value.Trim() : string.Empty;
 
     /// <summary>取布尔值。</summary>
     /// <param name="values">表单值。</param>
@@ -381,7 +381,7 @@ public static class FormValues
     /// <param name="fallback">回退值。</param>
     /// <returns>值。</returns>
     public static bool Flag(this IReadOnlyDictionary<string, string> values, string key, bool fallback = false) =>
-        values.TryGetValue(key, out string? value) && bool.TryParse(value, out bool parsed) ? parsed : fallback;
+        values.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed) ? parsed : fallback;
 
     /// <summary>取整数值。</summary>
     /// <param name="values">表单值。</param>
@@ -389,8 +389,8 @@ public static class FormValues
     /// <param name="fallback">回退值。</param>
     /// <returns>值。</returns>
     public static int Number(this IReadOnlyDictionary<string, string> values, string key, int fallback = 0) =>
-        values.TryGetValue(key, out string? value)
-        && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
+        values.TryGetValue(key, out var value)
+        && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : fallback;
 }

@@ -1,3 +1,5 @@
+using VelaShell.PluginSdk.RemoteExec;
+
 namespace VelaShell.Plugin.DockerPanel.Docker;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace VelaShell.Plugin.DockerPanel.Docker;
 /// (<c>.Containers</c> / <c>.Images</c> / <c>.VolumesNetworks</c> / <c>.Compose</c> / <c>.System</c>)。
 /// <para>
 /// 这一层只做两件事:**拼命令**与**解析输出**。它不认识界面,也不持有状态 ——
-/// 所以命令拼装可以在单测里逐条比对(见 <c>DockerApiCommandTests</c>),
+/// 所以命令拼装可以在单测里逐条比对(见 <c>DockerApiTests</c>),
 /// 而不必起一个 Avalonia 应用。
 /// </para>
 /// <para>
@@ -30,22 +32,26 @@ internal sealed partial class DockerApi(DockerEngine engine)
     private string D => Engine.DockerPrefix;
 
     /// <summary>
-    /// 对一批目标逐个执行同一条命令,并把每个目标的成败分别记下来。
+    /// 对一批目标执行同一条命令,并把每个目标的成败分别记下来。
     /// <para>
-    /// **为什么不是 <c>docker stop a b c</c>**:docker 确实接受多个目标,但只回一个退出码 ——
-    /// 停了九个、第十个失败,用户看到的是"失败",而那九个已经停了。
-    /// 这里一条一条跑(仍然是**一次** exec 往返,靠 <c>;</c> 串起来),
-    /// 每条自己带哨兵,于是界面能说清"8 成功 / 2 失败:xxx 正被 yyy 依赖"。
+    /// docker 的批量子命令(<c>stop a b c</c>)本身就接受多个目标,而且行为正好够用:
+    /// **成功的目标原样回显到标准输出**(一行一个),失败的写到标准错误。
+    /// 于是一次往返就能分辨"停了八个、两个失败",而不是把整批说成"失败" ——
+    /// 后者最要命的地方在于它是**假的**:那八个确实已经停了。
+    /// </para>
+    /// <para>
+    /// (SDK 1.1 之前拿不到标准错误与退出码,这里只能一条条跑、再按输出文字猜成败。
+    /// 现在不用猜了,往返次数也从 N 次降回 1 次。)
     /// </para>
     /// </summary>
     /// <param name="targets">目标(容器 id、镜像引用、卷名…)。</param>
-    /// <param name="build">按目标生成命令。</param>
+    /// <param name="build">按目标列表生成一条命令。</param>
     /// <param name="timeout">超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>逐个目标的结果。</returns>
     public async Task<IReadOnlyList<BatchOutcome>> RunBatchAsync(
         IReadOnlyList<string> targets,
-        Func<string, string> build,
+        Func<IReadOnlyList<string>, string> build,
         TimeSpan? timeout,
         CancellationToken cancellationToken)
     {
@@ -53,29 +59,52 @@ internal sealed partial class DockerApi(DockerEngine engine)
         {
             return [];
         }
-        IReadOnlyList<string> sections =
-            await Engine.RunSectionsAsync([.. targets.Select(build)], timeout, cancellationToken).ConfigureAwait(false);
-        List<BatchOutcome> outcomes = new(targets.Count);
-        for (int i = 0; i < targets.Count; i++)
+        var result = await Engine.RunAsync(build(targets), timeout, cancellationToken).ConfigureAwait(false);
+        HashSet<string> echoed = [with(StringComparer.Ordinal)];
+        foreach (var line in result.Output.Split('\n'))
         {
-            string output = OutputText.Collapse(sections.ElementAtOrDefault(i) ?? string.Empty).Trim();
-            // 分段执行拿不到每段的退出码(哨兵只有一个,在整条脚本的末尾)。
-            // 判据换成 docker 自己的行为:成功时它只回显目标名/id,失败时输出里带
-            // "Error response from daemon" 或 "Error:"。这比再跑 N 次往返划算得多。
-            bool failed = output.Contains("Error response from daemon", StringComparison.OrdinalIgnoreCase)
-                          || output.Contains("Error:", StringComparison.OrdinalIgnoreCase)
-                          || output.StartsWith("error", StringComparison.OrdinalIgnoreCase)
-                          || output.Contains("permission denied", StringComparison.OrdinalIgnoreCase)
-                          || output.Contains("No such container", StringComparison.OrdinalIgnoreCase)
-                          || output.Contains("not found", StringComparison.OrdinalIgnoreCase);
-            outcomes.Add(new(targets[i], !failed, output));
+            var trimmed = line.Trim();
+            if (trimmed.Length > 0)
+            {
+                echoed.Add(trimmed);
+            }
+        }
+        string[] errorLines = [.. result.Error.Split('\n').Select(static l => l.Trim()).Where(static l => l.Length > 0)];
+        List<BatchOutcome> outcomes = [with(targets.Count)];
+        foreach (var target in targets)
+        {
+            // 回显里出现过就是成功。整条命令成功(退出码 0)但**一个都没回显**时也算成功 ——
+            // 个别子命令(`network disconnect`、`update`)本来就不回显目标名。
+            var ok = echoed.Contains(target) || (result.IsSuccess && echoed.Count == 0);
+            outcomes.Add(new(target, ok, ok ? string.Empty : FindReason(errorLines, target, result)));
         }
         return outcomes;
+    }
+
+    /// <summary>从标准错误里挑出与某个目标有关的那一行;挑不出就用整体失败说明。</summary>
+    /// <param name="errorLines">标准错误的各行。</param>
+    /// <param name="target">目标。</param>
+    /// <param name="result">整条命令的结果。</param>
+    /// <returns>一行原因。</returns>
+    private static string FindReason(IReadOnlyList<string> errorLines, string target, ExecResult result)
+    {
+        // docker 的错误行里一般带着出问题的那个名字/id,而且用的是**用户传进去的那个写法**。
+        // 短 id 也试一次:有些子命令会把长 id 截短了再回报。
+        var shortTarget = target.Length > 12 ? target[..12] : target;
+        foreach (var line in errorLines)
+        {
+            if (line.Contains(target, StringComparison.OrdinalIgnoreCase)
+                || line.Contains(shortTarget, StringComparison.OrdinalIgnoreCase))
+            {
+                return line;
+            }
+        }
+        return errorLines.Count > 0 ? errorLines[0] : result.FailureText;
     }
 }
 
 /// <summary>批量操作里单个目标的结果。</summary>
 /// <param name="Target">目标(容器 id、镜像引用…)。</param>
-/// <param name="Ok">是否成功。</param>
-/// <param name="Output">该目标那一段输出。</param>
-internal sealed record BatchOutcome(string Target, bool Ok, string Output);
+/// <param name="IsSuccess">是否成功。</param>
+/// <param name="Output">失败原因(成功时为空)。</param>
+internal sealed record BatchOutcome(string Target, bool IsSuccess, string Output);

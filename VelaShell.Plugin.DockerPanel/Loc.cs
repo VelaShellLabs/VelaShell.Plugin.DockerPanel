@@ -15,7 +15,7 @@ public sealed class Loc(string locale)
     /// <param name="key">文案键。</param>
     /// <returns>文案。</returns>
     public string this[string key] =>
-        (_chinese ? Chinese : English).TryGetValue(key, out string? value) ? value : key;
+        (_chinese ? Chinese : English).TryGetValue(key, out var value) ? value : key;
 
     /// <summary>取一条带占位符的文案并格式化。</summary>
     /// <param name="key">文案键。</param>
@@ -61,6 +61,8 @@ public sealed class Loc(string locale)
         ["Engine_Other"] = "docker could not be reached: {0}",
         ["Engine_ComposeMissing"] = "compose not available",
         ["Engine_Compose"] = "compose {0}",
+        ["Engine_Live"] = "live",
+        ["Engine_LiveHint"] = "Connected to the docker event stream — the panel updates itself; the timer below is only a fallback.",
 
         // ── 页签 ────────────────────────────────────────────────────────
         ["Tab_Containers"] = "Containers",
@@ -325,6 +327,8 @@ public sealed class Loc(string locale)
         ["Engine_Other"] = "docker 不可用:{0}",
         ["Engine_ComposeMissing"] = "无 compose",
         ["Engine_Compose"] = "compose {0}",
+        ["Engine_Live"] = "实时",
+        ["Engine_LiveHint"] = "已接上 docker 事件流 —— 面板会自己更新;右边的定时刷新只是退路。",
 
         ["Tab_Containers"] = "容器",
         ["Tab_Images"] = "镜像",

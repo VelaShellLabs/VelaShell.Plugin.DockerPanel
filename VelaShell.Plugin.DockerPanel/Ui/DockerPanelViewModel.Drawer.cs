@@ -1,7 +1,8 @@
-using System.Text;
 using Avalonia.Controls;
 using Avalonia.Media;
+using System.Text;
 using VelaShell.Plugin.DockerPanel.Docker;
+using VelaShell.PluginSdk.RemoteExec;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
@@ -21,7 +22,6 @@ public sealed partial class DockerPanelViewModel
     private bool _drawerWrap;
     private string _logRaw = string.Empty;
     private string _logFilter = string.Empty;
-    private string _logCursor = string.Empty;
     private int _logTail = 500;
     private bool _logTimestamps = true;
     private bool _logFollow;
@@ -171,7 +171,7 @@ public sealed partial class DockerPanelViewModel
                ?? LogTailChoices[1];
         set
         {
-            if (value is not null && int.TryParse(value.Value, out int tail))
+            if (value is not null && int.TryParse(value.Value, out var tail))
             {
                 LogTail = tail;
                 RaisePropertyChanged();
@@ -205,9 +205,9 @@ public sealed partial class DockerPanelViewModel
     /// <summary>
     /// 日志是否"跟随"。
     /// <para>
-    /// 不是 <c>docker logs -f</c>:远程执行是一次性的,<c>-f</c> 永远不返回。这里是按自动刷新的
-    /// 间隔用 <c>--since &lt;上一条的时间戳&gt;</c> 增量续取。跟随因此**依赖时间戳** ——
-    /// 打开跟随会把时间戳一起打开,否则续不上。
+    /// 就是 <c>docker logs -f</c> —— 一条真正的流,新日志到达即出现,不是按间隔补拉。
+    /// (SDK 1.1 之前远程执行只有一次性形态,<c>-f</c> 永远不返回,那时只能用
+    /// <c>--since &lt;上一条时间戳&gt;</c> 反复补拉,还要自己处理闭区间重复。)
     /// </para>
     /// </summary>
     public bool LogFollow
@@ -219,15 +219,13 @@ public sealed partial class DockerPanelViewModel
             {
                 return;
             }
-            if (value)
+            if (value && DrawerContent is DrawerTab.Logs)
             {
-                LogTimestamps = true;
-                if (AutoRefreshSeconds <= 0)
-                {
-                    // 跟随却不刷新等于没跟随。给一个最小的、纪律允许的间隔。
-                    AutoRefreshSeconds = 5;
-                    RaisePropertyChanged(nameof(SelectedRefreshChoice));
-                }
+                StartLogStream();
+            }
+            else
+            {
+                StopLogStream();
             }
         }
     }
@@ -274,7 +272,7 @@ public sealed partial class DockerPanelViewModel
     /// <param name="command">远端命令。</param>
     /// <param name="result">结果。</param>
     /// <param name="elapsed">耗时。</param>
-    private void OnCommandObserved(string command, DockerResult result, TimeSpan elapsed)
+    private void OnCommandObserved(string command, ExecResult result, TimeSpan elapsed)
     {
         lock (_commandLog)
         {
@@ -295,7 +293,7 @@ public sealed partial class DockerPanelViewModel
         StringBuilder builder = new();
         lock (_commandLog)
         {
-            foreach (CommandLogEntry entry in _commandLog)
+            foreach (var entry in _commandLog)
             {
                 builder.AppendLine(entry.Line);
             }
@@ -382,11 +380,18 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         // 选中项换了就得重新拉:上一条的日志留在屏幕上、标题却已经是新容器,是最糟的一种"看起来对"。
-        _logCursor = string.Empty;
+        StopLogStream();
         switch (ActiveTab)
         {
             case DockerTab.Containers when PrimaryContainer is { } container:
                 DrawerTitle = container.Model.Name;
+                if (DrawerContent is DrawerTab.Logs && LogFollow)
+                {
+                    // 跟随是一条真流:`--tail` 先补历史,之后新行自己来。这里就不再取快照了,
+                    // 否则屏幕上会先出现一份历史、再被流里的同一份历史盖一遍。
+                    StartLogStream();
+                    break;
+                }
                 DrawerText = DrawerContent switch
                 {
                     DrawerTab.Logs => await LoadLogsAsync(api, container.Model.Id).ConfigureAwait(true),
@@ -431,39 +436,19 @@ public sealed partial class DockerPanelViewModel
         }
     }
 
+    /// <summary>
+    /// 取一次日志快照(不跟随时用)。跟随打开时走的是 <see cref="StartLogStream" /> 的真流,
+    /// 这里不参与。
+    /// </summary>
+    /// <param name="api">API。</param>
+    /// <param name="containerId">容器 id。</param>
+    /// <returns>过滤后的日志文本。</returns>
     private async Task<string> LoadLogsAsync(DockerApi api, string containerId)
     {
-        DockerResult result = await GuardAsync(
+        var result = await GuardAsync(
             token => api.LogsAsync(containerId, LogTail, LogTimestamps, string.Empty, token)).ConfigureAwait(true);
         _logRaw = result.Output;
-        _logCursor = LogTimestamps ? OutputText.LastTimestamp(_logRaw) : string.Empty;
         return FilterLog(_logRaw);
-    }
-
-    /// <summary>跟随模式下的增量续取。</summary>
-    /// <returns>表示异步操作的任务。</returns>
-    private async Task AppendLogTailAsync()
-    {
-        if (_api is not { } api || PrimaryContainer is not { } container || DrawerContent is not DrawerTab.Logs)
-        {
-            return;
-        }
-        if (_logCursor.Length == 0)
-        {
-            // 还没有游标(第一次,或关了时间戳):退回一次全量取。
-            DrawerText = await LoadLogsAsync(api, container.Model.Id).ConfigureAwait(true);
-            return;
-        }
-        DockerResult result = await GuardAsync(
-            token => api.LogsAsync(container.Model.Id, 0, true, _logCursor, token)).ConfigureAwait(true);
-        string fresh = OutputText.DropUpTo(result.Output, _logCursor).Trim('\n');
-        if (fresh.Length == 0)
-        {
-            return;
-        }
-        _logCursor = OutputText.LastTimestamp(fresh) is { Length: > 0 } cursor ? cursor : _logCursor;
-        _logRaw = OutputText.Tail($"{_logRaw}\n{fresh}", Math.Max(LogTail, 2000));
-        DrawerText = FilterLog(_logRaw);
     }
 
     private void PublishLog()
@@ -476,13 +461,13 @@ public sealed partial class DockerPanelViewModel
 
     private string FilterLog(string text)
     {
-        string needle = LogFilter.Trim();
+        var needle = LogFilter.Trim();
         if (needle.Length == 0 || text.Length == 0)
         {
             return text;
         }
         StringBuilder builder = new();
-        foreach (string line in text.Split('\n'))
+        foreach (var line in text.Split('\n'))
         {
             if (line.Contains(needle, StringComparison.OrdinalIgnoreCase))
             {

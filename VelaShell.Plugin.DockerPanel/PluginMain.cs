@@ -103,11 +103,11 @@ public sealed class DockerPanelPlugin : IVelaPlugin
             Loc loc = new(context.Host.Locale);
             // GetTask():带返回值的 InvokeAsync 回的是 DispatcherOperation<T>,它本身可 await
             // 但没有 ConfigureAwait —— 取出里面的 Task 再等,才能明确"不必回到调用线程"。
-            DockerPanelViewModel viewModel = await Dispatcher.UIThread
+            var viewModel = await Dispatcher.UIThread
                                                              .InvokeAsync(() => new DockerPanelViewModel(context, loc))
                                                              .GetTask()
                                                              .ConfigureAwait(false);
-            IPluginPanel panel = await context.Ui.ShowPanelAsync(
+            var panel = await context.Ui.ShowPanelAsync(
                 new PanelOptions
                 {
                     Title = loc["Panel_Title"],

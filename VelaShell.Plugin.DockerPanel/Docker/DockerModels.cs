@@ -29,9 +29,9 @@ public static class DockerLabels
         {
             return string.Empty;
         }
-        foreach (string pair in labels.Split(','))
+        foreach (var pair in labels.Split(','))
         {
-            int equals = pair.IndexOf('=');
+            var equals = pair.IndexOf('=');
             if (equals > 0 && pair.AsSpan(0, equals).Trim().SequenceEqual(key))
             {
                 return pair[(equals + 1)..].Trim();
@@ -119,9 +119,9 @@ public sealed record ContainerItem
             // "0.0.0.0:8080->80/tcp, :::8080->80/tcp" —— IPv6 那半条是同一个映射的另一面,
             // 两条都列出来只会把列撑爆,这里只留能读出"外部端口→内部端口"的那些。
             List<string> mapped = [];
-            foreach (string part in Ports.Split(','))
+            foreach (var part in Ports.Split(','))
             {
-                string trimmed = part.Trim();
+                var trimmed = part.Trim();
                 if (trimmed.Contains("->", StringComparison.Ordinal) && !trimmed.StartsWith(":::", StringComparison.Ordinal))
                 {
                     mapped.Add(trimmed);
@@ -161,7 +161,7 @@ public sealed record ImageItem
     {
         get
         {
-            string id = Id.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? Id[7..] : Id;
+            var id = Id.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? Id[7..] : Id;
             return id.Length > 12 ? id[..12] : id;
         }
     }
@@ -263,7 +263,7 @@ public sealed record ComposeProjectItem
             {
                 return string.Empty;
             }
-            int comma = ConfigFiles.IndexOf(',');
+            var comma = ConfigFiles.IndexOf(',');
             return (comma > 0 ? ConfigFiles[..comma] : ConfigFiles).Trim();
         }
     }
@@ -307,7 +307,7 @@ public sealed record StatsItem
 
     private static double ParsePercent(string text)
     {
-        ReadOnlySpan<char> span = text.AsSpan().Trim().TrimEnd('%');
-        return double.TryParse(span, System.Globalization.CultureInfo.InvariantCulture, out double value) ? value : 0;
+        var span = text.AsSpan().Trim().TrimEnd('%');
+        return double.TryParse(span, System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : 0;
     }
 }

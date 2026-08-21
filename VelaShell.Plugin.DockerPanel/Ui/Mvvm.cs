@@ -1,7 +1,7 @@
+using Avalonia.Threading;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
-using Avalonia.Threading;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 

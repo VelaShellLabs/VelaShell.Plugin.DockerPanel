@@ -7,6 +7,11 @@
   "author": "Joe",
   "entry": "VelaShell.Plugin.DockerPanel.dll",
   "apiLevel": 1,
+  // 面板用到 SDK 1.1 才有的两样:ExecResult 的标准错误 / 退出码,以及流式远程执行
+  // (docker logs -f 与 docker events)。apiLevel 表达不了这一档 —— 它只在**破坏性**
+  // 变更时才动,而这些都是新增。不声明的话,老宿主会把插件装上、激活,然后在第一次
+  // 调用新方法时抛 MissingMethodException;声明了就在发现期干净地标为不兼容。
+  "minSdkVersion": "1.1.0",
   "license": "MIT",
   "homepage": "https://github.com/joesdu/VelaShell",
   // 命令贡献:发现期就进命令面板(**不装载本程序集**),用户按下它才触发下面的惰性激活。

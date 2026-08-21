@@ -1,3 +1,5 @@
+using VelaShell.PluginSdk.RemoteExec;
+
 namespace VelaShell.Plugin.DockerPanel.Docker;
 
 /// <summary>"用镜像跑一个容器"的表单值。</summary>
@@ -43,13 +45,13 @@ internal sealed partial class DockerApi
     /// <param name="all">连中间层一起列(<c>-a</c>)。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>镜像列表与原始结果。</returns>
-    public async Task<(IReadOnlyList<ImageItem> Items, DockerResult Result)> ListImagesAsync(
+    public async Task<(IReadOnlyList<ImageItem> Items, ExecResult Result)> ListImagesAsync(
         bool all, CancellationToken cancellationToken)
     {
-        string command = $"{D} images{(all ? " -a" : "")} --no-trunc --format '{{{{json .}}}}'";
-        DockerResult result = await Engine.RunAsync(command, null, cancellationToken).ConfigureAwait(false);
+        var command = $"{D} images{(all ? " -a" : "")} --no-trunc --format '{{{{json .}}}}'";
+        var result = await Engine.RunAsync(command, null, cancellationToken).ConfigureAwait(false);
         List<ImageItem> items = [];
-        foreach (IReadOnlyDictionary<string, string> row in DockerJson.ParseLines(result.Output))
+        foreach (var row in DockerJson.ParseLines(result.Output))
         {
             items.Add(new()
             {
@@ -71,10 +73,10 @@ internal sealed partial class DockerApi
     /// <param name="platform">指定平台(如 <c>linux/arm64</c>);为空跟随远端默认。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果(输出已折叠掉进度条重画)。</returns>
-    public async Task<DockerResult> PullImageAsync(
+    public async Task<ExecResult> PullImageAsync(
         string reference, bool allTags, string platform, CancellationToken cancellationToken)
     {
-        string command = $"{D} pull";
+        var command = $"{D} pull";
         if (allTags)
         {
             command += " -a";
@@ -84,7 +86,7 @@ internal sealed partial class DockerApi
             command += $" --platform {Sh.Quote(platform)}";
         }
         command += $" {Sh.Quote(reference)}";
-        DockerResult result = await Engine.RunAsync(command, LongTimeout, cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync(command, LongTimeout, cancellationToken).ConfigureAwait(false);
         return result with { Output = OutputText.Collapse(result.Output) };
     }
 
@@ -95,23 +97,23 @@ internal sealed partial class DockerApi
     /// <returns>逐个镜像的结果。</returns>
     public Task<IReadOnlyList<BatchOutcome>> RemoveImagesAsync(
         IReadOnlyList<string> references, bool force, CancellationToken cancellationToken) =>
-        RunBatchAsync(references, r => $"{D} rmi{(force ? " -f" : "")} {Sh.Quote(r)}", LifecycleTimeout, cancellationToken);
+        RunBatchAsync(references, all => $"{D} rmi{(force ? " -f" : "")} {Sh.QuoteAll(all)}", LifecycleTimeout, cancellationToken);
 
     /// <summary>给镜像打标签。</summary>
     /// <param name="source">源引用或 id。</param>
     /// <param name="target">目标引用。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public Task<DockerResult> TagImageAsync(string source, string target, CancellationToken cancellationToken) =>
+    public Task<ExecResult> TagImageAsync(string source, string target, CancellationToken cancellationToken) =>
         Engine.RunAsync($"{D} tag {Sh.Quote(source)} {Sh.Quote(target)}", null, cancellationToken);
 
     /// <summary>推镜像到仓库。</summary>
     /// <param name="reference">镜像引用。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public async Task<DockerResult> PushImageAsync(string reference, CancellationToken cancellationToken)
+    public async Task<ExecResult> PushImageAsync(string reference, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} push {Sh.Quote(reference)}", LongTimeout, cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync($"{D} push {Sh.Quote(reference)}", LongTimeout, cancellationToken).ConfigureAwait(false);
         return result with { Output = OutputText.Collapse(result.Output) };
     }
 
@@ -121,7 +123,7 @@ internal sealed partial class DockerApi
     /// <returns>表格文本。</returns>
     public async Task<string> ImageHistoryAsync(string reference, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine
+        var result = await Engine
                                     .RunAsync($"{D} history --no-trunc --format 'table {{{{.ID}}}}\\t{{{{.CreatedSince}}}}\\t{{{{.Size}}}}\\t{{{{.CreatedBy}}}}' {Sh.Quote(reference)}",
                                         null, cancellationToken)
                                     .ConfigureAwait(false);
@@ -134,8 +136,8 @@ internal sealed partial class DockerApi
     /// <returns>格式化后的 JSON,或错误文本。</returns>
     public async Task<string> InspectImageAsync(string reference, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} image inspect {Sh.Quote(reference)}", null, cancellationToken).ConfigureAwait(false);
-        return result.Ok ? DockerJson.Pretty(result.Output) : result.Output;
+        var result = await Engine.RunAsync($"{D} image inspect {Sh.Quote(reference)}", null, cancellationToken).ConfigureAwait(false);
+        return result.IsSuccess ? DockerJson.Pretty(result.Output) : result.Output;
     }
 
     /// <summary>
@@ -163,15 +165,15 @@ internal sealed partial class DockerApi
         {
             parts.Add($"--name {Sh.Quote(spec.Name)}");
         }
-        foreach (string port in SplitLines(spec.Ports))
+        foreach (var port in SplitLines(spec.Ports))
         {
             parts.Add($"-p {Sh.Quote(port)}");
         }
-        foreach (string volume in SplitLines(spec.Volumes))
+        foreach (var volume in SplitLines(spec.Volumes))
         {
             parts.Add($"-v {Sh.Quote(volume)}");
         }
-        foreach (string env in SplitLines(spec.Environment))
+        foreach (var env in SplitLines(spec.Environment))
         {
             parts.Add($"-e {Sh.Quote(env)}");
         }
@@ -185,13 +187,13 @@ internal sealed partial class DockerApi
         {
             parts.Add($"--restart {Sh.Quote(spec.RestartPolicy)}");
         }
-        string extra = Sh.Raw(spec.ExtraArgs);
+        var extra = Sh.Raw(spec.ExtraArgs);
         if (extra.Length > 0)
         {
             parts.Add(extra);
         }
         parts.Add(Sh.Quote(spec.Image));
-        string command = Sh.Raw(spec.Command);
+        var command = Sh.Raw(spec.Command);
         if (command.Length > 0)
         {
             parts.Add(command);
@@ -203,9 +205,9 @@ internal sealed partial class DockerApi
     /// <param name="spec">表单值。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public async Task<DockerResult> RunContainerAsync(RunSpec spec, CancellationToken cancellationToken)
+    public async Task<ExecResult> RunContainerAsync(RunSpec spec, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync(BuildRunCommand(spec), LongTimeout, cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync(BuildRunCommand(spec), LongTimeout, cancellationToken).ConfigureAwait(false);
         return result with { Output = OutputText.Collapse(result.Output) };
     }
 

@@ -1,3 +1,5 @@
+using VelaShell.PluginSdk.RemoteExec;
+
 namespace VelaShell.Plugin.DockerPanel.Docker;
 
 internal sealed partial class DockerApi
@@ -13,27 +15,27 @@ internal sealed partial class DockerApi
     /// <param name="all">连已停的项目一起列。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>项目列表与原始结果。</returns>
-    public async Task<(IReadOnlyList<ComposeProjectItem> Items, DockerResult Result)> ListComposeProjectsAsync(
+    public async Task<(IReadOnlyList<ComposeProjectItem> Items, ExecResult Result)> ListComposeProjectsAsync(
         bool all, CancellationToken cancellationToken)
     {
-        string compose = Engine.ComposePrefix;
+        var compose = Engine.ComposePrefix;
         if (compose.Length == 0)
         {
-            return ([], new(-1, "compose is not available on this host"));
+            return ([], new(string.Empty) { Error = "compose is not available on this host", ExitCode = -1 });
         }
         if (!Engine.SupportsProjectListing)
         {
             // v1 的 docker-compose 没有 `ls`。当作"列不出来"而不是"失败":
             // 这条路上用户该走的是「打开文件…」,而不是盯着一条每 5 秒重印一次的错误。
-            return ([], new(0, string.Empty));
+            return ([], new(string.Empty));
         }
-        DockerResult result = await Engine
+        var result = await Engine
                                     .RunAsync($"{compose} ls{(all ? " --all" : "")} --format json", null, cancellationToken)
                                     .ConfigureAwait(false);
         List<ComposeProjectItem> items = [];
-        foreach (IReadOnlyDictionary<string, string> row in DockerJson.ParseArray(result.Output))
+        foreach (var row in DockerJson.ParseArray(result.Output))
         {
-            string name = DockerJson.Str(row, "Name");
+            var name = DockerJson.Str(row, "Name");
             if (name.Length == 0)
             {
                 continue;
@@ -62,12 +64,12 @@ internal sealed partial class DockerApi
     /// <returns>完整命令行;compose 不可用时返回空串。</returns>
     public string BuildComposeCommand(string project, string configFile, string arguments)
     {
-        string compose = Engine.ComposePrefix;
+        var compose = Engine.ComposePrefix;
         if (compose.Length == 0)
         {
             return string.Empty;
         }
-        string command = compose;
+        var command = compose;
         if (project.Length > 0)
         {
             command += $" -p {Sh.Quote(project)}";
@@ -78,7 +80,7 @@ internal sealed partial class DockerApi
             // --project-directory:compose 用它解析 yml 里的相对路径(bind mount、env_file)。
             // 不给的话 v2 会以**当前工作目录**为基准,而 exec 通道的当前目录是登录目录,
             // 于是 ./data 会解析到 ~/data —— 一个安静地挂错盘的 bug。
-            string directory = ParentDirectory(configFile);
+            var directory = ParentDirectory(configFile);
             if (directory.Length > 0)
             {
                 command += $" --project-directory {Sh.Quote(directory)}";
@@ -94,15 +96,15 @@ internal sealed partial class DockerApi
     /// <param name="timeout">超时;为空用长超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public async Task<DockerResult> ComposeAsync(
+    public async Task<ExecResult> ComposeAsync(
         string project, string configFile, string arguments, TimeSpan? timeout, CancellationToken cancellationToken)
     {
-        string command = BuildComposeCommand(project, configFile, arguments);
+        var command = BuildComposeCommand(project, configFile, arguments);
         if (command.Length == 0)
         {
-            return new(-1, "compose is not available on this host");
+            return new(string.Empty) { Error = "compose is not available on this host", ExitCode = -1 };
         }
-        DockerResult result = await Engine.RunAsync(command, timeout ?? LongTimeout, cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync(command, timeout ?? LongTimeout, cancellationToken).ConfigureAwait(false);
         return result with { Output = OutputText.Collapse(result.Output) };
     }
 
@@ -113,7 +115,7 @@ internal sealed partial class DockerApi
     /// <returns>表格文本。</returns>
     public async Task<string> ComposePsAsync(string project, string configFile, CancellationToken cancellationToken)
     {
-        DockerResult result = await ComposeAsync(project, configFile, "ps -a", TimeSpan.FromSeconds(60), cancellationToken).ConfigureAwait(false);
+        var result = await ComposeAsync(project, configFile, "ps -a", TimeSpan.FromSeconds(60), cancellationToken).ConfigureAwait(false);
         return result.Output;
     }
 
@@ -125,7 +127,7 @@ internal sealed partial class DockerApi
     /// <returns>日志文本。</returns>
     public async Task<string> ComposeLogsAsync(string project, string configFile, int tail, CancellationToken cancellationToken)
     {
-        DockerResult result = await ComposeAsync(project, configFile, $"logs --no-color --tail {tail}", TimeSpan.FromSeconds(90), cancellationToken)
+        var result = await ComposeAsync(project, configFile, $"logs --no-color --tail {tail}", TimeSpan.FromSeconds(90), cancellationToken)
                                     .ConfigureAwait(false);
         return result.Output;
     }
@@ -137,7 +139,7 @@ internal sealed partial class DockerApi
     /// <returns>展开后的 YAML 或错误文本。</returns>
     public async Task<string> ComposeConfigAsync(string project, string configFile, CancellationToken cancellationToken)
     {
-        DockerResult result = await ComposeAsync(project, configFile, "config", TimeSpan.FromSeconds(60), cancellationToken).ConfigureAwait(false);
+        var result = await ComposeAsync(project, configFile, "config", TimeSpan.FromSeconds(60), cancellationToken).ConfigureAwait(false);
         return result.Output;
     }
 
@@ -146,7 +148,7 @@ internal sealed partial class DockerApi
     /// <returns>父目录;没有分隔符时返回空串。</returns>
     internal static string ParentDirectory(string path)
     {
-        int slash = path.LastIndexOf('/');
+        var slash = path.LastIndexOf('/');
         return slash switch
         {
             < 0 => string.Empty,

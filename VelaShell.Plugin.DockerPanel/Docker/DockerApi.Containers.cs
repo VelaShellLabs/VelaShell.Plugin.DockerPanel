@@ -1,3 +1,5 @@
+using VelaShell.PluginSdk.RemoteExec;
+
 namespace VelaShell.Plugin.DockerPanel.Docker;
 
 internal sealed partial class DockerApi
@@ -14,10 +16,10 @@ internal sealed partial class DockerApi
     /// <param name="withSize">连可写层大小一起要(<c>-s</c>);它在容器多时明显更慢,默认关。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>容器列表与原始输出(解析不出时界面要能把原文摆给用户看)。</returns>
-    public async Task<(IReadOnlyList<ContainerItem> Items, DockerResult Result)> ListContainersAsync(
+    public async Task<(IReadOnlyList<ContainerItem> Items, ExecResult Result)> ListContainersAsync(
         bool all, bool withSize, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync(ListContainersCommand(all, withSize), null, cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync(ListContainersCommand(all, withSize), null, cancellationToken).ConfigureAwait(false);
         return (ParseContainers(result.Output), result);
     }
 
@@ -48,9 +50,9 @@ internal sealed partial class DockerApi
         {
             commands.Add($"{D} stats --no-stream --format '{{{{json .}}}}'");
         }
-        IReadOnlyList<string> sections =
+        var sections =
             await Engine.RunSectionsAsync(commands, TimeSpan.FromSeconds(90), cancellationToken).ConfigureAwait(false);
-        IReadOnlyList<ContainerItem> items = ParseContainers(sections.ElementAtOrDefault(0) ?? string.Empty);
+        var items = ParseContainers(sections.ElementAtOrDefault(0) ?? string.Empty);
         return new(
             items,
             new(ParseCount(sections, 1), ParseCount(sections, 2), ParseCount(sections, 3), ParseCount(sections, 4)),
@@ -60,7 +62,7 @@ internal sealed partial class DockerApi
     private static IReadOnlyList<ContainerItem> ParseContainers(string output)
     {
         List<ContainerItem> items = [];
-        foreach (IReadOnlyDictionary<string, string> row in DockerJson.ParseLines(output))
+        foreach (var row in DockerJson.ParseLines(output))
         {
             items.Add(new()
             {
@@ -91,7 +93,7 @@ internal sealed partial class DockerApi
     /// <returns>逐个容器的结果。</returns>
     public Task<IReadOnlyList<BatchOutcome>> ContainerActionAsync(
         string action, IReadOnlyList<string> ids, CancellationToken cancellationToken) =>
-        RunBatchAsync(ids, id => $"{D} {action} {Sh.Quote(id)}", LifecycleTimeout, cancellationToken);
+        RunBatchAsync(ids, all => $"{D} {action} {Sh.QuoteAll(all)}", LifecycleTimeout, cancellationToken);
 
     /// <summary>删除容器。</summary>
     /// <param name="ids">容器 id。</param>
@@ -102,7 +104,7 @@ internal sealed partial class DockerApi
     public Task<IReadOnlyList<BatchOutcome>> RemoveContainersAsync(
         IReadOnlyList<string> ids, bool force, bool removeVolumes, CancellationToken cancellationToken) =>
         RunBatchAsync(ids,
-            id => $"{D} rm{(force ? " -f" : "")}{(removeVolumes ? " -v" : "")} {Sh.Quote(id)}",
+            all => $"{D} rm{(force ? " -f" : "")}{(removeVolumes ? " -v" : "")} {Sh.QuoteAll(all)}",
             LifecycleTimeout, cancellationToken);
 
     /// <summary>重命名容器。</summary>
@@ -110,7 +112,7 @@ internal sealed partial class DockerApi
     /// <param name="newName">新名字。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>执行结果。</returns>
-    public Task<DockerResult> RenameContainerAsync(string id, string newName, CancellationToken cancellationToken) =>
+    public Task<ExecResult> RenameContainerAsync(string id, string newName, CancellationToken cancellationToken) =>
         Engine.RunAsync($"{D} rename {Sh.Quote(id)} {Sh.Quote(newName)}", LifecycleTimeout, cancellationToken);
 
     /// <summary>改容器的重启策略(<c>docker update --restart</c>)。</summary>
@@ -120,7 +122,7 @@ internal sealed partial class DockerApi
     /// <returns>逐个容器的结果。</returns>
     public Task<IReadOnlyList<BatchOutcome>> UpdateRestartPolicyAsync(
         IReadOnlyList<string> ids, string policy, CancellationToken cancellationToken) =>
-        RunBatchAsync(ids, id => $"{D} update --restart={Sh.Quote(policy)} {Sh.Quote(id)}", LifecycleTimeout, cancellationToken);
+        RunBatchAsync(ids, all => $"{D} update --restart={Sh.Quote(policy)} {Sh.QuoteAll(all)}", LifecycleTimeout, cancellationToken);
 
     /// <summary>容器详情(inspect 的完整 JSON)。</summary>
     /// <param name="id">容器 id。</param>
@@ -128,8 +130,8 @@ internal sealed partial class DockerApi
     /// <returns>格式化后的 JSON,或 docker 的错误文本。</returns>
     public async Task<string> InspectContainerAsync(string id, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} inspect {Sh.Quote(id)}", null, cancellationToken).ConfigureAwait(false);
-        return result.Ok ? DockerJson.Pretty(result.Output) : result.Output;
+        var result = await Engine.RunAsync($"{D} inspect {Sh.Quote(id)}", null, cancellationToken).ConfigureAwait(false);
+        return result.IsSuccess ? DockerJson.Pretty(result.Output) : result.Output;
     }
 
     /// <summary>容器内的进程表(<c>docker top</c>)。</summary>
@@ -138,7 +140,7 @@ internal sealed partial class DockerApi
     /// <returns>原始表格文本。</returns>
     public async Task<string> TopAsync(string id, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} top {Sh.Quote(id)} aux", null, cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync($"{D} top {Sh.Quote(id)} aux", null, cancellationToken).ConfigureAwait(false);
         return result.Output;
     }
 
@@ -148,7 +150,7 @@ internal sealed partial class DockerApi
     /// <returns>原始文本(最多 2000 行:改动上万的容器不该把界面拖死)。</returns>
     public async Task<string> DiffAsync(string id, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} diff {Sh.Quote(id)}", null, cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync($"{D} diff {Sh.Quote(id)}", null, cancellationToken).ConfigureAwait(false);
         return OutputText.Tail(result.Output, 2000);
     }
 
@@ -158,7 +160,7 @@ internal sealed partial class DockerApi
     /// <returns>原始文本。</returns>
     public async Task<string> PortsAsync(string id, CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine.RunAsync($"{D} port {Sh.Quote(id)}", null, cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync($"{D} port {Sh.Quote(id)}", null, cancellationToken).ConfigureAwait(false);
         return result.Output;
     }
 
@@ -176,10 +178,10 @@ internal sealed partial class DockerApi
     /// <param name="since">起始时间(RFC3339 或 <c>10m</c> 这样的相对量);为空不限。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>日志文本。</returns>
-    public async Task<DockerResult> LogsAsync(
+    public async Task<ExecResult> LogsAsync(
         string id, int tail, bool timestamps, string since, CancellationToken cancellationToken)
     {
-        string command = $"{D} logs{(timestamps ? " --timestamps" : "")}";
+        var command = $"{D} logs{(timestamps ? " --timestamps" : "")}";
         if (tail > 0)
         {
             command += $" --tail {tail}";
@@ -189,7 +191,7 @@ internal sealed partial class DockerApi
             command += $" --since {Sh.Quote(since)}";
         }
         command += $" {Sh.Quote(id)}";
-        DockerResult result = await Engine.RunAsync(command, TimeSpan.FromSeconds(60), cancellationToken).ConfigureAwait(false);
+        var result = await Engine.RunAsync(command, TimeSpan.FromSeconds(60), cancellationToken).ConfigureAwait(false);
         return result with { Output = OutputText.Collapse(result.Output) };
     }
 
@@ -198,7 +200,7 @@ internal sealed partial class DockerApi
     /// <returns>按短 id 索引的统计。</returns>
     public async Task<IReadOnlyDictionary<string, StatsItem>> StatsAsync(CancellationToken cancellationToken)
     {
-        DockerResult result = await Engine
+        var result = await Engine
                                     .RunAsync($"{D} stats --no-stream --format '{{{{json .}}}}'", TimeSpan.FromSeconds(60), cancellationToken)
                                     .ConfigureAwait(false);
         return ParseStats(result.Output);
@@ -206,8 +208,8 @@ internal sealed partial class DockerApi
 
     private static IReadOnlyDictionary<string, StatsItem> ParseStats(string output)
     {
-        Dictionary<string, StatsItem> stats = new(StringComparer.OrdinalIgnoreCase);
-        foreach (IReadOnlyDictionary<string, string> row in DockerJson.ParseLines(OutputText.Collapse(output)))
+        Dictionary<string, StatsItem> stats = [with(StringComparer.OrdinalIgnoreCase)];
+        foreach (var row in DockerJson.ParseLines(OutputText.Collapse(output)))
         {
             StatsItem item = new()
             {
@@ -244,7 +246,7 @@ internal sealed partial class DockerApi
     /// <returns>可直接键入终端的一行命令(**不含**换行)。</returns>
     public string BuildExecCommand(string id, string shell, string user, string workdir)
     {
-        string command = $"{D} exec -it";
+        var command = $"{D} exec -it";
         if (user.Length > 0)
         {
             command += $" -u {Sh.Quote(user)}";
@@ -255,7 +257,7 @@ internal sealed partial class DockerApi
         }
         // 常见镜像(alpine、distroless 派生)里没有 bash;先试再退回 sh,
         // 比让用户吃一句 "executable file not found" 再自己改一遍强。
-        string safeShell = shell.Length > 0 ? shell : "bash";
+        var safeShell = shell.Length > 0 ? shell : "bash";
         return $"{command} {Sh.Quote(id)} {safeShell} 2>/dev/null || {command} {Sh.Quote(id)} sh";
     }
 }

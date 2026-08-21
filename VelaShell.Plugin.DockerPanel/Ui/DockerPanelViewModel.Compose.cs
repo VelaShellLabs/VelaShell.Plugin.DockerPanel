@@ -111,16 +111,16 @@ public sealed partial class DockerPanelViewModel
             RaisePropertyChanged(nameof(HasComposeProjects));
             return;
         }
-        (IReadOnlyList<ComposeProjectItem> items, DockerResult result) =
+        (var items, var result) =
             await GuardAsync(token => api.ListComposeProjectsAsync(true, token)).ConfigureAwait(true);
-        if (!result.Ok && items.Count == 0)
+        if (!result.IsSuccess && items.Count == 0)
         {
             Status = _loc.Format("Status_Failed", _loc["Tab_Compose"], FirstLine(result.FailureText));
         }
         // 手工打开的文件不在 `compose ls` 里(那个项目可能从没起过),但用户刚打开它就不见了
         // 是最让人恼火的一种"刷新"。把它并进来。
         List<ComposeProjectItem> merged = [.. items];
-        foreach (ComposeProjectItem manual in _manualProjects)
+        foreach (var manual in _manualProjects)
         {
             if (!merged.Any(p => string.Equals(p.Name, manual.Name, StringComparison.Ordinal)))
             {
@@ -136,14 +136,14 @@ public sealed partial class DockerPanelViewModel
     private void PublishCompose()
     {
         List<ComposeProjectItem> visible = [];
-        foreach (ComposeProjectItem item in _allComposeProjects)
+        foreach (var item in _allComposeProjects)
         {
             if (Matches(item.Name, item.Status, item.ConfigFiles))
             {
                 visible.Add(item);
             }
         }
-        string? keep = SelectedCompose?.Key;
+        var keep = SelectedCompose?.Key;
         RowSync.Apply(ComposeProjects, visible, static p => p.Name, static p => new ComposeRow(p));
         RaisePropertyChanged(nameof(HasComposeProjects));
         if (keep is not null && ComposeProjects.FirstOrDefault(r => r.Key == keep) is { } restored)
@@ -163,7 +163,7 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         Status = _loc.Format("Status_Working", label);
-        DockerResult result = await GuardAsync(
+        var result = await GuardAsync(
             token => api.ComposeAsync(ComposeProjectName, ComposeConfigFile, arguments, null, token)).ConfigureAwait(true);
         ReportResult(label, result);
         // compose 的输出是这个面板里最值得看的一段(哪个服务重建了、哪个健康检查没过)。
@@ -178,7 +178,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        ConfirmAnswer answer = await Confirm.AskAsync(
+        var answer = await Confirm.AskAsync(
             _loc.Format("Confirm_ComposeDown", ComposeProjectName),
             _loc["Confirm_ComposeDownBody"],
             api.BuildComposeCommand(ComposeProjectName, ComposeConfigFile, "down"),
@@ -194,7 +194,7 @@ public sealed partial class DockerPanelViewModel
         // 勾了"连卷一起删"就是在删数据 —— 再要一次手打确认,和删卷同档。
         if (answer.Option)
         {
-            ConfirmAnswer second = await Confirm.AskAsync(
+            var second = await Confirm.AskAsync(
                 _loc.Format("Confirm_ComposeDown", ComposeProjectName),
                 _loc["Confirm_RemoveVolumesBody"],
                 api.BuildComposeCommand(ComposeProjectName, ComposeConfigFile, "down -v"),
@@ -219,7 +219,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        IReadOnlyDictionary<string, string>? values = await Form.AskAsync(
+        var values = await Form.AskAsync(
             _loc["Form_ComposeFile_Title"],
             _loc["Compose_Hint"],
             [
@@ -233,17 +233,17 @@ public sealed partial class DockerPanelViewModel
             Status = _loc["Status_Cancelled"];
             return;
         }
-        string path = values.Text("path");
+        var path = values.Text("path");
         if (path.Length == 0)
         {
             return;
         }
-        string project = values.Text("project");
+        var project = values.Text("project");
         if (project.Length == 0)
         {
             // compose 自己就是按目录名推的,这里跟着推一遍,免得项目行显示成空白。
-            string directory = DockerApi.ParentDirectory(path);
-            int slash = directory.LastIndexOf('/');
+            var directory = DockerApi.ParentDirectory(path);
+            var slash = directory.LastIndexOf('/');
             project = slash >= 0 && slash + 1 < directory.Length ? directory[(slash + 1)..] : directory.Trim('/');
         }
         ComposeProjectItem manual = new() { Name = project, Status = string.Empty, ConfigFiles = path };
@@ -267,7 +267,7 @@ public sealed partial class DockerPanelViewModel
         {
             // compose 文件是小文本;走 SFTP 读比 `cat` 干净 —— 不经 shell,也就不会被 shell 的
             // 编码/行尾处理动过手脚。
-            byte[] bytes = await _context.RemoteFs
+            var bytes = await _context.RemoteFs
                                          .ReadAllBytesAsync(session.SessionId, ComposeConfigFile, 2 * 1024 * 1024, _lifetime.Token)
                                          .ConfigureAwait(true);
             return Encoding.UTF8.GetString(bytes);
@@ -286,7 +286,7 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        ConfirmAnswer answer = await Confirm.AskAsync(
+        var answer = await Confirm.AskAsync(
             _loc.Format("Confirm_SaveComposeFile", ComposeConfigFile),
             _loc["Confirm_SaveComposeFileBody"],
             ComposeConfigFile,
@@ -304,7 +304,7 @@ public sealed partial class DockerPanelViewModel
         {
             // 结尾补一个换行:YAML 解析器不在意,但 `git diff` 会为"\ No newline at end of file"
             // 记一笔,而这个文件多半是在版本库里的。
-            string text = DrawerText.EndsWith('\n') ? DrawerText : DrawerText + "\n";
+            var text = DrawerText.EndsWith('\n') ? DrawerText : DrawerText + "\n";
             await _context.RemoteFs
                           .WriteAllBytesAsync(session.SessionId, ComposeConfigFile, Encoding.UTF8.GetBytes(text), _lifetime.Token)
                           .ConfigureAwait(true);

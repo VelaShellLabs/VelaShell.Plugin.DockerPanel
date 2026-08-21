@@ -28,7 +28,7 @@ public sealed class PluginActivationTests
         context.HostInfo.Locale = "zh-Hans";
         DockerPanelPlugin plugin = new();
         await plugin.ActivateAsync(context, CancellationToken.None);
-        string title = context.RecordingCommands.Registered.First(c => c.Id == OpenCommandId).Title;
+        var title = context.RecordingCommands.Registered.First(c => c.Id == OpenCommandId).Title;
         StringAssert.Contains(title, "Docker");
         StringAssert.Contains(title, "面板");
         await plugin.DeactivateAsync(CancellationToken.None);
@@ -58,12 +58,12 @@ public sealed class PluginActivationTests
         // (它是装载器的一部分)。这里要验的本来也不是"读得动",而是**清单与代码一致**:
         // 占位命令的 id 与实际注册的 id 对不上,用户在命令面板里按下的会是一条永远
         // 不装载插件的死命令。
-        string manifestPath = Path.Combine(AppContext.BaseDirectory, "plugin.json");
+        var manifestPath = Path.Combine(AppContext.BaseDirectory, "plugin.json");
         Assert.IsTrue(File.Exists(manifestPath), $"plugin.json should ship next to the assembly: {manifestPath}");
-        using JsonDocument manifest = JsonDocument.Parse(
+        using var manifest = JsonDocument.Parse(
             File.ReadAllText(manifestPath),
             new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
-        JsonElement root = manifest.RootElement;
+        var root = manifest.RootElement;
 
         Assert.AreEqual("velashell.dockerpanel", root.GetProperty("id").GetString());
         Assert.AreEqual("VelaShell.Plugin.DockerPanel.dll", root.GetProperty("entry").GetString());
@@ -71,7 +71,7 @@ public sealed class PluginActivationTests
         // hostMode 必须留在默认的 inProcess(即:根本不出现在清单里)。
         Assert.IsFalse(root.TryGetProperty("hostMode", out _));
 
-        JsonElement commands = root.GetProperty("contributes").GetProperty("commands");
+        var commands = root.GetProperty("contributes").GetProperty("commands");
         Assert.IsTrue(commands.EnumerateArray().Any(c => c.GetProperty("id").GetString() == OpenCommandId));
         // 命令 id 必须以插件 id 为前缀(宿主强制,防插件间冒名)。
         Assert.IsTrue(commands.EnumerateArray().All(
