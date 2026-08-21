@@ -1,0 +1,244 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:VelaShell.Plugin.DockerPanel.Ui"
+             xmlns:pages="clr-namespace:VelaShell.Plugin.DockerPanel.Ui.Pages"
+             x:Class="VelaShell.Plugin.DockerPanel.Ui.Pages.ImagesPageView"
+             x:DataType="pages:ImagesPageViewModel">
+
+  <Grid ColumnDefinitions="*,Auto">
+
+  <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*">
+
+    <Border Grid.Row="0" Classes="toolbar">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
+        <TextBlock Grid.Column="0" Text="镜像" Classes="h1" />
+        <TextBlock Grid.Column="1" Text="{Binding TotalCount}" Classes="meta" Margin="8,0,0,0" />
+
+        <Border Grid.Column="2" Margin="12,0,0,0" CornerRadius="4" Padding="2"
+                Background="{DynamicResource VelaBgInput}"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="ifilter"
+                         IsChecked="{Binding IsAll, Mode=OneWay}" Command="{Binding SetFilterCommand}"
+                         CommandParameter="{x:Static pages:ImageFilter.All}">
+              <TextBlock Text="{Binding TotalCount, StringFormat='全部 {0}'}" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{Binding $parent[RadioButton].Foreground}" />
+            </RadioButton>
+            <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="ifilter"
+                         IsChecked="{Binding IsUsed, Mode=OneWay}" Command="{Binding SetFilterCommand}"
+                         CommandParameter="{x:Static pages:ImageFilter.Used}">
+              <TextBlock Text="{Binding UsedCount, StringFormat='使用中 {0}'}" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{Binding $parent[RadioButton].Foreground}" />
+            </RadioButton>
+            <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="ifilter"
+                         IsChecked="{Binding IsUnused, Mode=OneWay}" Command="{Binding SetFilterCommand}"
+                         CommandParameter="{x:Static pages:ImageFilter.Unused}">
+              <TextBlock Text="{Binding UnusedCount, StringFormat='未使用 {0}'}" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{Binding $parent[RadioButton].Foreground}" />
+            </RadioButton>
+            <RadioButton Theme="{StaticResource DockerSegmentButton}" GroupName="ifilter"
+                         IsChecked="{Binding IsDangling, Mode=OneWay}" Command="{Binding SetFilterCommand}"
+                         CommandParameter="{x:Static pages:ImageFilter.Dangling}">
+              <TextBlock Text="{Binding DanglingCount, StringFormat='悬空 {0}'}" FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{Binding $parent[RadioButton].Foreground}" />
+            </RadioButton>
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Column="3" Classes="input" Width="200" Height="26" Margin="10,0,0,0">
+          <Grid ColumnDefinitions="Auto,*">
+            <ui:Glyph Grid.Column="0" Key="Icon.search" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+            <TextBox Grid.Column="1" Classes="bare" Margin="7,0,0,0" Text="{Binding Search}"
+                     PlaceholderText="按仓库、标签或 ID 过滤…" />
+          </Grid>
+        </Border>
+
+        <!-- 导入 tar:离线环境里唯一把镜像搬进来的路 -->
+        <Button Grid.Column="4" HorizontalAlignment="Right" Margin="0,0,8,0"
+                Theme="{StaticResource DockerToolButton}" IsVisible="{Binding CanPickFiles}"
+                ToolTip.Tip="从 docker save 出来的 tar 导入镜像"
+                Command="{Binding LoadCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <ui:Glyph Key="Docker.file-archive" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
+            <TextBlock Text="导入 tar…" FontSize="{DynamicResource VelaFontSize11}"
+                       Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Grid.Column="5" Theme="{StaticResource DockerToolButton}" Margin="0,0,8,0"
+                Command="{Binding PruneDanglingCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <ui:Glyph Key="Docker.broom" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
+            <TextBlock Text="{Binding DanglingCount, StringFormat='清理悬空 ({0})'}"
+                       FontSize="{DynamicResource VelaFontSize11}"
+                       Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Grid.Column="6" Theme="{StaticResource DockerToolButton}" Margin="0,0,8,0"
+                Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
+                Command="{Binding PullCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <ui:Glyph Key="Docker.arrow-down-to-line" Size="13"
+                      Brush="{DynamicResource VelaAccentForeground}" />
+            <TextBlock Text="拉取镜像…" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                       Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}" Command="{Binding RefreshCommand}">
+          <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="1" Height="32" Padding="12,0" IsVisible="{Binding HasSelection}"
+            Background="{DynamicResource VelaAccentDim}"
+            BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+        <ui:Glyph Key="Docker.check" Size="13" Brush="{DynamicResource VelaAccent}" />
+        <TextBlock Text="{Binding SelectionText}" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                   Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+        <Border Classes="vdivider" Margin="4,0" />
+        <Button Theme="{StaticResource DockerToolButton}" Height="22" IsVisible="{Binding CanPickFiles}"
+                ToolTip.Tip="把选中的镜像导出成一个 tar" Command="{Binding SaveCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <ui:Glyph Key="Docker.file-archive" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+            <TextBlock Text="导出 tar…" FontSize="{DynamicResource VelaFontSize11}"
+                       Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Theme="{StaticResource DockerToolButton}" Height="22"
+                BorderBrush="{DynamicResource VelaShellRedDim}" Command="{Binding RemoveCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <ui:Glyph Key="Icon.trash-2" Size="12" Brush="{DynamicResource VelaError}" />
+            <TextBlock Text="删除…" FontSize="{DynamicResource VelaFontSize11}"
+                       Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="22" Padding="6,0"
+                Command="{Binding ClearSelectionCommand}">
+          <TextBlock Text="取消选择" FontSize="{DynamicResource VelaFontSize11}"
+                     Foreground="{DynamicResource VelaTextTertiary}" />
+        </Button>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="2" Classes="header-row">
+      <Grid ColumnDefinitions="26,*,110,90,120,100,150">
+        <TextBlock Grid.Column="1" Text="仓库 / 标签" Classes="col" Margin="4,0,0,0" />
+        <TextBlock Grid.Column="2" Text="镜像 ID" Classes="col" />
+        <TextBlock Grid.Column="3" Text="大小" Classes="col" />
+        <TextBlock Grid.Column="4" Text="创建" Classes="col" />
+        <TextBlock Grid.Column="5" Text="使用中" Classes="col" />
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="3" Background="{DynamicResource VelaBgSurface}">
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding View}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="ui:ImageRow">
+              <Grid Height="32" ColumnDefinitions="26,*,110,90,120,100,150" Background="Transparent">
+                <!-- 设计稿 19 号板的「镜像 · 更多」那五项 -->
+                <Grid.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="运行容器…" Command="{Binding Owner.RunCommand}" CommandParameter="{Binding}" />
+                    <Separator />
+                    <MenuItem Header="查看 inspect JSON / 构建历史"
+                              Command="{Binding Owner.OpenDetailCommand}" CommandParameter="{Binding}" />
+                    <MenuItem Header="打标签…" Command="{Binding Owner.TagCommand}" CommandParameter="{Binding}" />
+                    <MenuItem Header="推送…" Command="{Binding Owner.PushCommand}" CommandParameter="{Binding}" />
+                    <Separator />
+                    <MenuItem Header="导出为 tar…" IsVisible="{Binding Owner.CanPickFiles}"
+                              Command="{Binding Owner.SaveCommand}" CommandParameter="{Binding}" />
+                    <MenuItem Header="复制镜像 ID"
+                              Command="{Binding Owner.RowCopyIdCommand}" CommandParameter="{Binding}" />
+                    <Separator />
+                    <MenuItem Header="删除镜像…" Command="{Binding Owner.RemoveCommand}" CommandParameter="{Binding}" />
+                  </ContextMenu>
+                </Grid.ContextMenu>
+                <CheckBox Grid.Column="0" Classes="compact" IsChecked="{Binding Selected}"
+                          HorizontalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" Margin="4,0"
+                            VerticalAlignment="Center">
+                  <ui:Glyph Size="13" Brush="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}">
+                    <ui:Glyph.Key>
+                      <Binding Path="IsDangling">
+                        <Binding.Converter>
+                          <ui:ImageIconConverter />
+                        </Binding.Converter>
+                      </Binding>
+                    </ui:Glyph.Key>
+                  </ui:Glyph>
+                  <TextBlock Text="{Binding Repository}" Classes="name" />
+                  <Border Classes="chip" Height="16" Background="{DynamicResource VelaAccentDim}">
+                    <TextBlock Text="{Binding Tag}" FontFamily="{DynamicResource VelaUiMonoFont}"
+                               FontSize="{DynamicResource VelaFontSize9}"
+                               Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+                  </Border>
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding ShortId}" Classes="cell" />
+                <TextBlock Grid.Column="3" Text="{Binding SizeText}" Classes="cell" />
+                <TextBlock Grid.Column="4" Text="{Binding CreatedText}" Classes="cell" />
+                <TextBlock Grid.Column="5" Text="{Binding UsageText}" Classes="cell"
+                           Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="1" HorizontalAlignment="Right"
+                            Margin="0,0,6,0" VerticalAlignment="Center">
+                  <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="运行容器…"
+                          Command="{Binding $parent[ItemsControl].((pages:ImagesPageViewModel)DataContext).RunCommand}"
+                          CommandParameter="{Binding}">
+                    <ui:Glyph Key="Icon.play" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                  </Button>
+                  <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="打标签…"
+                          Command="{Binding $parent[ItemsControl].((pages:ImagesPageViewModel)DataContext).TagCommand}"
+                          CommandParameter="{Binding}">
+                    <ui:Glyph Key="Docker.tag" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                  </Button>
+                  <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="推送"
+                          Command="{Binding $parent[ItemsControl].((pages:ImagesPageViewModel)DataContext).PushCommand}"
+                          CommandParameter="{Binding}">
+                    <ui:Glyph Key="Icon.upload" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                  </Button>
+                  <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="删除…"
+                          Command="{Binding $parent[ItemsControl].((pages:ImagesPageViewModel)DataContext).RemoveCommand}"
+                          CommandParameter="{Binding}">
+                    <ui:Glyph Key="Icon.trash-2" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                  </Button>
+                  <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="详情"
+                          Command="{Binding $parent[ItemsControl].((pages:ImagesPageViewModel)DataContext).OpenDetailCommand}"
+                          CommandParameter="{Binding}">
+                    <ui:Glyph Key="Icon.chevron-right" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                  Spacing="12" Width="380">
+        <TextBlock Text="这台机器上还没有镜像" Classes="h2" HorizontalAlignment="Center" />
+        <TextBlock Text="拉一个下来就能开始。" Classes="hint" TextAlignment="Center" />
+        <Button Theme="{StaticResource DockerToolButton}" Height="28" HorizontalAlignment="Center"
+                Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
+                Command="{Binding PullCommand}">
+          <TextBlock Text="拉取镜像…" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                     Foreground="{DynamicResource VelaAccentForeground}" />
+        </Button>
+      </StackPanel>
+    </Grid>
+  </Grid>
+
+    <!-- 详情抽屉 -->
+    <Border Grid.Column="1" Width="440" IsVisible="{Binding HasDetail}"
+            Background="{DynamicResource VelaBgSurface}"
+            BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
+      <ContentControl Content="{Binding Detail}">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="pages:ImageDetailViewModel">
+            <pages:ImageDetailView />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </Border>
+  </Grid>
+</UserControl>

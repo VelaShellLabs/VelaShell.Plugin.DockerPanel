@@ -1,165 +1,361 @@
 using VelaShell.Plugin.DockerPanel.Docker;
 using VelaShell.Plugin.DockerPanel.Ui;
+using VelaShell.Plugin.DockerPanel.Ui.Pages;
 
 namespace VelaShell.Plugin.DockerPanel.Tests;
 
 /// <summary>
-/// 面板里那些**不需要一个 Avalonia 应用**就能验的逻辑:行的身份合并、确认闸门、表单。
+/// 面板逻辑:批量判定、进度聚合、行合并、确认闸门、表单校验。
 /// <para>
-/// 视图模型整体没有在这里跑:它的属性通知会走 <c>Dispatcher.UIThread</c>,而单测进程里
-/// 没有 Avalonia 的调度循环 —— 硬跑只会得到一堆永远不投递的通知,测出来的东西也不可信。
-/// 真正的界面行为在宿主里手测(README 的"验证清单"),这里覆盖的是它下面那层纯逻辑。
+/// 这一层没有界面,但界面上最要紧的那几句话("成功 8、失败 2 —— 谁失败了、为什么")
+/// 全是它算出来的。
 /// </para>
 /// </summary>
 [TestClass]
-public sealed class PanelLogicTests
+public class PanelLogicTests
 {
-    private static ContainerItem Container(string id, string name, string state = "running") =>
-        new() { Id = id, Name = name, State = state, Status = state == "running" ? "Up 1 minute" : "Exited (0)" };
+    // ── 批量 ──────────────────────────────────────────────────
 
     [TestMethod]
-    public void RowSync_KeepsTheSameRowInstanceWhenOnlyTheDataChanged()
+    public async Task Batch_JudgesEachTargetSeparatelyAndKeepsGoing()
     {
-        System.Collections.ObjectModel.ObservableCollection<ContainerRow> rows = [];
-        RowSync.Apply(rows, [Container("a", "web")], static c => c.Id, static c => new ContainerRow(c));
-        var first = rows[0];
+        BatchResult result = await BatchRunner.RunAsync(
+            [("a", "worker-1"), ("b", "postgres-main"), ("c", "worker-2")],
+            (target, _) => target == "b"
+                ? throw new DockerApiException(System.Net.HttpStatusCode.Conflict,
+                    "conflict: container is being used by api-gateway")
+                : Task.CompletedTask);
 
-        // 刷新时 Status 天天在变(Up 1 minute → Up 2 minutes)。换掉行实例的话,
-        // 用户正选着的那一行每几秒就会被 ListBox 丢掉一次选中态。
-        RowSync.Apply(rows, [Container("a", "web") with { Status = "Up 2 minutes" }],
-            static c => c.Id, static c => new ContainerRow(c));
-
-        Assert.AreEqual(1, rows.Count);
-        Assert.AreSame(first, rows[0]);
-        Assert.AreEqual("Up 2 minutes", rows[0].Model.Status);
+        // 一个目标失败不能把后面的目标一起拖下水 —— 界面要报"成功 2、失败 1",
+        // 而不是把整批说成"操作失败"。
+        Assert.AreEqual(2, result.SucceededCount);
+        Assert.AreEqual(1, result.FailedCount);
+        Assert.AreEqual("postgres-main", result.Failures.Single().Target);
+        StringAssert.Contains(result.Failures.Single().Failure!, "api-gateway");
     }
 
     [TestMethod]
-    public void RowSync_InsertsRemovesAndReorders()
+    public async Task Batch_StopsAfterTheConnectionDies()
     {
-        System.Collections.ObjectModel.ObservableCollection<ContainerRow> rows = [];
-        RowSync.Apply(rows, [Container("a", "web"), Container("b", "db")],
-            static c => c.Id, static c => new ContainerRow(c));
-        var db = rows[1];
+        int attempts = 0;
+        BatchResult result = await BatchRunner.RunAsync(
+            [("a", "one"), ("b", "two"), ("c", "three")],
+            (_, _) =>
+            {
+                attempts++;
+                throw new DockerUnreachableException("连接断了", DockerUnreachableReason.SessionUnavailable);
+            });
 
-        // 顺序反过来 + 多一个 + 少一个。
-        RowSync.Apply(rows, [Container("b", "db"), Container("c", "cache")],
-            static c => c.Id, static c => new ContainerRow(c));
-
-        Assert.AreEqual(2, rows.Count);
-        Assert.AreSame(db, rows[0], "已有的行应该被搬过去而不是重建");
-        Assert.AreEqual("c", rows[1].Key);
+        // 连接没了就没必要继续戳后面的目标 —— 它们只会拿到同一条错误。
+        Assert.AreEqual(1, attempts);
+        Assert.AreEqual(3, result.FailedCount);
+        StringAssert.Contains(result.Outcomes[2].Failure!, "没有执行");
     }
 
     [TestMethod]
-    public void ContainerRow_ClearsStatsWhenTheContainerIsNoLongerRunning()
+    public async Task Batch_ReportsProgressForEveryTarget()
     {
-        ContainerRow row = new(Container("a", "web"));
-        row.ApplyStats(new() { Id = "a", CpuPercent = "5.00%", MemUsage = "20MiB / 2GiB" });
-        Assert.AreEqual("5.00%", row.Cpu);
+        List<(int Done, int Total)> progress = [];
+        await BatchRunner.RunAsync(
+            [("a", "one"), ("b", "two")],
+            (_, _) => Task.CompletedTask,
+            (done, total, _) => progress.Add((done, total)));
 
-        // 容器停了之后 stats 里就没有它了。留着上一次的数字比留空更糟 ——
-        // 那是一个看起来还在跑的死容器。
-        row.ApplyStats(null);
-        Assert.AreEqual(string.Empty, row.Cpu);
-        Assert.AreEqual(string.Empty, row.Memory);
+        CollectionAssert.AreEqual(new[] { (0, 2), (1, 2), (2, 2) }, progress);
+    }
+
+    // ── 拉取进度聚合 ──────────────────────────────────────────
+
+    [TestMethod]
+    public void PullAggregator_TracksBytesAcrossLayers()
+    {
+        var aggregator = new PullAggregator();
+        aggregator.Accept(new() { Id = "a", Status = "Downloading", ProgressDetail = new() { Current = 50, Total = 100 } });
+        aggregator.Accept(new() { Id = "b", Status = "Downloading", ProgressDetail = new() { Current = 25, Total = 100 } });
+
+        Assert.AreEqual(2, aggregator.LayerCount);
+        Assert.AreEqual(75, aggregator.CurrentBytes);
+        Assert.AreEqual(200, aggregator.TotalBytes);
+        Assert.AreEqual(0.375, aggregator.Progress, 0.001);
     }
 
     [TestMethod]
-    public async Task Confirmation_ReturnsTheAnswerAndTheOptionCheckbox()
+    public void PullAggregator_DoesNotRegressWhenALayerCompletes()
     {
-        Confirmation confirm = new();
-        var pending = confirm.AskAsync(
-            "Remove 2 containers?", "…", "docker rm a b", "Remove", "Cancel", true, optionLabel: "with volumes");
-        Assert.IsTrue(confirm.IsOpen);
-        Assert.IsTrue(confirm.HasOption);
-        confirm.OptionValue = true;
-        confirm.ConfirmCommand.Execute(null);
+        var aggregator = new PullAggregator();
+        aggregator.Accept(new() { Id = "a", Status = "Downloading", ProgressDetail = new() { Current = 80, Total = 100 } });
+        // "Pull complete" 之后不再有字节明细;沿用上次的 total 并补满,
+        // 否则进度条会在最后一刻往回跳。
+        aggregator.Accept(new() { Id = "a", Status = "Pull complete" });
 
-        var answer = await pending;
-        Assert.IsTrue(answer.Confirmed);
-        Assert.IsTrue(answer.Option);
-        Assert.IsFalse(confirm.IsOpen);
+        Assert.AreEqual(100, aggregator.CurrentBytes);
+        Assert.AreEqual(1, aggregator.Progress, 0.001);
     }
 
     [TestMethod]
-    public async Task Confirmation_RequiresTheTypedPhraseForDataLosingActions()
+    public void PullAggregator_FallsBackToLayerCountWhenEverythingIsCached()
     {
-        Confirmation confirm = new();
-        var pending = confirm.AskAsync(
-            "Delete 3 volumes?", "…", "docker volume rm …", "Delete", "Cancel", true, "delete", "Type delete to confirm");
-        Assert.IsTrue(confirm.RequiresTyping);
-        Assert.IsFalse(confirm.CanConfirm);
+        var aggregator = new PullAggregator();
+        aggregator.Accept(new() { Id = "a", Status = "Already exists" });
+        aggregator.Accept(new() { Id = "b", Status = "Already exists" });
 
-        confirm.TypedText = "delet";
-        Assert.IsFalse(confirm.CanConfirm, "差一个字符也不算");
-        confirm.ConfirmCommand.Execute(null);
-        Assert.IsTrue(confirm.IsOpen, "确认按钮不可用时点击必须什么都不做");
-
-        confirm.TypedText = " delete ";
-        Assert.IsTrue(confirm.CanConfirm, "首尾空白不该成为障碍");
-        confirm.ConfirmCommand.Execute(null);
-        Assert.IsTrue((await pending).Confirmed);
+        // 一次全命中缓存的拉取一个字节都不报;按字节算会显示成 0% 然后直接跳到完成。
+        Assert.AreEqual(2, aggregator.ReusedLayers);
+        Assert.AreEqual(1, aggregator.Progress, 0.001);
     }
 
     [TestMethod]
-    public async Task Confirmation_RefusesASecondQuestionWhileOneIsStillOnScreen()
+    public void PullAggregator_IgnoresFramesWithoutALayerId()
     {
-        Confirmation confirm = new();
-        var first = confirm.AskAsync("A?", "", "", "OK", "Cancel");
-        var second = await confirm.AskAsync("B?", "", "", "OK", "Cancel");
-        // 排队会让用户在第一个框上点完"确认"之后,莫名其妙地被问第二个他早已忘了的问题 ——
-        // 而这里的每个问题都关乎删东西。
-        Assert.IsFalse(second.Confirmed);
-        confirm.CancelCommand.Execute(null);
-        Assert.IsFalse((await first).Confirmed);
+        var aggregator = new PullAggregator();
+        aggregator.Accept(new() { Status = "Pulling from library/nginx" });
+        aggregator.Accept(new() { Status = "Digest: sha256:abc" });
+
+        Assert.AreEqual(0, aggregator.LayerCount);
+    }
+
+    // ── 行合并 ────────────────────────────────────────────────
+
+    private sealed class Item(string id) : ObservableObject
+    {
+        public string Id { get; } = id;
+        public int Version { get; set; }
     }
 
     [TestMethod]
-    public async Task PanelForm_CollectsValuesAndKeepsThePreviewLive()
+    public void Merge_KeepsExistingInstancesSoSelectionSurvivesARefresh()
     {
-        PanelForm form = new();
-        var image = PanelForm.Text("image", "Image", "nginx");
-        var all = PanelForm.Boolean("allTags", "All tags");
-        var pending = form.AskAsync(
-            "Pull", string.Empty, [image, all], "Pull", "Cancel", "Will run",
-            v => $"docker pull{(v.Flag("allTags") ? " -a" : "")} {v.Text("image")}");
+        var collection = new KeyedCollection<Item>(i => i.Id);
+        var a = new Item("a");
+        var b = new Item("b");
+        collection.Merge([a, b], (_, _) => { });
+        Item keptA = collection[0];
 
-        Assert.AreEqual("docker pull nginx", form.PreviewText);
-        // 预览必须跟着输入走:用户按下"执行"之前看到的那条命令,就是会跑起来的那条。
-        all.BoolValue = true;
-        image.Value = "redis:7";
-        Assert.AreEqual("docker pull -a redis:7", form.PreviewText);
+        collection.Merge([new Item("a"), new Item("b")], (current, incoming) => current.Version++);
 
-        form.SubmitCommand.Execute(null);
-        var values = await pending;
-        Assert.IsNotNull(values);
-        Assert.AreEqual("redis:7", values.Text("image"));
-        Assert.IsTrue(values.Flag("allTags"));
+        // 简单地 Clear + AddRange 会把选中态、滚动位置与展开状态全部清掉,
+        // 而这个面板每秒都可能因为一条事件而刷新。
+        Assert.AreSame(keptA, collection[0]);
+        Assert.AreEqual(1, collection[0].Version);
     }
 
     [TestMethod]
-    public async Task PanelForm_CancelReturnsNullSoCallersCanTellItApartFromEmptyInput()
+    public void Merge_AddsRemovesAndReorders()
     {
-        PanelForm form = new();
-        var pending =
-            form.AskAsync("Rename", string.Empty, [PanelForm.Text("name", "Name")], "OK", "Cancel");
-        form.CancelCommand.Execute(null);
-        Assert.IsNull(await pending);
+        var collection = new KeyedCollection<Item>(i => i.Id);
+        collection.Merge([new Item("a"), new Item("b"), new Item("c")], (_, _) => { });
+
+        collection.Merge([new Item("c"), new Item("a"), new Item("d")], (_, _) => { });
+
+        CollectionAssert.AreEqual(new[] { "c", "a", "d" }, collection.Select(i => i.Id).ToArray());
+    }
+
+    // ── 确认闸门 ──────────────────────────────────────────────
+
+    private static ConfirmRequest DataLossRequest() => new()
+    {
+        Title = "删除卷 pg-data?",
+        HostName = "prod-sg-01",
+        ConfirmLabel = "永久删除卷",
+        Tier = ConfirmTier.DataLoss,
+        ConfirmWord = "delete"
+    };
+
+    [TestMethod]
+    public void Gate_DataLossTierStaysLockedUntilTheWordIsTypedExactly()
+    {
+        var gate = new ConfirmGate();
+        _ = gate.AskAsync(DataLossRequest());
+
+        gate.TypedWord = "delet";
+        Assert.IsFalse(gate.CanConfirm);
+        StringAssert.Contains(gate.RemainingHint, "还差 1");
+
+        gate.TypedWord = "DELETE";
+        // 大小写不同就是不同 —— 这道闸门的全部意义就是"必须精确地打对"。
+        Assert.IsFalse(gate.CanConfirm);
+
+        gate.TypedWord = "delete";
+        Assert.IsTrue(gate.CanConfirm);
     }
 
     [TestMethod]
-    public void FormField_ChoiceStartsOnItsDefaultAndWritesBackTheValue()
+    public void Gate_DestructiveTierNeedsNoTypedWord()
     {
-        var policy = PanelForm.Choice("policy", "Policy",
+        var gate = new ConfirmGate();
+        _ = gate.AskAsync(new()
+        {
+            Title = "删除 2 个容器?",
+            HostName = "prod-sg-01",
+            ConfirmLabel = "删除"
+        });
+
+        Assert.IsTrue(gate.CanConfirm);
+        Assert.IsFalse(gate.IsDataLoss);
+    }
+
+    [TestMethod]
+    public async Task Gate_ConfirmAndCancelResolveTheWaiter()
+    {
+        var gate = new ConfirmGate();
+        Task<bool> pending = gate.AskAsync(DataLossRequest());
+        gate.TypedWord = "delete";
+        gate.ConfirmCommand.Execute(null);
+        Assert.IsTrue(await pending);
+
+        Task<bool> second = gate.AskAsync(DataLossRequest());
+        gate.CancelCommand.Execute(null);
+        Assert.IsFalse(await second);
+    }
+
+    [TestMethod]
+    public async Task Gate_RefusesASecondRequestWhileOneIsOpen()
+    {
+        var gate = new ConfirmGate();
+        Task<bool> first = gate.AskAsync(DataLossRequest());
+
+        // 两层确认框叠在一起,用户不可能说清自己在确认哪一个。
+        Assert.IsFalse(await gate.AskAsync(DataLossRequest()));
+        gate.CancelCommand.Execute(null);
+        Assert.IsFalse(await first);
+    }
+
+    // ── 表单校验 ──────────────────────────────────────────────
+
+    [TestMethod]
+    public void RenameForm_RejectsIllegalNamesAndNoOpRenames()
+    {
+        var form = new RenameContainerForm("nginx-proxy", "web-stack");
+        Assert.IsFalse(form.Validate(), "改成同一个名字不该放行。");
+
+        SetText(form, "新名称", "-bad-start");
+        Assert.IsFalse(form.Validate());
+
+        SetText(form, "新名称", "nginx-proxy-2");
+        Assert.IsTrue(form.Validate());
+        StringAssert.Contains(form.ComposeWarning, "web-stack");
+    }
+
+    [TestMethod]
+    public void RunContainerForm_RejectsTheRmPlusRestartPolicyCombination()
+    {
+        var form = new RunContainerForm("nginx:1.27-alpine", "", ["bridge"]);
+        SetToggle(form, "退出即删除  --rm", true);
+
+        // Docker 自己会拒掉这个组合,但等它拒不如现在就说清楚。
+        Assert.IsFalse(form.Validate());
+        StringAssert.Contains(form.FormError!, "互斥");
+    }
+
+    [TestMethod]
+    public void RunContainerForm_ValidatesPortsAndMountTargets()
+    {
+        var form = new RunContainerForm("nginx:1.27-alpine", "", ["bridge"]);
+        form.Ports.Rows.Add(new("99999", "80"));
+        Assert.IsFalse(form.Validate());
+
+        form.Ports.Rows.Clear();
+        form.Volumes.Rows.Add(new("/srv/data", "relative/path"));
+        Assert.IsFalse(form.Validate());
+
+        form.Volumes.Rows.Clear();
+        form.Ports.Rows.Add(new("8080", "80"));
+        form.Volumes.Rows.Add(new("/srv/data", "/data"));
+        Assert.IsTrue(form.Validate());
+    }
+
+    [TestMethod]
+    public void RunContainerForm_BuildsACreateRequestThatMatchesTheForm()
+    {
+        var form = new RunContainerForm("nginx:1.27-alpine", "", ["web-stack_default"]);
+        form.Ports.Rows.Add(new("8081", "80"));
+        form.Volumes.Rows.Add(new("/srv/conf", "/etc/nginx/conf.d"));
+        form.Env.Rows.Add(new("KEY", "value"));
+
+        ContainerCreateRequest request = form.ToRequest();
+
+        Assert.AreEqual("nginx:1.27-alpine", request.Image);
+        Assert.AreEqual("8081", request.HostConfig!.PortBindings!["80/tcp"][0].HostPort);
+        CollectionAssert.AreEqual(new[] { "/srv/conf:/etc/nginx/conf.d" }, request.HostConfig.Binds);
+        CollectionAssert.AreEqual(new[] { "KEY=value" }, request.Env);
+        StringAssert.Contains(form.CommandNote, "-p 8081:80");
+    }
+
+    [TestMethod]
+    public void SplitArguments_RespectsQuotes()
+    {
+        CollectionAssert.AreEqual(
+            new[] { "nginx", "-g", "daemon off;" },
+            RunContainerForm.SplitArguments("nginx -g 'daemon off;'"));
+    }
+
+    [TestMethod]
+    public void CreateNetworkForm_RequiresASubnetWhenAGatewayIsGiven()
+    {
+        var form = new CreateNetworkForm(swarmActive: false);
+        SetText(form, "名称", "edge-dmz");
+        SetText(form, "网关", "172.28.0.1");
+
+        // 只给网关不给子网,Docker 不知道它属于哪一段。
+        Assert.IsFalse(form.Validate());
+
+        SetText(form, "子网", "172.28.0.0/16");
+        Assert.IsTrue(form.Validate());
+    }
+
+    [TestMethod]
+    public void CreateNetworkForm_DisablesOverlayWhenSwarmIsInactive()
+    {
+        var form = new CreateNetworkForm(swarmActive: false);
+        ChoiceField driver = form.Fields.OfType<ChoiceField>().Single(f => f.Label == "驱动");
+        ChoiceOption overlay = driver.Options.Single(o => o.Value == "overlay");
+
+        // 直接置灰而不是让用户去撞一条 daemon 的错误。
+        Assert.IsFalse(overlay.Enabled);
+        StringAssert.Contains(overlay.DisabledReason, "swarm");
+    }
+
+    [TestMethod]
+    public void ConnectNetworkForm_RefusesOneAliasForManyContainers()
+    {
+        var form = new ConnectNetworkForm("web-stack_default",
         [
-            new("no", "no"),
-            new("always", "always")
-        ], "always");
-        Assert.AreEqual("always", policy.Value);
-        Assert.AreEqual("always", policy.SelectedChoice?.Value);
+            ("a", "one", "运行中", true, ""),
+            ("b", "two", "运行中", true, "")
+        ]);
+        foreach (SelectItem item in form.Containers.Items)
+        {
+            item.Selected = true;
+        }
+        SetText(form, "网络别名", "db");
 
-        policy.SelectedChoice = policy.Choices[0];
-        Assert.AreEqual("no", policy.Value);
+        // 同一个别名指向多个容器,DNS 解析结果就成了随机的。
+        Assert.IsFalse(form.Validate());
     }
+
+    [TestMethod]
+    public void OpenComposeForm_DerivesTheProjectNameFromTheDirectory()
+    {
+        var form = new OpenComposeForm();
+        SetText(form, "compose 文件路径", "/srv/stacks/web-stack/compose.yaml");
+
+        Assert.IsTrue(form.Validate());
+        Assert.AreEqual("web-stack", form.ProjectName);
+    }
+
+    [TestMethod]
+    public void OpenComposeForm_RejectsRelativePaths()
+    {
+        var form = new OpenComposeForm();
+        SetText(form, "compose 文件路径", "stacks/web/compose.yaml");
+
+        // 相对路径会以登录目录为基准 —— 一个安静地打开错项目的 bug。
+        Assert.IsFalse(form.Validate());
+    }
+
+    private static void SetText(PanelForm form, string label, string value) =>
+        form.Fields.OfType<TextField>().Single(f => f.Label == label).Value = value;
+
+    private static void SetToggle(PanelForm form, string label, bool value) =>
+        form.Fields.OfType<ToggleField>().Single(f => f.Label == label).Value = value;
 }

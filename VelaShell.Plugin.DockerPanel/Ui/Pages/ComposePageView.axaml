@@ -1,0 +1,278 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:VelaShell.Plugin.DockerPanel.Ui"
+             xmlns:docker="clr-namespace:VelaShell.Plugin.DockerPanel.Docker"
+             xmlns:pages="clr-namespace:VelaShell.Plugin.DockerPanel.Ui.Pages"
+             x:Class="VelaShell.Plugin.DockerPanel.Ui.Pages.ComposePageView"
+             x:DataType="pages:ComposePageViewModel">
+
+  <!--
+    三栏:项目列表 / compose.yaml 编辑器 + 服务表 / 执行记录。
+    compose 走的是远端的 docker compose CLI —— Engine API 里没有 compose 这一块,
+    在面板里重写一遍只会与远端装的那个版本行为不一致。
+  -->
+
+  <Grid ColumnDefinitions="260,*,400">
+
+    <!-- 项目 -->
+    <Border Grid.Column="0" Background="{DynamicResource VelaBgPage}"
+            BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,1,0">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" Height="40" Padding="12,0"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+            <TextBlock Grid.Column="0" Text="Compose 项目" Classes="h2" />
+            <TextBlock Grid.Column="1" Text="{Binding Projects.Count}" Classes="meta" Margin="8,0,0,0" />
+            <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" ToolTip.Tip="刷新"
+                    Command="{Binding RefreshCommand}">
+              <ui:Glyph Key="Icon.refresh-cw" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+            </Button>
+          </Grid>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Padding="12,10"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,1,0,0">
+          <StackPanel Spacing="7">
+            <TextBlock Text="compose ls 只认得起过至少一次的项目 —— 别的用「按路径打开」。" Classes="hint" />
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" HorizontalAlignment="Stretch"
+                    Command="{Binding OpenByPathCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Icon.folder-open" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+                <TextBlock Text="按路径打开…" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Border>
+
+        <ScrollViewer>
+          <StackPanel>
+            <Border IsVisible="{Binding !ComposeAvailable}" Padding="12,10"
+                    Background="{DynamicResource DockerWarnDim}">
+              <TextBlock Text="{Binding UnavailableHint}" Classes="hint"
+                         Foreground="{DynamicResource VelaWarning}" />
+            </Border>
+            <ItemsControl ItemsSource="{Binding Projects}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="docker:ComposeProject">
+                  <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="NaN" CornerRadius="0"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12,8"
+                          Command="{Binding $parent[ItemsControl].((pages:ComposePageViewModel)DataContext).SelectCommand}"
+                          CommandParameter="{Binding}">
+                    <StackPanel Spacing="3">
+                      <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                        <ui:Glyph Grid.Column="0" Key="Docker.boxes" Size="13" VerticalAlignment="Center"
+                                  Brush="{DynamicResource VelaAccent}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="name" Margin="7,0,0,0" />
+                        <TextBlock Grid.Column="3" Text="{Binding Status}" Classes="meta" />
+                      </Grid>
+                      <TextBlock Text="{Binding PrimaryFile}" Classes="meta" />
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+
+    <!-- 编辑器 + 服务 -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding HasSelection}">
+      <Border Grid.Row="0" Height="48" Padding="14,0" Background="{DynamicResource VelaBgContentHeader}"
+              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <ui:Glyph Key="Docker.boxes" Size="15" Brush="{DynamicResource VelaAccent}" />
+              <TextBlock Text="{Binding ProjectName}" Classes="h2" />
+              <Border Classes="chip" Background="{DynamicResource VelaShellGreenDim}">
+                <TextBlock Text="{Binding ProjectStatus}" FontSize="{DynamicResource VelaFontSize10}"
+                           Foreground="{DynamicResource VelaStatusConnected}" VerticalAlignment="Center" />
+              </Border>
+            </StackPanel>
+            <!-- 项目名 / compose 文件 / 项目目录 三个参数一起钉住,少一个都出错 -->
+            <TextBlock Text="{Binding ProjectPrefix}" Classes="meta" FontSize="9" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
+                    Command="{Binding PullCommand}">
+              <TextBlock Text="pull" FontFamily="{DynamicResource VelaUiMonoFont}"
+                         FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" />
+            </Button>
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
+                    Command="{Binding BuildCommand}">
+              <TextBlock Text="build" FontFamily="{DynamicResource VelaUiMonoFont}"
+                         FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" />
+            </Button>
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
+                    Command="{Binding RestartCommand}">
+              <TextBlock Text="restart" FontFamily="{DynamicResource VelaUiMonoFont}"
+                         FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" />
+            </Button>
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
+                    Command="{Binding StopCommand}">
+              <TextBlock Text="stop" FontFamily="{DynamicResource VelaUiMonoFont}"
+                         FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaTextSecondary}" />
+            </Button>
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
+                    BorderBrush="{DynamicResource VelaShellRedDim}" Command="{Binding DownCommand}">
+              <TextBlock Text="down" FontFamily="{DynamicResource VelaUiMonoFont}"
+                         FontSize="{DynamicResource VelaFontSize11}"
+                         Foreground="{DynamicResource VelaError}" />
+            </Button>
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
+                    Background="{DynamicResource VelaError}" BorderBrush="Transparent"
+                    ToolTip.Tip="down -v 会把这个项目的命名卷一起删掉" Command="{Binding DownVolumesCommand}">
+              <TextBlock Text="down -v" FontFamily="{DynamicResource VelaUiMonoFont}"
+                         FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium" Foreground="#FFFFFF" />
+            </Button>
+            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
+                    Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
+                    Command="{Binding UpCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Icon.play" Size="12" Brush="{DynamicResource VelaAccentForeground}" />
+                <TextBlock Text="up -d" FontFamily="{DynamicResource VelaUiMonoFont}"
+                           FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                           Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Border Grid.Row="1" Height="32" Padding="12,0" Background="{DynamicResource VelaBgPage}"
+              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+          <ui:Glyph Grid.Column="0" Key="Docker.file-code" Size="12" VerticalAlignment="Center"
+                    Brush="{DynamicResource VelaWarning}" />
+          <TextBlock Grid.Column="1" Text="{Binding ProjectFile}" Classes="meta" Margin="7,0,0,0" />
+          <Border Grid.Column="3" Classes="chip" Height="17" Margin="0,0,8,0" IsVisible="{Binding IsModified}"
+                  Background="{DynamicResource DockerWarnDim}">
+            <TextBlock Text="{Binding ModifiedText}" FontSize="{DynamicResource VelaFontSize9}"
+                       Foreground="{DynamicResource VelaWarning}" VerticalAlignment="Center" />
+          </Border>
+          <Button Grid.Column="4" Theme="{StaticResource DockerToolButton}" Height="22" Margin="0,0,6,0"
+                  Command="{Binding ConfigCommand}">
+            <TextBlock Text="config 校验" FontSize="{DynamicResource VelaFontSize10}"
+                       Foreground="{DynamicResource VelaTextSecondary}" />
+          </Button>
+          <Button Grid.Column="5" Theme="{StaticResource DockerToolButton}" Height="22"
+                  IsEnabled="{Binding IsModified}" Background="{DynamicResource VelaAccent}"
+                  BorderBrush="Transparent" Command="{Binding SaveCommand}">
+            <TextBlock Text="保存…" FontSize="{DynamicResource VelaFontSize10}" FontWeight="Medium"
+                       Foreground="{DynamicResource VelaAccentForeground}" />
+          </Button>
+        </Grid>
+      </Border>
+
+      <Border Grid.Row="2" Classes="terminal">
+        <Grid>
+          <TextBox Text="{Binding Yaml}" AcceptsReturn="True" AcceptsTab="True"
+                   Background="Transparent" BorderThickness="0" Padding="14,10"
+                   FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize11}"
+                   Foreground="{DynamicResource VelaShellWhite}"
+                   CaretBrush="{DynamicResource VelaAccent}"
+                   SelectionBrush="{DynamicResource VelaAccentDim}" TextWrapping="NoWrap" />
+          <TextBlock IsVisible="{Binding HasError}" Text="{Binding Error}" Classes="hint"
+                     Foreground="{DynamicResource VelaError}" VerticalAlignment="Center"
+                     HorizontalAlignment="Center" TextAlignment="Center" MaxWidth="420" />
+        </Grid>
+      </Border>
+
+      <!-- 服务表 -->
+      <Border Grid.Row="3" Height="132" Background="{DynamicResource VelaBgSurface}"
+              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,1,0,0">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Height="30" Padding="14,0"
+                  BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <ui:Glyph Key="Docker.list-tree" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+              <TextBlock Text="服务" Classes="h3" />
+              <TextBlock Text="compose ps -a" Classes="meta" />
+            </StackPanel>
+          </Border>
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Services}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="docker:ComposeService">
+                  <Grid Height="30" ColumnDefinitions="110,180,*,170" Margin="14,0">
+                    <TextBlock Grid.Column="0" Text="{Binding Service}" Classes="name" />
+                    <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="cell" />
+                    <TextBlock Grid.Column="2" Text="{Binding Status}" Classes="cell" />
+                    <TextBlock Grid.Column="3" Text="{Binding PortsText}" Classes="cell"
+                               Foreground="{DynamicResource VelaInfo}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+
+    <StackPanel Grid.Column="1" IsVisible="{Binding !HasSelection}" VerticalAlignment="Center"
+                HorizontalAlignment="Center" Spacing="10" MaxWidth="380">
+      <TextBlock Text="选一个 compose 项目" Classes="h2" HorizontalAlignment="Center" />
+      <TextBlock Text="左边列出的是**起过至少一次**的项目;还没起过的用「按路径打开」给一个远端路径。"
+                 Classes="hint" TextAlignment="Center" />
+    </StackPanel>
+
+    <!-- 执行记录 -->
+    <Border Grid.Column="2" Background="{DynamicResource VelaBgSurface}"
+            BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" Height="44" Padding="14,0"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+            <ui:Glyph Grid.Column="0" Key="Docker.square-terminal" Size="15" VerticalAlignment="Center"
+                      Brush="{DynamicResource VelaTextSecondary}" />
+            <TextBlock Grid.Column="1" Text="执行记录" Classes="h2" Margin="8,0,0,0" />
+            <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" ToolTip.Tip="清空"
+                    Command="{Binding ClearOutputCommand}">
+              <ui:Glyph Key="Docker.eraser" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+            </Button>
+          </Grid>
+        </Border>
+        <Border DockPanel.Dock="Bottom" Height="26" Padding="12,0"
+                Background="{DynamicResource VelaBgContentHeader}"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,1,0,0">
+          <TextBlock Text="保留最近 2000 行 · stdout 与 stderr 分色" Classes="meta" VerticalAlignment="Center" />
+        </Border>
+        <Border Classes="terminal">
+          <ScrollViewer Padding="12,8">
+            <ItemsControl ItemsSource="{Binding Output}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="pages:OutputLine">
+                  <Grid ColumnDefinitions="56,*" MinHeight="17">
+                    <TextBlock Grid.Column="0" Text="{Binding Time}"
+                               FontFamily="{DynamicResource VelaUiMonoFont}"
+                               FontSize="{DynamicResource VelaFontSize9}"
+                               Foreground="{DynamicResource DockerCodeComment}" VerticalAlignment="Center" />
+                    <SelectableTextBlock Grid.Column="1" Text="{Binding Text}"
+                                         FontFamily="{DynamicResource VelaUiMonoFont}"
+                                         FontSize="{DynamicResource VelaFontSize10}" TextWrapping="Wrap">
+                      <SelectableTextBlock.Foreground>
+                        <MultiBinding>
+                          <MultiBinding.Converter>
+                            <ui:OutputLineForegroundConverter />
+                          </MultiBinding.Converter>
+                          <Binding Path="IsError" />
+                          <Binding Path="IsCommand" />
+                        </MultiBinding>
+                      </SelectableTextBlock.Foreground>
+                    </SelectableTextBlock>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Border>
+      </DockPanel>
+    </Border>
+  </Grid>
+</UserControl>

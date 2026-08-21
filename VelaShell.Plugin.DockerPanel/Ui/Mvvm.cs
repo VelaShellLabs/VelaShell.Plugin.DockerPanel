@@ -1,18 +1,17 @@
-using Avalonia.Threading;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using Avalonia.Threading;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
 /// <summary>
-/// 最小可观察基类。
+/// 最小的可观察对象。
 /// <para>
-/// 刻意**不引 ReactiveUI / CommunityToolkit**:插件的第三方依赖是随插件目录分发的,
-/// 为了两个接口拖进一整棵依赖树不值当;更要紧的是插件 ALC 里那份 <c>RxApp</c>
-/// 与宿主的是两个独立实例,它的主线程调度器不会自动挂到 Avalonia 的调度器上,
-/// 于是命令的可用性变化会在后台线程上触发绑定更新。要的只是
-/// <see cref="INotifyPropertyChanged" /> 与两个命令类型,自己写一百行更稳。
+/// 插件刻意不引 ReactiveUI / CommunityToolkit:插件包会被原样塞进 .vpx,
+/// 而一个 Docker 面板需要的全部"MVVM"就是这两个类。少一个依赖,
+/// 就少一次"宿主与插件加载了同一个库的两个版本"的排查。
 /// </para>
 /// </summary>
 public abstract class ObservableObject : INotifyPropertyChanged
@@ -20,56 +19,65 @@ public abstract class ObservableObject : INotifyPropertyChanged
     /// <inheritdoc />
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    /// <summary>值变化时赋值并通知。</summary>
-    /// <typeparam name="T">属性类型。</typeparam>
-    /// <param name="field">后备字段。</param>
-    /// <param name="value">新值。</param>
-    /// <param name="propertyName">属性名(自动填充)。</param>
-    /// <returns>是否真的变了。</returns>
-    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    /// <summary>赋值并在值真的变了时通知。</summary>
+    protected bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {
             return false;
         }
         field = value;
-        RaisePropertyChanged(propertyName);
+        OnPropertyChanged(propertyName);
         return true;
     }
 
-    /// <summary>手动触发一次属性变更通知(派生属性用)。</summary>
-    /// <param name="propertyName">属性名。</param>
-    protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null)
+    /// <summary>手动触发一次通知(计算属性跟着源属性变时用)。</summary>
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
+        PropertyChanged?.Invoke(this, new(propertyName));
+
+    /// <summary>触发一组通知。</summary>
+    protected void OnPropertiesChanged(params string[] propertyNames)
     {
-        if (PropertyChanged is not { } handler)
+        foreach (string name in propertyNames)
         {
-            return;
-        }
-        // 绑定只能在 UI 线程更新。加载逻辑大多跑在后台线程(远程执行是要等网络的),
-        // 统一在这里封送,免得每个调用点都记得 Dispatcher —— 漏一个就是一次随机的崩溃。
-        if (Dispatcher.UIThread.CheckAccess())
-        {
-            handler(this, new(propertyName));
-        }
-        else
-        {
-            Dispatcher.UIThread.Post(() => handler(this, new(propertyName)));
+            OnPropertyChanged(name);
         }
     }
 }
 
-/// <summary>无参异步命令。执行期间自动禁用自己,避免重复点击叠加请求。</summary>
-/// <param name="execute">命令体。</param>
-/// <param name="canExecute">可用性判定;为 null 即恒可用。</param>
-public sealed class AsyncCommand(Func<Task> execute, Func<bool>? canExecute = null) : ICommand
+/// <summary>
+/// 一个命令。异步版本自带"跑着的时候不能再点"—— 双击一个"删除"按钮
+/// 不该发出两条删除请求。
+/// </summary>
+public sealed class RelayCommand : ICommand
 {
+    private readonly Func<object?, Task> _execute;
+    private readonly Func<object?, bool>? _canExecute;
     private bool _running;
+
+    /// <summary>同步命令。</summary>
+    public RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null)
+    {
+        _execute = p =>
+        {
+            execute(p);
+            return Task.CompletedTask;
+        };
+        _canExecute = canExecute;
+    }
+
+    /// <summary>异步命令。</summary>
+    public RelayCommand(Func<object?, Task> execute, Func<object?, bool>? canExecute = null)
+    {
+        _execute = execute;
+        _canExecute = canExecute;
+    }
 
     /// <inheritdoc />
     public event EventHandler? CanExecuteChanged;
 
     /// <inheritdoc />
-    public bool CanExecute(object? parameter) => !_running && (canExecute?.Invoke() ?? true);
+    public bool CanExecute(object? parameter) => !_running && (_canExecute?.Invoke(parameter) ?? true);
 
     /// <inheritdoc />
     public async void Execute(object? parameter)
@@ -82,12 +90,13 @@ public sealed class AsyncCommand(Func<Task> execute, Func<bool>? canExecute = nu
         RaiseCanExecuteChanged();
         try
         {
-            await execute().ConfigureAwait(true);
+            await _execute(parameter).ConfigureAwait(true);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // 命令体自己负责把失败呈现到界面上(Status)。这里只保证异常不逃出 async void ——
-            // 那会直接带走宿主进程,而这只是一次点击。
+            // 命令的实现自己负责把失败呈现出来;真漏到这里的话,
+            // 至少不能让一个未观察的异常把宿主拖走。
+            UnhandledCommandError?.Invoke(ex);
         }
         finally
         {
@@ -96,47 +105,95 @@ public sealed class AsyncCommand(Func<Task> execute, Func<bool>? canExecute = nu
         }
     }
 
-    /// <summary>重新求值可用性。</summary>
-    public void RaiseCanExecuteChanged() => Dispatcher.UIThread.Post(() => CanExecuteChanged?.Invoke(this, EventArgs.Empty));
+    /// <summary>命令实现漏出来的异常(面板挂一个全局处理,写进状态栏)。</summary>
+    public static event Action<Exception>? UnhandledCommandError;
+
+    /// <summary>重新求一次 <see cref="CanExecute" />。</summary>
+    public void RaiseCanExecuteChanged()
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(() => CanExecuteChanged?.Invoke(this, EventArgs.Empty));
+        }
+    }
 }
 
-/// <summary>带参异步命令(列表行上的按钮、页签切换这类)。</summary>
-/// <typeparam name="T">参数类型。</typeparam>
-/// <param name="execute">命令体。</param>
-public sealed class AsyncCommand<T>(Func<T, Task> execute) : ICommand
+/// <summary>UI 线程封送的小工具。</summary>
+public static class Ui
 {
-    private bool _running;
-
-    /// <inheritdoc />
-    public event EventHandler? CanExecuteChanged;
-
-    /// <inheritdoc />
-    public bool CanExecute(object? parameter) => !_running && parameter is T;
-
-    /// <inheritdoc />
-    public async void Execute(object? parameter)
+    /// <summary>在 UI 线程上跑一段同步代码(已经在 UI 线程就直接跑)。</summary>
+    public static void Post(Action action)
     {
-        if (parameter is not T typed || _running)
+        if (Dispatcher.UIThread.CheckAccess())
         {
-            return;
+            action();
         }
-        _running = true;
-        RaiseCanExecuteChanged();
-        try
+        else
         {
-            await execute(typed).ConfigureAwait(true);
-        }
-        catch (Exception)
-        {
-            // 同 AsyncCommand。
-        }
-        finally
-        {
-            _running = false;
-            RaiseCanExecuteChanged();
+            Dispatcher.UIThread.Post(action);
         }
     }
 
-    /// <summary>重新求值可用性。</summary>
-    public void RaiseCanExecuteChanged() => Dispatcher.UIThread.Post(() => CanExecuteChanged?.Invoke(this, EventArgs.Empty));
+    /// <summary>在 UI 线程上跑一段代码并等它完成。</summary>
+    public static Task InvokeAsync(Action action) =>
+        Dispatcher.UIThread.CheckAccess()
+            ? RunInline(action)
+            : Dispatcher.UIThread.InvokeAsync(action).GetTask();
+
+    private static Task RunInline(Action action)
+    {
+        action();
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>带"整体替换但保留身份"的可观察集合。</summary>
+public sealed class KeyedCollection<T>(Func<T, string> keySelector) : ObservableCollection<T>
+{
+    /// <summary>
+    /// 用新快照就地合并:同 key 的项**保留原实例**(只更新内容),新增的插进去,
+    /// 消失的删掉。
+    /// <para>
+    /// 不能简单地 Clear + AddRange:那会把选中态、滚动位置与展开状态全部清掉 ——
+    /// 而这个面板每秒都可能因为一条事件而刷新。用户选中三行准备批量停止,
+    /// 刷新一次就全没了,是这个面板能犯的最烦人的错误。
+    /// </para>
+    /// </summary>
+    /// <param name="snapshot">新快照(顺序即目标顺序)。</param>
+    /// <param name="update">把新数据合并进旧实例。</param>
+    public void Merge(IReadOnlyList<T> snapshot, Action<T, T> update)
+    {
+        Dictionary<string, T> existing = [];
+        foreach (T item in this)
+        {
+            existing[keySelector(item)] = item;
+        }
+        for (int i = 0; i < snapshot.Count; i++)
+        {
+            T incoming = snapshot[i];
+            string key = keySelector(incoming);
+            if (existing.TryGetValue(key, out T? current))
+            {
+                update(current, incoming);
+                int at = IndexOf(current);
+                if (at != i && at >= 0)
+                {
+                    Move(at, i);
+                }
+                existing.Remove(key);
+            }
+            else
+            {
+                Insert(i, incoming);
+            }
+        }
+        foreach (T stale in existing.Values)
+        {
+            Remove(stale);
+        }
+    }
 }

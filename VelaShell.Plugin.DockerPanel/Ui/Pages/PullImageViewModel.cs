@@ -1,0 +1,487 @@
+using System.Collections.ObjectModel;
+using VelaShell.Plugin.DockerPanel.Docker;
+
+namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
+
+/// <summary>拉取对话框的三个状态。</summary>
+public enum PullStage
+{
+    /// <summary>填表。</summary>
+    Form,
+
+    /// <summary>拉取中。</summary>
+    Running,
+
+    /// <summary>完成。</summary>
+    Done
+}
+
+/// <summary>拉取进度里的一层。</summary>
+public sealed class PullLayerItem(string id, string status, double progress, string sizeText) : ObservableObject
+{
+    /// <summary>层 id。</summary>
+    public string Id { get; } = id;
+
+    /// <summary>状态。</summary>
+    public string Status { get; private set; } = status;
+
+    /// <summary>进度 0–1。</summary>
+    public double Progress { get; private set; } = progress;
+
+    /// <summary>大小文本。</summary>
+    public string SizeText { get; private set; } = sizeText;
+
+    /// <summary>这一层是不是已经好了。</summary>
+    public bool Complete => Progress >= 1;
+
+    /// <summary>更新。</summary>
+    public void Update(string status, double progress, string sizeText)
+    {
+        Status = status;
+        Progress = progress;
+        SizeText = sizeText;
+        OnPropertiesChanged(nameof(Status), nameof(Progress), nameof(SizeText), nameof(Complete));
+    }
+}
+
+/// <summary>
+/// 拉取镜像。
+/// <para>
+/// 同一个对话框**原地换态**,不弹第二层:填表 → 拉取中 → 完成。
+/// 「转入后台」把进度移交给顶栏的任务中心,任务继续跑 ——
+/// 拉一个 2 GB 的镜像时,用户多半想一边等一边去看别的容器。
+/// </para>
+/// </summary>
+public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
+{
+    private readonly DockerPanelViewModel _shell;
+    private readonly PullAggregator _aggregator = new();
+    private readonly Dictionary<string, PullLayerItem> _layerMap = [];
+    private CancellationTokenSource? _cts;
+    private PanelTask? _task;
+    private PullStage _stage = PullStage.Form;
+    private string _reference = "";
+    private string _tag = "latest";
+    private string _platform = "";
+    private bool _allTags;
+    private string _error = "";
+    private double _progress;
+    private string _speedText = "";
+    private string _summaryText = "";
+    private string _authText = "";
+    private RegistryAuthState _authState = RegistryAuthState.NotRequired;
+    private DateTimeOffset _startedAt;
+    private long _lastBytes;
+    private DateTimeOffset _lastSample;
+    private string _doneDigest = "";
+    private string _doneSize = "";
+    private string _doneElapsed = "";
+
+    /// <summary>建对话框。</summary>
+    public PullImageViewModel(DockerPanelViewModel shell, string? initialReference)
+    {
+        _shell = shell;
+        if (!string.IsNullOrWhiteSpace(initialReference))
+        {
+            int colon = initialReference!.LastIndexOf(':');
+            int slash = initialReference.LastIndexOf('/');
+            if (colon > slash && colon > 0)
+            {
+                _reference = initialReference[..colon];
+                _tag = initialReference[(colon + 1)..];
+            }
+            else
+            {
+                _reference = initialReference;
+            }
+        }
+        StartCommand = new RelayCommand(_ => StartAsync(), _ => Stage == PullStage.Form && Reference.Trim().Length > 0);
+        CancelCommand = new RelayCommand(_ => CancelAsync());
+        BackgroundCommand = new RelayCommand(_ => _shell.CloseDialogCommand.Execute(null));
+        CloseCommand = new RelayCommand(_ => _shell.CloseDialogCommand.Execute(null));
+        _ = RefreshAuthAsync();
+    }
+
+    /// <summary>当前状态。</summary>
+    public PullStage Stage
+    {
+        get => _stage;
+        private set
+        {
+            if (SetField(ref _stage, value))
+            {
+                OnPropertiesChanged(nameof(IsForm), nameof(IsRunning), nameof(IsDone), nameof(Title), nameof(ChipText));
+                StartCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>填表态。</summary>
+    public bool IsForm => Stage == PullStage.Form;
+
+    /// <summary>拉取中。</summary>
+    public bool IsRunning => Stage == PullStage.Running;
+
+    /// <summary>完成态。</summary>
+    public bool IsDone => Stage == PullStage.Done;
+
+    /// <summary>标题。</summary>
+    public string Title => Stage switch
+    {
+        PullStage.Running => "拉取中",
+        PullStage.Done => Error.Length > 0 ? "拉取失败" : "拉取完成",
+        _ => "拉取镜像"
+    };
+
+    /// <summary>标题右侧的徽章文字。</summary>
+    public string ChipText => Stage switch
+    {
+        PullStage.Running => "进行中",
+        PullStage.Done => Error.Length > 0 ? "失败" : "成功",
+        _ => ""
+    };
+
+    /// <summary>镜像引用(不含标签)。</summary>
+    public string Reference
+    {
+        get => _reference;
+        set
+        {
+            if (SetField(ref _reference, value))
+            {
+                StartCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(FullReference));
+                _ = RefreshAuthAsync();
+            }
+        }
+    }
+
+    /// <summary>标签。</summary>
+    public string Tag
+    {
+        get => _tag;
+        set
+        {
+            if (SetField(ref _tag, value))
+            {
+                OnPropertyChanged(nameof(FullReference));
+            }
+        }
+    }
+
+    /// <summary>平台。</summary>
+    public string Platform
+    {
+        get => _platform;
+        set => SetField(ref _platform, value);
+    }
+
+    /// <summary>拉取全部标签。</summary>
+    public bool AllTags
+    {
+        get => _allTags;
+        set
+        {
+            if (SetField(ref _allTags, value))
+            {
+                OnPropertyChanged(nameof(FullReference));
+            }
+        }
+    }
+
+    /// <summary>完整引用。</summary>
+    public string FullReference => AllTags ? $"{Reference}(全部标签)" : $"{Reference}:{(Tag.Length > 0 ? Tag : "latest")}";
+
+    /// <summary>等效命令。</summary>
+    public string CommandPreview =>
+        $"POST /images/create?fromImage={Reference}{(AllTags ? "" : $"&tag={(Tag.Length > 0 ? Tag : "latest")}")}";
+
+    /// <summary>等价命令行。</summary>
+    public string CommandNote =>
+        $"等价于  docker pull {(AllTags ? "-a " : "")}{Reference}{(AllTags ? "" : $":{(Tag.Length > 0 ? Tag : "latest")}")}" +
+        $"{(Platform.Trim().Length > 0 ? $" --platform {Platform.Trim()}" : "")}";
+
+    /// <summary>仓库登录状态文本。</summary>
+    public string AuthText
+    {
+        get => _authText;
+        private set => SetField(ref _authText, value);
+    }
+
+    /// <summary>仓库登录状态。</summary>
+    public RegistryAuthState AuthState
+    {
+        get => _authState;
+        private set
+        {
+            if (SetField(ref _authState, value))
+            {
+                OnPropertiesChanged(nameof(AuthOk), nameof(AuthWarn));
+            }
+        }
+    }
+
+    /// <summary>凭据没问题。</summary>
+    public bool AuthOk => AuthState is RegistryAuthState.Available or RegistryAuthState.NotRequired;
+
+    /// <summary>凭据取不到。</summary>
+    public bool AuthWarn => AuthState is RegistryAuthState.HelperOnly or RegistryAuthState.Missing;
+
+    /// <summary>总进度 0–1。</summary>
+    public double Progress
+    {
+        get => _progress;
+        private set
+        {
+            if (SetField(ref _progress, value))
+            {
+                OnPropertyChanged(nameof(PercentText));
+            }
+        }
+    }
+
+    /// <summary>百分比文本。</summary>
+    public string PercentText => $"{Progress * 100:0}%";
+
+    /// <summary>速率文本。</summary>
+    public string SpeedText
+    {
+        get => _speedText;
+        private set => SetField(ref _speedText, value);
+    }
+
+    /// <summary>层摘要。</summary>
+    public string SummaryText
+    {
+        get => _summaryText;
+        private set => SetField(ref _summaryText, value);
+    }
+
+    /// <summary>字节进度文本。</summary>
+    public string BytesText => _aggregator.TotalBytes > 0
+        ? $"{Humanize.Bytes(_aggregator.CurrentBytes)} / {Humanize.Bytes(_aggregator.TotalBytes)}"
+        : "";
+
+    /// <summary>已复用的层数摘要。</summary>
+    public string ReusedText => _aggregator.ReusedLayers > 0
+        ? $"{_aggregator.ReusedLayers} 层已存在,已折叠"
+        : "";
+
+    /// <summary>有没有折叠掉的复用层。</summary>
+    public bool HasReused => _aggregator.ReusedLayers > 0;
+
+    /// <summary>正在动的层。</summary>
+    public ObservableCollection<PullLayerItem> ActiveLayers { get; } = [];
+
+    /// <summary>错误(拉取失败时 daemon 的原话)。</summary>
+    public string Error
+    {
+        get => _error;
+        private set
+        {
+            if (SetField(ref _error, value))
+            {
+                OnPropertiesChanged(nameof(HasError), nameof(Title), nameof(ChipText));
+            }
+        }
+    }
+
+    /// <summary>有没有出错。</summary>
+    public bool HasError => Error.Length > 0;
+
+    /// <summary>完成后的摘要:摘要串。</summary>
+    public string DoneDigest
+    {
+        get => _doneDigest;
+        private set => SetField(ref _doneDigest, value);
+    }
+
+    /// <summary>完成后的摘要:大小。</summary>
+    public string DoneSize
+    {
+        get => _doneSize;
+        private set => SetField(ref _doneSize, value);
+    }
+
+    /// <summary>完成后的摘要:用时。</summary>
+    public string DoneElapsed
+    {
+        get => _doneElapsed;
+        private set => SetField(ref _doneElapsed, value);
+    }
+
+    /// <summary>开始拉取。</summary>
+    public RelayCommand StartCommand { get; }
+
+    /// <summary>取消拉取。</summary>
+    public RelayCommand CancelCommand { get; }
+
+    /// <summary>转入后台。</summary>
+    public RelayCommand BackgroundCommand { get; }
+
+    /// <summary>关掉。</summary>
+    public RelayCommand CloseCommand { get; }
+
+    private async Task RefreshAuthAsync()
+    {
+        if (_shell.RegistryAuth is not { } auth || Reference.Trim().Length == 0)
+        {
+            AuthText = "";
+            return;
+        }
+        try
+        {
+            RegistryAuthStatus status = await auth.GetStatusAsync(Reference.Trim(), _shell.Lifetime).ConfigureAwait(true);
+            AuthState = status.State;
+            AuthText = status.State switch
+            {
+                RegistryAuthState.Available => $"{status.Registry} 已登录 · {status.Detail}",
+                RegistryAuthState.NotRequired => $"{status.Registry} · {status.Detail}",
+                RegistryAuthState.HelperOnly => $"{status.Registry} · {status.Detail}",
+                _ => $"{status.Registry} · {status.Detail}"
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AuthText = "";
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        if (_shell.Client is not { } client)
+        {
+            return;
+        }
+        Stage = PullStage.Running;
+        Error = "";
+        _startedAt = DateTimeOffset.UtcNow;
+        _lastSample = _startedAt;
+        _lastBytes = 0;
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(_shell.Lifetime);
+        _task = _shell.Tasks.Start("Docker.arrow-down-to-line", $"拉取 {FullReference}", indeterminate: false);
+        string reference = Reference.Trim();
+        string tag = Tag.Trim();
+        string platform = Platform.Trim();
+        bool allTags = AllTags;
+        try
+        {
+            string? header = _shell.RegistryAuth is { } auth
+                ? await auth.GetAuthHeaderAsync(reference, _cts.Token).ConfigureAwait(true)
+                : null;
+            await client.PullImageAsync(reference, tag, platform, allTags, header,
+                new DirectProgress<PullProgressFrame>(OnFrame), _cts.Token).ConfigureAwait(true);
+            _task.Finish(PanelTaskState.Succeeded, "完成", _aggregator.Summary);
+            DoneElapsed = Humanize.Duration(DateTimeOffset.UtcNow - _startedAt);
+            DoneSize = _aggregator.TotalBytes > 0
+                ? $"{Humanize.Bytes(_aggregator.TotalBytes)}({_aggregator.LayerCount} 层,复用 {_aggregator.ReusedLayers} 层)"
+                : $"{_aggregator.LayerCount} 层,全部复用";
+            Stage = PullStage.Done;
+            _shell.Feedback.Status(FeedbackKind.Success, $"已拉取 {FullReference} · 用时 {DoneElapsed}");
+            await _shell.Images.RefreshAsync(_shell.Lifetime).ConfigureAwait(true);
+            DoneDigest = _shell.Images.View.FirstOrDefault(r =>
+                $"{r.Repository}:{r.Tag}" == $"{reference}:{(tag.Length > 0 ? tag : "latest")}")?.ShortId ?? "";
+        }
+        catch (OperationCanceledException)
+        {
+            _task?.Finish(PanelTaskState.Cancelled, "已取消");
+            Error = "已取消。";
+            Stage = PullStage.Done;
+        }
+        catch (Exception ex)
+        {
+            _task?.Finish(PanelTaskState.Failed, "失败", ex.Message);
+            Error = ex is DockerApiException api ? api.Message : ex.Message;
+            Stage = PullStage.Done;
+        }
+    }
+
+    private void OnFrame(PullProgressFrame frame)
+    {
+        _aggregator.Accept(frame);
+        Ui.Post(() =>
+        {
+            Progress = _aggregator.Progress;
+            SummaryText = _aggregator.Summary;
+            if (_task is { } task)
+            {
+                task.Progress = _aggregator.Progress;
+                task.Detail = _aggregator.Summary;
+            }
+            UpdateSpeed();
+            SyncLayers();
+            OnPropertiesChanged(nameof(BytesText), nameof(ReusedText), nameof(HasReused));
+        });
+    }
+
+    private void UpdateSpeed()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        TimeSpan span = now - _lastSample;
+        if (span < TimeSpan.FromMilliseconds(700))
+        {
+            return;
+        }
+        long bytes = _aggregator.CurrentBytes;
+        long delta = bytes - _lastBytes;
+        _lastBytes = bytes;
+        _lastSample = now;
+        if (delta <= 0)
+        {
+            return;
+        }
+        double perSecond = delta / span.TotalSeconds;
+        long remaining = _aggregator.TotalBytes - bytes;
+        SpeedText = remaining > 0 && perSecond > 0
+            ? $"{Humanize.Bytes((long)perSecond)}/s · 剩余 ~{Humanize.Duration(TimeSpan.FromSeconds(remaining / perSecond))}"
+            : $"{Humanize.Bytes((long)perSecond)}/s";
+    }
+
+    /// <summary>
+    /// 只把**正在动**的层摆进列表。复用的那些折成一行 ——
+    /// 一次命中缓存的拉取能有三十层 "Already exists",逐条列出来只是噪音。
+    /// </summary>
+    private void SyncLayers()
+    {
+        foreach ((string id, string status, double progress, string sizeText) in _aggregator.Snapshot())
+        {
+            bool complete = progress >= 1;
+            bool reused = status.Contains("Already exists", StringComparison.OrdinalIgnoreCase);
+            if (reused)
+            {
+                continue;
+            }
+            if (_layerMap.TryGetValue(id, out PullLayerItem? item))
+            {
+                item.Update(status, progress, sizeText);
+            }
+            else if (!complete || ActiveLayers.Count < 12)
+            {
+                var created = new PullLayerItem(Humanize.ShortId(id), status, progress, sizeText);
+                _layerMap[id] = created;
+                ActiveLayers.Add(created);
+            }
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (_cts is { } cts)
+        {
+            await cts.CancelAsync().ConfigureAwait(true);
+        }
+        _task?.Cancel();
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        // 关掉对话框**不取消任务** —— 进度移交给任务中心,拉取继续。
+        if (_cts is { } cts && Stage != PullStage.Running)
+        {
+            await cts.CancelAsync().ConfigureAwait(false);
+            cts.Dispose();
+            _cts = null;
+        }
+    }
+}
