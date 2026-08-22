@@ -537,7 +537,7 @@
             </Grid>
             <StackPanel Spacing="6">
               <TextBlock Text="默认补多少行历史" Classes="label" Foreground="{DynamicResource VelaTextPrimary}" />
-              <Border CornerRadius="4" Padding="2" HorizontalAlignment="Left"
+              <Border CornerRadius="4" Padding="2" BackgroundSizing="OuterBorderEdge" HorizontalAlignment="Left"
                       Background="{DynamicResource VelaBgInput}"
                       BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
                 <StackPanel Orientation="Horizontal" Spacing="2">
@@ -594,9 +594,10 @@
       </DockPanel>
     </Border>
 
-    <!-- 命令面板:压在内容之上、闸门之下 —— 它触发的动作往往还要再弹一次闸门 -->
+    <!-- 命令面板:压在内容之上、闸门之下 —— 它触发的动作往往还要再弹一次闸门。
+         遮罩可点:点面板以外的地方就是"算了" —— 命令面板里没有用户输了一半的东西。 -->
     <Grid Grid.Row="1" IsVisible="{Binding Palette.IsOpen}">
-      <Border Background="#9905070A" />
+      <Border Background="#9905070A" PointerPressed="OnScrimPressed" />
       <ui:CommandPaletteView DataContext="{Binding Palette}"
                              VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,80,0,0" />
     </Grid>

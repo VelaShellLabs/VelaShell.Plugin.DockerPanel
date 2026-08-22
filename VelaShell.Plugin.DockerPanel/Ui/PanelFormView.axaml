@@ -97,7 +97,7 @@
               <DataTemplate DataType="ui:ChoiceField">
                 <StackPanel Spacing="5">
                   <TextBlock Text="{Binding Label}" Classes="h3" />
-                  <Border CornerRadius="4" Padding="2" Background="{DynamicResource VelaBgInput}"
+                  <Border CornerRadius="4" Padding="2" BackgroundSizing="OuterBorderEdge" Background="{DynamicResource VelaBgInput}"
                           BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
                     <ItemsControl ItemsSource="{Binding Options}">
                       <ItemsControl.ItemsPanel>
@@ -107,12 +107,15 @@
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="ui:ChoiceOption">
+                          <!-- 选中的那一颗染强调色底:分段控件不亮起来,用户没有别的办法
+                               知道自己刚才点中了哪一个。 -->
                           <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="22"
+                                  Classes.picked="{Binding Picked}"
                                   HorizontalAlignment="Stretch" IsEnabled="{Binding Enabled}"
                                   ToolTip.Tip="{Binding DisabledReason}"
                                   Command="{Binding $parent[ItemsControl].((ui:ChoiceField)DataContext).SelectCommand}"
                                   CommandParameter="{Binding}">
-                            <TextBlock Text="{Binding Label}" FontSize="{DynamicResource VelaFontSize11}"
+                            <TextBlock Text="{Binding Label}" Classes="pick-label" FontSize="{DynamicResource VelaFontSize11}"
                                        Foreground="{DynamicResource VelaTextSecondary}" />
                           </Button>
                         </DataTemplate>
@@ -133,16 +136,23 @@
                   <ItemsControl ItemsSource="{Binding Options}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="ui:ChoiceOption">
+                        <!-- 选中的那一条:整条染强调色底 + 圆点填实。
+                             单选列表原来两者都没有 —— 点完之后界面上不留任何痕迹。 -->
                         <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="NaN"
+                                Classes.picked="{Binding Picked}"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                 Padding="11,9" Margin="0,0,0,5" CornerRadius="4"
                                 Command="{Binding $parent[ItemsControl].((ui:RadioListField)DataContext).SelectCommand}"
                                 CommandParameter="{Binding}">
                           <Grid ColumnDefinitions="Auto,*">
-                            <Ellipse Grid.Column="0" Width="12" Height="12" VerticalAlignment="Top" Margin="0,2,0,0"
-                                     Stroke="{DynamicResource VelaBorderSecondary}" StrokeThickness="1" />
+                            <Panel Grid.Column="0" VerticalAlignment="Top" Margin="0,2,0,0">
+                              <Ellipse Width="12" Height="12"
+                                       Stroke="{DynamicResource VelaBorderSecondary}" StrokeThickness="1" />
+                              <Ellipse Width="6" Height="6" IsVisible="{Binding Picked}"
+                                       Fill="{DynamicResource VelaAccent}" />
+                            </Panel>
                             <StackPanel Grid.Column="1" Margin="9,0" Spacing="2">
-                              <TextBlock Text="{Binding Value}" FontFamily="{DynamicResource VelaUiMonoFont}"
+                              <TextBlock Text="{Binding Value}" Classes="pick-label" FontFamily="{DynamicResource VelaUiMonoFont}"
                                          FontSize="{DynamicResource VelaFontSize11}" FontWeight="SemiBold"
                                          Foreground="{DynamicResource VelaTextPrimary}" />
                               <TextBlock Text="{Binding Description}" Classes="hint" />

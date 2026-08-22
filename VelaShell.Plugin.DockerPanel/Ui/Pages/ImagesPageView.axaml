@@ -20,7 +20,7 @@
         <TextBlock Grid.Column="1" Text="{Binding TotalCount}" Classes="cell" Margin="9,0,0,0"
                    Foreground="{DynamicResource VelaTextTertiary}" />
 
-        <Border Grid.Column="2" Margin="12,0,0,0" CornerRadius="4" Padding="2"
+        <Border Grid.Column="2" Margin="12,0,0,0" CornerRadius="4" Padding="2" BackgroundSizing="OuterBorderEdge"
                 Background="{DynamicResource VelaBgInput}"
                 BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
           <StackPanel Orientation="Horizontal" Spacing="2">
@@ -136,7 +136,9 @@
       <Grid x:Name="HeaderGrid">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="26" />
-          <ColumnDefinition Width="{Binding Columns.Repo}" MinWidth="160" />
+          <ColumnDefinition Width="{Binding Columns.Repo}" MinWidth="120" />
+          <ColumnDefinition Width="6" />
+          <ColumnDefinition Width="{Binding Columns.Tag}" MinWidth="70" />
           <ColumnDefinition Width="6" />
           <ColumnDefinition Width="{Binding Columns.Id}" MinWidth="80" />
           <ColumnDefinition Width="6" />
@@ -152,24 +154,28 @@
         <CheckBox Grid.Column="0" Classes="compact" IsThreeState="True"
                   HorizontalAlignment="Center" ToolTip.Tip="全选当前筛选出的这些行"
                   IsChecked="{Binding AllSelected}" />
-        <TextBlock Grid.Column="1" Text="仓库 / 标签" Classes="col" Margin="4,0,6,0" />
+        <TextBlock Grid.Column="1" Text="镜像" Classes="col" Margin="4,0,6,0" />
         <Border Grid.Column="2" Classes="colgrip" Tag="repo">
           <Border Classes="colline" />
         </Border>
-        <TextBlock Grid.Column="3" Text="镜像 ID" Classes="col" Margin="0,0,6,0" />
-        <Border Grid.Column="4" Classes="colgrip" Tag="id">
+        <TextBlock Grid.Column="3" Text="标签" Classes="col" Margin="0,0,6,0" />
+        <Border Grid.Column="4" Classes="colgrip" Tag="tag">
           <Border Classes="colline" />
         </Border>
-        <TextBlock Grid.Column="5" Text="大小" Classes="col" Margin="0,0,6,0" />
-        <Border Grid.Column="6" Classes="colgrip" Tag="size">
+        <TextBlock Grid.Column="5" Text="镜像 ID" Classes="col" Margin="0,0,6,0" />
+        <Border Grid.Column="6" Classes="colgrip" Tag="id">
           <Border Classes="colline" />
         </Border>
-        <TextBlock Grid.Column="7" Text="创建" Classes="col" Margin="0,0,6,0" />
-        <Border Grid.Column="8" Classes="colgrip" Tag="created">
+        <TextBlock Grid.Column="7" Text="大小" Classes="col" Margin="0,0,6,0" />
+        <Border Grid.Column="8" Classes="colgrip" Tag="size">
           <Border Classes="colline" />
         </Border>
-        <TextBlock Grid.Column="9" Text="使用中" Classes="col" Margin="0,0,6,0" />
-        <Border Grid.Column="10" Classes="colgrip" Tag="used">
+        <TextBlock Grid.Column="9" Text="创建" Classes="col" Margin="0,0,6,0" />
+        <Border Grid.Column="10" Classes="colgrip" Tag="created">
+          <Border Classes="colline" />
+        </Border>
+        <TextBlock Grid.Column="11" Text="使用中" Classes="col" Margin="0,0,6,0" />
+        <Border Grid.Column="12" Classes="colgrip" Tag="used">
           <Border Classes="colline" />
         </Border>
       </Grid>
@@ -189,7 +195,9 @@
               <Grid Height="32" ClipToBounds="True">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="26" />
-                  <ColumnDefinition Width="{Binding Owner.Columns.Repo}" MinWidth="160" />
+                  <ColumnDefinition Width="{Binding Owner.Columns.Repo}" MinWidth="120" />
+                  <ColumnDefinition Width="6" />
+                  <ColumnDefinition Width="{Binding Owner.Columns.Tag}" MinWidth="70" />
                   <ColumnDefinition Width="6" />
                   <ColumnDefinition Width="{Binding Owner.Columns.Id}" MinWidth="80" />
                   <ColumnDefinition Width="6" />
@@ -233,20 +241,23 @@
                       </Binding>
                     </ui:Glyph.Key>
                   </ui:Glyph>
-                  <TextBlock Text="{Binding Repository}" Classes="name" />
-                  <Border Classes="chip" Height="16" Background="{DynamicResource VelaAccentDim}">
-                    <TextBlock Text="{Binding Tag}" FontFamily="{DynamicResource VelaUiMonoFont}"
-                               FontSize="{DynamicResource VelaFontSize9}"
-                               Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
-                  </Border>
+                  <TextBlock Text="{Binding Repository}" Classes="name" ToolTip.Tip="{Binding Repository}" />
                 </StackPanel>
-                <TextBlock Grid.Column="3" Text="{Binding ShortId}" Classes="cell" Margin="0,0,6,0" />
-                <TextBlock Grid.Column="5" Text="{Binding SizeText}" Classes="cell" Margin="0,0,6,0" />
-                <TextBlock Grid.Column="7" Text="{Binding CreatedText}" Classes="cell" Margin="0,0,6,0" />
-                <TextBlock Grid.Column="9" Text="{Binding UsageText}" Classes="cell" Margin="0,0,6,0"
+                <!-- 标签自成一列:latest 与 1.27-alpine 之间的差别常常比仓库名更要紧,
+                     挤在名字后面当徽标就只能跟着名字长短到处跑。 -->
+                <Border Grid.Column="3" Classes="chip" Height="16" Margin="0,0,6,0"
+                        HorizontalAlignment="Left" Background="{DynamicResource VelaAccentDim}">
+                  <TextBlock Text="{Binding Tag}" FontFamily="{DynamicResource VelaUiMonoFont}"
+                             FontSize="{DynamicResource VelaFontSize9}" TextTrimming="CharacterEllipsis"
+                             Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Grid.Column="5" Text="{Binding ShortId}" Classes="cell" Margin="0,0,6,0" />
+                <TextBlock Grid.Column="7" Text="{Binding SizeText}" Classes="cell" Margin="0,0,6,0" />
+                <TextBlock Grid.Column="9" Text="{Binding CreatedText}" Classes="cell" Margin="0,0,6,0" />
+                <TextBlock Grid.Column="11" Text="{Binding UsageText}" Classes="cell" Margin="0,0,6,0"
                            Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
-                <!-- 行尾动作钉在最右:第 11 列是填充列,富余的宽度全归它 -->
-                <StackPanel Grid.Column="12" Orientation="Horizontal" Spacing="1" HorizontalAlignment="Right"
+                <!-- 行尾动作钉在最右:第 13 列是填充列,富余的宽度全归它 -->
+                <StackPanel Grid.Column="14" Orientation="Horizontal" Spacing="1" HorizontalAlignment="Right"
                             Margin="0,0,6,0" VerticalAlignment="Center">
                   <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="运行容器…"
                           Command="{Binding $parent[ItemsControl].((pages:ImagesPageViewModel)DataContext).RunCommand}"
