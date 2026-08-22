@@ -141,7 +141,9 @@ public sealed class ConfirmGate : ObservableObject
             {
                 OnPropertiesChanged(nameof(IsOpen), nameof(IsDataLoss), nameof(HasTargets),
                     nameof(HasConsequences), nameof(HasCommandNote), nameof(CanConfirm), nameof(RemainingHint),
-                    nameof(HasPrecaution), nameof(PrecautionLabel));
+                    nameof(HasPrecaution), nameof(PrecautionLabel), nameof(Icon), nameof(Title),
+                    nameof(HostName), nameof(HostDetail), nameof(CommandNote), nameof(DataLossHeadline),
+                    nameof(ConfirmWord), nameof(ConfirmIcon), nameof(ConfirmLabel));
                 ConfirmCommand.RaiseCanExecuteChanged();
             }
         }
@@ -149,6 +151,37 @@ public sealed class ConfirmGate : ObservableObject
 
     /// <summary>闸门是否打开着。</summary>
     public bool IsOpen => Request is not null;
+
+    // 下面这些都是 Request 的空安全转发。界面不直接绑 Request.Xxx ——
+    // 闸门关着时 Request 是 null,而 IsVisible 只是不画:子树照样建、绑定照样求值,
+    // 于是每关一次就刷一屏 “binding … Value is null”。转发一层,关着时给的是空串。
+
+    /// <summary>标题左侧的图标资源键。</summary>
+    public string Icon => Request?.Icon ?? "Icon.trash-2";
+
+    /// <summary>标题。</summary>
+    public string Title => Request?.Title ?? "";
+
+    /// <summary>目标主机名。</summary>
+    public string HostName => Request?.HostName ?? "";
+
+    /// <summary>主机名后面那行小字。</summary>
+    public string HostDetail => Request?.HostDetail ?? "";
+
+    /// <summary>请求下面那行等价的命令行。</summary>
+    public string CommandNote => Request?.CommandNote ?? "";
+
+    /// <summary>会丢数据那一档要额外醒目显示的一句话。</summary>
+    public string DataLossHeadline => Request?.DataLossHeadline ?? "";
+
+    /// <summary>会丢数据那一档要手打的确认串。</summary>
+    public string ConfirmWord => Request?.ConfirmWord ?? "";
+
+    /// <summary>确认按钮的图标。</summary>
+    public string ConfirmIcon => Request?.ConfirmIcon ?? "Icon.trash-2";
+
+    /// <summary>确认按钮文字。</summary>
+    public string ConfirmLabel => Request?.ConfirmLabel ?? "";
 
     /// <summary>是不是"会丢数据"那一档。</summary>
     public bool IsDataLoss => Request?.Tier == ConfirmTier.DataLoss;

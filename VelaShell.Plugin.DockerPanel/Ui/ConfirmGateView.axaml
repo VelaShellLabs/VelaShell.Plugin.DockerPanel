@@ -31,9 +31,9 @@
       <Border Height="52" Padding="18,0" Background="{DynamicResource VelaShellRedDim}"
               BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
         <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
-          <ui:Glyph Grid.Column="0" Key="{Binding Request.Icon}" Size="17" VerticalAlignment="Center"
+          <ui:Glyph Grid.Column="0" Key="{Binding Icon}" Size="17" VerticalAlignment="Center"
                     Brush="{DynamicResource VelaError}" />
-          <TextBlock Grid.Column="1" Text="{Binding Request.Title}" Margin="10,0,0,0"
+          <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="10,0,0,0"
                      FontSize="{DynamicResource VelaFontSize15}" FontWeight="SemiBold"
                      Foreground="{DynamicResource VelaTextPrimary}" VerticalAlignment="Center" />
           <Border Grid.Column="2" Classes="chip" Margin="9,0,0,0" IsVisible="{Binding IsDataLoss}"
@@ -53,10 +53,10 @@
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <ui:Glyph Key="Docker.server" Size="13" Brush="{DynamicResource VelaStatusConnected}" />
           <TextBlock Text="目标主机" Classes="label" />
-          <TextBlock Text="{Binding Request.HostName}" FontFamily="{DynamicResource VelaUiMonoFont}"
+          <TextBlock Text="{Binding HostName}" FontFamily="{DynamicResource VelaUiMonoFont}"
                      FontSize="{DynamicResource VelaFontSize12}" FontWeight="SemiBold"
                      Foreground="{DynamicResource VelaTextPrimary}" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding Request.HostDetail}" Classes="meta" />
+          <TextBlock Text="{Binding HostDetail}" Classes="meta" />
         </StackPanel>
       </Border>
 
@@ -74,7 +74,7 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <TextBlock Text="{Binding Request.CommandNote}" IsVisible="{Binding HasCommandNote}"
+              <TextBlock Text="{Binding CommandNote}" IsVisible="{Binding HasCommandNote}"
                          FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize10}"
                          Foreground="{DynamicResource DockerCodeComment}" TextWrapping="Wrap" Margin="0,3,0,0" />
             </StackPanel>
@@ -125,7 +125,7 @@
             <StackPanel Spacing="6">
               <StackPanel Orientation="Horizontal" Spacing="7">
                 <ui:Glyph Key="Docker.database" Size="14" Brush="{DynamicResource VelaError}" />
-                <TextBlock Text="{Binding Request.DataLossHeadline}" FontSize="{DynamicResource VelaFontSize12}"
+                <TextBlock Text="{Binding DataLossHeadline}" FontSize="{DynamicResource VelaFontSize12}"
                            FontWeight="SemiBold" Foreground="{DynamicResource VelaError}" TextWrapping="Wrap" />
               </StackPanel>
               <ItemsControl ItemsSource="{Binding DataLossPoints}">
@@ -154,7 +154,7 @@
           <StackPanel Spacing="5" IsVisible="{Binding IsDataLoss}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="请输入" Classes="h3" />
-              <TextBlock Text="{Binding Request.ConfirmWord}" FontFamily="{DynamicResource VelaUiMonoFont}"
+              <TextBlock Text="{Binding ConfirmWord}" FontFamily="{DynamicResource VelaUiMonoFont}"
                          FontSize="{DynamicResource VelaFontSize12}" FontWeight="SemiBold"
                          Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
               <TextBlock Text="以确认" Classes="h3" />
@@ -186,8 +186,8 @@
                   Background="{DynamicResource VelaError}" BorderBrush="Transparent"
                   Command="{Binding ConfirmCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <ui:Glyph Key="{Binding Request.ConfirmIcon}" Size="13" Brush="#FFFFFF" />
-              <TextBlock Text="{Binding Request.ConfirmLabel}" FontSize="{DynamicResource VelaFontSize12}"
+              <ui:Glyph Key="{Binding ConfirmIcon}" Size="13" Brush="#FFFFFF" />
+              <TextBlock Text="{Binding ConfirmLabel}" FontSize="{DynamicResource VelaFontSize12}"
                          FontWeight="Medium" Foreground="#FFFFFF" VerticalAlignment="Center" />
             </StackPanel>
           </Button>

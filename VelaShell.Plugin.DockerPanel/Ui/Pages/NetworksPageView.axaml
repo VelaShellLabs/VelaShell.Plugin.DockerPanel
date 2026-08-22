@@ -108,14 +108,22 @@
             BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
       <ScrollViewer>
         <StackPanel Margin="14,12" Spacing="12">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <ui:Glyph Key="Icon.network" Size="15" Brush="{DynamicResource VelaAccent}" />
-            <TextBlock Text="{Binding Selected.Name}" Classes="h2" />
-            <Border Classes="chip" Background="{DynamicResource VelaAccentDim}">
-              <TextBlock Text="{Binding Selected.Driver}" FontSize="{DynamicResource VelaFontSize10}"
-                         Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
-            </Border>
-          </StackPanel>
+          <!-- 没选中时 Selected 是 null,IsVisible 只是不画、绑定照样求值;
+               交给 ContentControl,模板在 Content 为 null 时不实例化。 -->
+          <ContentControl Content="{Binding Selected}">
+            <ContentControl.ContentTemplate>
+              <DataTemplate DataType="ui:NetworkRow">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <ui:Glyph Key="Icon.network" Size="15" Brush="{DynamicResource VelaAccent}" />
+                  <TextBlock Text="{Binding Name}" Classes="h2" />
+                  <Border Classes="chip" Background="{DynamicResource VelaAccentDim}">
+                    <TextBlock Text="{Binding Driver}" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+                  </Border>
+                </StackPanel>
+              </DataTemplate>
+            </ContentControl.ContentTemplate>
+          </ContentControl>
 
           <StackPanel Orientation="Horizontal" Spacing="6">
             <Button Theme="{StaticResource DockerToolButton}" Height="26"

@@ -301,4 +301,43 @@ public class DockerProtocolTests
         // 列目录是这一层唯一一处把用户输入拼进 shell 的地方,引用错了就是命令注入。
         Assert.AreEqual("'/tmp/it'\\''s here'", Sh.Quote("/tmp/it's here"));
     }
+
+    // ── 连不上的分类 ──────────────────────────────────────────
+
+    /// <summary>一条永远连不上的传输,用来把 <c>Unreachable</c> 的分类逼出来。</summary>
+    private sealed class FailingTransport(string message) : IDockerTransport
+    {
+        public string Description => "/var/run/docker.sock (SSH 隧道)";
+
+        public Task<Stream> ConnectAsync(CancellationToken cancellationToken = default) =>
+            throw new IOException(message);
+    }
+
+    private static async Task<DockerUnreachableException> PingFailureAsync(string transportMessage)
+    {
+        await using var client = new DockerClient(
+            DockerEndpoint.Local("测试"), new FailingTransport(transportMessage));
+        return await Assert.ThrowsExactlyAsync<DockerUnreachableException>(() => client.PingAsync());
+    }
+
+    [TestMethod]
+    public async Task Unreachable_ClassifiesSshChannelOpenFailureAsSocketMissing()
+    {
+        // SDK 报的是 ConnectFailed —— 中间没有空格。只匹配 "connect failed" 会漏掉它,
+        // 于是最常见的一种失败反而落进 Unknown,界面上只剩一个"重试",没有任何出路。
+        DockerUnreachableException ex = await PingFailureAsync(
+            "Failed to open channel - ConnectFailed - open failed. (docker:80)");
+
+        Assert.AreEqual(DockerUnreachableReason.SocketMissing, ex.Reason);
+    }
+
+    [TestMethod]
+    public async Task Unreachable_PrefersPermissionDeniedOverChannelFailure()
+    {
+        // 两者同时出现时按"没权限"报:它是明说的,而"通道开不起来"是笼统的。
+        DockerUnreachableException ex = await PingFailureAsync(
+            "open failed: connect /var/run/docker.sock: permission denied");
+
+        Assert.AreEqual(DockerUnreachableReason.PermissionDenied, ex.Reason);
+    }
 }

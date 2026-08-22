@@ -73,28 +73,38 @@
               <ui:Glyph Key="Icon.chevron-left" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
             </Button>
             <TextBlock Grid.Column="1" Text="日志" Classes="h1" Margin="8,0,0,0" />
-            <ItemsControl Grid.Column="2" ItemsSource="{Binding MergedLogs.Sources}" Margin="12,0,0,0">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="pages:LogSource">
-                  <!-- chip 可以直接点掉,不必跑回左边面板取消勾选 -->
-                  <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="8,0"
-                          ToolTip.Tip="从合并流里移除"
-                          Command="{Binding $parent[ItemsControl].((pages:ContainersPageViewModel)DataContext).RemoveSourceCommand}"
-                          CommandParameter="{Binding}">
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                      <TextBlock Text="{Binding Name}" FontSize="{DynamicResource VelaFontSize10}"
-                                 Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
-                      <ui:Glyph Key="Icon.x" Size="10" Brush="{DynamicResource VelaTextTertiary}" />
-                    </StackPanel>
-                  </Button>
+            <!-- 走 ContentControl 而不是直接 {Binding MergedLogs.Sources}:
+                 不在日志模式时 MergedLogs 是 null,而 IsVisible 只是不画,子树照样建、
+                 绑定照样求值 —— 那正是一串"Value is null"绑定告警的来源。
+                 Content 为 null 时模板根本不实例化,自然也就没有可求值的空链。 -->
+            <ContentControl Grid.Column="2" Content="{Binding MergedLogs}" Margin="12,0,0,0">
+              <ContentControl.ContentTemplate>
+                <DataTemplate DataType="pages:LogsViewModel">
+                  <ItemsControl ItemsSource="{Binding Sources}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="pages:LogSource">
+                        <!-- chip 可以直接点掉,不必跑回左边面板取消勾选 -->
+                        <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="8,0"
+                                ToolTip.Tip="从合并流里移除"
+                                Command="{Binding $parent[UserControl].((pages:ContainersPageViewModel)DataContext).RemoveSourceCommand}"
+                                CommandParameter="{Binding}">
+                          <StackPanel Orientation="Horizontal" Spacing="5">
+                            <TextBlock Text="{Binding Name}" FontSize="{DynamicResource VelaFontSize10}"
+                                       Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+                            <ui:Glyph Key="Icon.x" Size="10" Brush="{DynamicResource VelaTextTertiary}" />
+                          </StackPanel>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
                 </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+              </ContentControl.ContentTemplate>
+            </ContentControl>
           </Grid>
         </Border>
         <ContentControl Content="{Binding MergedLogs}">
@@ -176,74 +186,87 @@
         </Grid>
       </Border>
 
-      <!-- 批量进行中:选中条原地变成这一条,位置不动、列表不动、选中不丢 -->
-      <Border Grid.Row="1" Height="32" Padding="12,0" IsVisible="{Binding HasBatchProgress}"
-              Background="{DynamicResource VelaAccentDim}"
-              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
-        <Grid ColumnDefinitions="Auto,Auto,140,Auto,*,Auto" VerticalAlignment="Center">
-          <ui:Glyph Grid.Column="0" Key="Icon.refresh-cw" Size="13" Brush="{DynamicResource VelaAccent}" />
-          <TextBlock Grid.Column="1" Text="{Binding BatchProgress.Title}" Margin="7,0,10,0"
-                     FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
-                     Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
-          <ProgressBar Grid.Column="2" Height="4" Minimum="0" Maximum="1" VerticalAlignment="Center"
-                       Value="{Binding BatchProgress.Progress}"
-                       Foreground="{DynamicResource VelaAccent}"
-                       Background="{DynamicResource VelaGaugeTrack}" />
-          <TextBlock Grid.Column="3" Text="{Binding BatchProgress.CountText}" Classes="meta" Margin="8,0"
-                     Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
-          <TextBlock Grid.Column="4" Text="{Binding BatchProgress.WaitText}" Classes="meta"
-                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-          <Button Grid.Column="5" Theme="{StaticResource DockerToolButton}" Height="22"
-                  Command="{Binding BatchProgress.CancelCommand}">
-            <StackPanel Orientation="Horizontal" Spacing="5">
-              <ui:Glyph Key="Icon.x" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
-              <TextBlock Text="取消剩余" FontSize="{DynamicResource VelaFontSize11}"
-                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-        </Grid>
-      </Border>
+      <!-- 批量进行中:选中条原地变成这一条,位置不动、列表不动、选中不丢。
+           Content 为 null 时整条不实例化 —— 没有批量在跑时也就没有空绑定。 -->
+      <ContentControl Grid.Row="1" Content="{Binding BatchProgress}">
+        <ContentControl.ContentTemplate>
+          <DataTemplate DataType="pages:BatchProgressState">
+            <Border Height="32" Padding="12,0"
+                    Background="{DynamicResource VelaAccentDim}"
+                    BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+              <Grid ColumnDefinitions="Auto,Auto,140,Auto,*,Auto" VerticalAlignment="Center">
+                <ui:Glyph Grid.Column="0" Key="Icon.refresh-cw" Size="13" Brush="{DynamicResource VelaAccent}" />
+                <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="7,0,10,0"
+                           FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                           Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+                <ProgressBar Grid.Column="2" Height="4" Minimum="0" Maximum="1" VerticalAlignment="Center"
+                             Value="{Binding Progress}"
+                             Foreground="{DynamicResource VelaAccent}"
+                             Background="{DynamicResource VelaGaugeTrack}" />
+                <TextBlock Grid.Column="3" Text="{Binding CountText}" Classes="meta" Margin="8,0"
+                           Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="4" Text="{Binding WaitText}" Classes="meta"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="5" Theme="{StaticResource DockerToolButton}" Height="22"
+                        Command="{Binding CancelCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <ui:Glyph Key="Icon.x" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+                    <TextBlock Text="取消剩余" FontSize="{DynamicResource VelaFontSize11}"
+                               Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ContentControl.ContentTemplate>
+      </ContentControl>
 
       <!-- 批量结果:只在**有失败**时留下,带「重试失败的 N 个」 -->
-      <Border Grid.Row="1" Padding="12,8" IsVisible="{Binding HasBatchSummary}"
-              Background="{DynamicResource VelaShellRedDim}"
-              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
-        <StackPanel Spacing="6">
-          <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
-            <ui:Glyph Grid.Column="0" Key="Icon.triangle-alert" Size="13" Brush="{DynamicResource VelaError}"
-                      VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Text="{Binding BatchSummary.Title}" Margin="7,0,0,0"
-                       FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
-                       Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
-            <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Height="22" Margin="0,0,6,0"
-                    Command="{Binding RetryFailedCommand}">
-              <StackPanel Orientation="Horizontal" Spacing="5">
-                <ui:Glyph Key="Docker.rotate-cw" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
-                <TextBlock Text="{Binding BatchSummary.RetryText}" FontSize="{DynamicResource VelaFontSize11}"
-                           Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
-            <Button Grid.Column="4" Theme="{StaticResource DockerIconButton}" Width="22" Height="22"
-                    Command="{Binding DismissBatchCommand}">
-              <ui:Glyph Key="Icon.x" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
-            </Button>
-          </Grid>
-          <!-- 只列失败的:成功的那些不需要用户做任何事 -->
-          <ItemsControl ItemsSource="{Binding BatchSummary.Failures}" Margin="20,0,0,0">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="docker:BatchOutcome">
-                <Grid ColumnDefinitions="150,*" Margin="0,1">
-                  <TextBlock Grid.Column="0" Text="{Binding Target}" Classes="cell" />
-                  <TextBlock Grid.Column="1" Text="{Binding Failure}" Classes="meta" TextWrapping="Wrap"
-                             Foreground="{DynamicResource VelaError}" />
+      <ContentControl Grid.Row="1" Content="{Binding BatchSummary}">
+        <ContentControl.ContentTemplate>
+          <DataTemplate DataType="pages:BatchSummaryState">
+            <Border Padding="12,8"
+                    Background="{DynamicResource VelaShellRedDim}"
+                    BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+              <StackPanel Spacing="6">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                  <ui:Glyph Grid.Column="0" Key="Icon.triangle-alert" Size="13" Brush="{DynamicResource VelaError}"
+                            VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="7,0,0,0"
+                             FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                             Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
+                  <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Height="22" Margin="0,0,6,0"
+                          Command="{Binding $parent[UserControl].((pages:ContainersPageViewModel)DataContext).RetryFailedCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <ui:Glyph Key="Docker.rotate-cw" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+                      <TextBlock Text="{Binding RetryText}" FontSize="{DynamicResource VelaFontSize11}"
+                                 Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <Button Grid.Column="4" Theme="{StaticResource DockerIconButton}" Width="22" Height="22"
+                          Command="{Binding $parent[UserControl].((pages:ContainersPageViewModel)DataContext).DismissBatchCommand}">
+                    <ui:Glyph Key="Icon.x" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
+                  </Button>
                 </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <TextBlock Text="{Binding BatchSummary.CollapsedText}" Classes="meta" Margin="20,0,0,0"
-                     IsVisible="{Binding BatchSummary.HasCollapsed}" />
-        </StackPanel>
-      </Border>
+                <!-- 只列失败的:成功的那些不需要用户做任何事 -->
+                <ItemsControl ItemsSource="{Binding Failures}" Margin="20,0,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="docker:BatchOutcome">
+                      <Grid ColumnDefinitions="150,*" Margin="0,1">
+                        <TextBlock Grid.Column="0" Text="{Binding Target}" Classes="cell" />
+                        <TextBlock Grid.Column="1" Text="{Binding Failure}" Classes="meta" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource VelaError}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding CollapsedText}" Classes="meta" Margin="20,0,0,0"
+                           IsVisible="{Binding HasCollapsed}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ContentControl.ContentTemplate>
+      </ContentControl>
 
       <!-- 选中条 -->
       <Border Grid.Row="1" Height="32" Padding="12,0"
@@ -487,7 +510,7 @@
           <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
             <Button Theme="{StaticResource DockerToolButton}" Height="28"
                     Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
-                    Command="{Binding $parent[UserControl].((pages:ContainersPageViewModel)DataContext).RunFromImagesCommand}">
+                    Command="{Binding RunFromImagesCommand}">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <ui:Glyph Key="Icon.play" Size="12" Brush="{DynamicResource VelaAccentForeground}" />
                 <TextBlock Text="运行容器…" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
@@ -495,7 +518,7 @@
               </StackPanel>
             </Button>
             <Button Theme="{StaticResource DockerToolButton}" Height="28"
-                    Command="{Binding $parent[UserControl].((pages:ContainersPageViewModel)DataContext).GoComposeCommand}">
+                    Command="{Binding GoComposeCommand}">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <ui:Glyph Key="Docker.file-code" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
                 <TextBlock Text="从 compose 起一套" FontSize="{DynamicResource VelaFontSize11}"
@@ -511,13 +534,15 @@
     </Grid>
 
     <!-- 详情抽屉 -->
-    <Border Grid.Column="1" Width="{Binding Detail.DrawerWidth}" IsVisible="{Binding HasDetail}"
+    <!-- 宽度跟着抽屉自己的 DrawerWidth,但求值放在模板里 ——
+         抽屉关着时 Detail 是 null,写在外层 Border 上就成了一条空绑定。 -->
+    <Border Grid.Column="1" IsVisible="{Binding HasDetail}"
             Background="{DynamicResource VelaBgSurface}"
             BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
       <ContentControl Content="{Binding Detail}">
         <ContentControl.DataTemplates>
           <DataTemplate DataType="pages:ContainerDetailViewModel">
-            <pages:ContainerDetailView />
+            <pages:ContainerDetailView Width="{Binding DrawerWidth}" />
           </DataTemplate>
         </ContentControl.DataTemplates>
       </ContentControl>

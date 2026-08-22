@@ -772,13 +772,15 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             {
                 case DockerUnreachableReason.SocketMissing:
                     ErrorIcon = "Docker.circle-x";
-                    ErrorTitle = "这台机器上找不到 docker.sock";
-                    ErrorDetail = "路径不存在,也没有可用的 DOCKER_HOST。远端可能压根没装 Docker,或者 daemon 没在跑。";
+                    ErrorTitle = "打不开到 docker.sock 的通道";
+                    ErrorDetail = "路径不存在、daemon 没在跑,或者当前账号根本碰不到这个 socket —— 远端只回了一句笼统的失败,自己分不出是哪一种。下面这条命令一次看清。";
+                    // 三种可能一条命令全覆盖:socket 在不在(ls)、账号在不在 docker 组(id)、
+                    // daemon 跑没跑(systemctl)。分三次让用户来回试不如一次问清。
                     RecoveryActions.Add(new("在终端里检查", "Icon.terminal", true,
                         () => _ = SendToHostTerminalAsync(
-                            $"ls -l {item.Endpoint.SocketPath}; systemctl status docker --no-pager | head -5")));
+                            $"ls -l {item.Endpoint.SocketPath}; id; systemctl status docker --no-pager | head -5")));
                     RecoveryActions.Add(new("换一个 socket 路径", "Icon.settings", false, () => SettingsOpen = true));
-                    item.Update(false, "找不到 docker.sock", FeedbackKind.Error);
+                    item.Update(false, "打不开通道", FeedbackKind.Error);
                     break;
                 case DockerUnreachableReason.PermissionDenied:
                     ErrorIcon = "Docker.lock";

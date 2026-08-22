@@ -253,16 +253,23 @@ public sealed partial class DockerClient : IAsyncDisposable
     private DockerUnreachableException Unreachable(Exception ex)
     {
         string text = Flatten(ex);
+        // 权限先判:它是明说的,而下面那组"通道开不起来"是笼统的 ——
+        // 一条同时带着两者的消息,按"没权限"处理才对得上用户要做的事。
         DockerUnreachableReason reason =
-            text.Contains("no such file", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("does not exist", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("connect failed", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("ENOENT", StringComparison.OrdinalIgnoreCase)
-                ? DockerUnreachableReason.SocketMissing
-                : text.Contains("permission denied", StringComparison.OrdinalIgnoreCase) ||
-                  text.Contains("access is denied", StringComparison.OrdinalIgnoreCase) ||
-                  text.Contains("EACCES", StringComparison.OrdinalIgnoreCase)
-                    ? DockerUnreachableReason.PermissionDenied
+            text.Contains("permission denied", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("access is denied", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("EACCES", StringComparison.OrdinalIgnoreCase)
+                ? DockerUnreachableReason.PermissionDenied
+                // sshd 开不起到 socket 的通道时只回一句笼统的失败,不区分"不存在"与"没权限"。
+                // 归到"找不到 socket"这一档:它给的出路(去终端 ls 一下、换条路径)对两种情形都成立。
+                // 注意 SDK 报的是 ConnectFailed —— 中间没有空格,只匹配 "connect failed" 会漏掉。
+                : text.Contains("no such file", StringComparison.OrdinalIgnoreCase) ||
+                  text.Contains("does not exist", StringComparison.OrdinalIgnoreCase) ||
+                  text.Contains("connect failed", StringComparison.OrdinalIgnoreCase) ||
+                  text.Contains("connectfailed", StringComparison.OrdinalIgnoreCase) ||
+                  text.Contains("open failed", StringComparison.OrdinalIgnoreCase) ||
+                  text.Contains("ENOENT", StringComparison.OrdinalIgnoreCase)
+                    ? DockerUnreachableReason.SocketMissing
                     : ex is NotSupportedException
                         ? DockerUnreachableReason.TunnelUnsupported
                         : text.Contains("session", StringComparison.OrdinalIgnoreCase) &&
@@ -272,7 +279,7 @@ public sealed partial class DockerClient : IAsyncDisposable
         string message = reason switch
         {
             DockerUnreachableReason.SocketMissing =>
-                $"连不上 {Transport.Description}:socket 不存在。远端可能没装 Docker,或者 daemon 没在跑。",
+                $"连不上 {Transport.Description}:打不开到它的通道。远端可能没装 Docker、daemon 没在跑,或者这条路径不对。",
             DockerUnreachableReason.PermissionDenied =>
                 $"没有 {Transport.Description} 的读写权限。把账号加进 docker 组,或改用一个有权限的账号。",
             DockerUnreachableReason.TunnelUnsupported =>

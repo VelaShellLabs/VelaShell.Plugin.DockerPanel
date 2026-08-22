@@ -26,8 +26,18 @@ public static class DockerJson
     };
 
     /// <summary>把一段 JSON 反序列化成 <typeparamref name="T" />;失败返回 <see langword="null" />。</summary>
+    /// <remarks>
+    /// 先看一眼首字符再解析。这条路上最常见的输入根本不是 JSON —— 反代挡下来的 HTML、
+    /// socket 权限不足时的一行纯文本、空响应体,都会走到这里。为这些"抛出再吞掉"
+    /// 一次异常,除了在调试器里刷一屏首次异常之外没有任何收益。
+    /// </remarks>
     public static T? TryDeserialize<T>(string json) where T : class
     {
+        ReadOnlySpan<char> body = json.AsSpan().Trim();
+        if (body.IsEmpty || (body[0] != '{' && body[0] != '['))
+        {
+            return null;
+        }
         try
         {
             return JsonSerializer.Deserialize<T>(json, Options);

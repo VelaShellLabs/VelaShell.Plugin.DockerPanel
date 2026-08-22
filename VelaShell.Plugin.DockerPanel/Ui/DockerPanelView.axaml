@@ -564,10 +564,19 @@
                           HorizontalAlignment="Center" />
     </Grid>
 
-    <!-- 表单弹窗 -->
+    <!-- 表单弹窗。与对话框同一条路子:表单壳的 DataContext 就是那张表单本身,
+         没有表单时 ContentControl 压根不实例化它 —— IsVisible 只是不画,
+         子树照样建、绑定照样求值,那正是一串“Value is null”绑定告警的来源。 -->
     <Grid Grid.Row="1" IsVisible="{Binding HasForm}">
       <Border Background="#CC05070A" />
-      <ui:PanelFormView MaxWidth="480" VerticalAlignment="Center" HorizontalAlignment="Center" />
+      <ContentControl Content="{Binding ActiveForm}" MaxWidth="480" VerticalAlignment="Center"
+                      HorizontalAlignment="Center">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="ui:PanelForm">
+            <ui:PanelFormView />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
     </Grid>
 
     <!-- 自定义对话框(拉取镜像) -->

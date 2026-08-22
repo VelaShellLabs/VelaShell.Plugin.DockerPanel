@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="clr-namespace:VelaShell.Plugin.DockerPanel.Ui"
              x:Class="VelaShell.Plugin.DockerPanel.Ui.PanelFormView"
-             x:DataType="ui:DockerPanelViewModel">
+             x:DataType="ui:PanelForm">
 
   <!--
     表单弹窗的通用外壳:标题栏 → 主机条 → 字段 → 等效命令 → 页脚。
@@ -17,10 +17,10 @@
 
       <Border Height="48" Padding="16,0" BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
         <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-          <ui:Glyph Grid.Column="0" Key="{Binding ActiveForm.Icon}" Size="16" VerticalAlignment="Center"
+          <ui:Glyph Grid.Column="0" Key="{Binding Icon}" Size="16" VerticalAlignment="Center"
                     Brush="{DynamicResource VelaAccent}" />
-          <TextBlock Grid.Column="1" Text="{Binding ActiveForm.Title}" Classes="h2" Margin="9,0,0,0" />
-          <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" Command="{Binding FormCancelCommand}">
+          <TextBlock Grid.Column="1" Text="{Binding Title}" Classes="h2" Margin="9,0,0,0" />
+          <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" Command="{Binding $parent[ui:DockerPanelView].((ui:DockerPanelViewModel)DataContext).FormCancelCommand}">
             <ui:Glyph Key="Icon.x" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
           </Button>
         </Grid>
@@ -31,16 +31,16 @@
               BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
         <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
           <ui:Glyph Key="Docker.server" Size="12" Brush="{DynamicResource VelaStatusConnected}" />
-          <TextBlock Text="{Binding EndpointName}" FontFamily="{DynamicResource VelaUiMonoFont}"
+          <TextBlock Text="{Binding $parent[ui:DockerPanelView].((ui:DockerPanelViewModel)DataContext).EndpointName}" FontFamily="{DynamicResource VelaUiMonoFont}"
                      FontSize="{DynamicResource VelaFontSize11}" FontWeight="SemiBold"
                      Foreground="{DynamicResource VelaTextPrimary}" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding EndpointDetail}" Classes="meta" />
+          <TextBlock Text="{Binding $parent[ui:DockerPanelView].((ui:DockerPanelViewModel)DataContext).EndpointDetail}" Classes="meta" />
         </StackPanel>
       </Border>
 
       <ScrollViewer MaxHeight="460">
         <StackPanel Margin="16,14" Spacing="12">
-          <ItemsControl ItemsSource="{Binding ActiveForm.Fields}">
+          <ItemsControl ItemsSource="{Binding Fields}">
             <ItemsControl.DataTemplates>
 
               <!-- 文本 -->
@@ -241,23 +241,23 @@
             </ItemsControl.DataTemplates>
           </ItemsControl>
 
-          <TextBlock Text="{Binding ActiveForm.FormError}" IsVisible="{Binding ActiveForm.HasFormError}"
+          <TextBlock Text="{Binding FormError}" IsVisible="{Binding HasFormError}"
                      FontSize="{DynamicResource VelaFontSize11}" Foreground="{DynamicResource VelaError}"
                      TextWrapping="Wrap" />
         </StackPanel>
       </ScrollViewer>
 
       <!-- 等效命令:让人能核对自己填的东西,也能直接复制到终端里验证 -->
-      <Border Padding="16,10" IsVisible="{Binding ActiveForm.HasPreview}"
+      <Border Padding="16,10" IsVisible="{Binding HasPreview}"
               Background="{DynamicResource VelaBgContentHeader}"
               BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,1,0,0">
         <StackPanel Spacing="6">
           <TextBlock Text="等效命令" Classes="label" />
           <Border CornerRadius="4" Padding="10,8" Background="{DynamicResource VelaBgTerminal}">
             <StackPanel Spacing="3">
-              <TextBlock Text="{Binding ActiveForm.CommandPreview}" Classes="code" FontSize="10"
+              <TextBlock Text="{Binding CommandPreview}" Classes="code" FontSize="10"
                          TextWrapping="Wrap" />
-              <TextBlock Text="{Binding ActiveForm.CommandNote}" FontFamily="{DynamicResource VelaUiMonoFont}"
+              <TextBlock Text="{Binding CommandNote}" FontFamily="{DynamicResource VelaUiMonoFont}"
                          FontSize="{DynamicResource VelaFontSize9}"
                          Foreground="{DynamicResource DockerCodeComment}" TextWrapping="Wrap" />
             </StackPanel>
@@ -268,19 +268,19 @@
       <Border Height="56" Padding="16,0" Background="{DynamicResource VelaBgContentHeader}"
               BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,1,0,0">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-          <TextBlock Grid.Column="0" Text="{Binding ActiveForm.FooterHint}" Classes="meta" />
+          <TextBlock Grid.Column="0" Text="{Binding FooterHint}" Classes="meta" />
           <Button Grid.Column="2" Theme="{StaticResource DockerToolButton}" Height="30" Margin="0,0,9,0"
-                  Command="{Binding FormCancelCommand}">
+                  Command="{Binding $parent[ui:DockerPanelView].((ui:DockerPanelViewModel)DataContext).FormCancelCommand}">
             <TextBlock Text="取消" FontSize="{DynamicResource VelaFontSize12}"
                        Foreground="{DynamicResource VelaTextSecondary}" />
           </Button>
           <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Height="30"
                   Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
-                  Command="{Binding FormConfirmCommand}">
+                  Command="{Binding $parent[ui:DockerPanelView].((ui:DockerPanelViewModel)DataContext).FormConfirmCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <ui:Glyph Key="{Binding ActiveForm.ConfirmIcon}" Size="13"
+              <ui:Glyph Key="{Binding ConfirmIcon}" Size="13"
                         Brush="{DynamicResource VelaAccentForeground}" />
-              <TextBlock Text="{Binding ActiveForm.ConfirmLabel}" FontSize="{DynamicResource VelaFontSize12}"
+              <TextBlock Text="{Binding ConfirmLabel}" FontSize="{DynamicResource VelaFontSize12}"
                          FontWeight="Medium" Foreground="{DynamicResource VelaAccentForeground}"
                          VerticalAlignment="Center" />
             </StackPanel>
