@@ -140,14 +140,6 @@ public sealed class OverviewPageViewModel : PageViewModel
     private readonly Dictionary<string, string> _hotNames = [];
     private readonly Dictionary<string, double> _hotPercent = [];
     private double _cpuPeak;
-    private string _runningText = "—";
-    private string _runningDetail = "";
-    private string _cpuText = "—";
-    private string _cpuDetail = "";
-    private string _memText = "—";
-    private string _memDetail = "";
-    private string _reclaimText = "—";
-    private string _reclaimDetail = "";
     private long _hostMemory;
     private int _hostCpus;
     private bool _reclaimRequested;
@@ -175,58 +167,58 @@ public sealed class OverviewPageViewModel : PageViewModel
     /// <summary>运行中容器。</summary>
     public string RunningText
     {
-        get => _runningText;
-        private set => SetField(ref _runningText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "—";
 
     /// <summary>运行中容器的小字。</summary>
     public string RunningDetail
     {
-        get => _runningDetail;
-        private set => SetField(ref _runningDetail, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>CPU 总占用。</summary>
     public string CpuText
     {
-        get => _cpuText;
-        private set => SetField(ref _cpuText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "—";
 
     /// <summary>CPU 小字。</summary>
     public string CpuDetail
     {
-        get => _cpuDetail;
-        private set => SetField(ref _cpuDetail, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>内存。</summary>
     public string MemText
     {
-        get => _memText;
-        private set => SetField(ref _memText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "—";
 
     /// <summary>内存小字。</summary>
     public string MemDetail
     {
-        get => _memDetail;
-        private set => SetField(ref _memDetail, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>可回收空间。</summary>
     public string ReclaimText
     {
-        get => _reclaimText;
-        private set => SetField(ref _reclaimText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "—";
 
     /// <summary>可回收小字。</summary>
     public string ReclaimDetail
     {
-        get => _reclaimDetail;
-        private set => SetField(ref _reclaimDetail, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>CPU 趋势采样。</summary>
     /// <summary>
@@ -238,11 +230,9 @@ public sealed class OverviewPageViewModel : PageViewModel
     /// <summary>趋势图标题旁边那行小字 —— 得写清楚纵轴到哪儿,否则读不出量级。</summary>
     public string TrendScaleText
     {
-        get => _trendScaleText;
-        private set => SetField(ref _trendScaleText, value);
-    }
-
-    private string _trendScaleText = "每 5 秒一个采样点";
+        get;
+        private set => SetField(ref field, value);
+    } = "每 5 秒一个采样点";
 
     /// <summary>按当前窗口重画趋势图。</summary>
     private void RebuildTrend()
@@ -396,7 +386,7 @@ public sealed class OverviewPageViewModel : PageViewModel
             RunningDetail = $"{unhealthy} 个不健康 · {failed} 个异常退出";
             _hostMemory = info.MemTotal;
             _hostCpus = info.NCPU;
-            if (_memText == "—")
+            if (MemText == "—")
             {
                 MemDetail = $"共 {Humanize.Bytes(info.MemTotal)} · {info.NCPU} 核";
             }

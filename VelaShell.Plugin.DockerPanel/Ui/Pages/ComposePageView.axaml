@@ -106,7 +106,8 @@
       </DockPanel>
     </Border>
 
-    <Border Grid.Column="1" Width="1" HorizontalAlignment="Left"
+    <!-- 分割条:5px 透明抓取区上画一条 1px 细线,线居中 —— 与容器详情抽屉、宿主侧栏同款。 -->
+    <Border Grid.Column="1" Width="1" HorizontalAlignment="Center"
             Background="{DynamicResource VelaBorderPrimary}" />
     <GridSplitter Grid.Column="1" x:Name="ProjectsSplitter" Background="Transparent"
                   ResizeDirection="Columns" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
@@ -430,19 +431,40 @@
                           ui:AutoScroll.Source="{Binding Logs}" Padding="0,6">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="pages:OutputLine">
-                  <Grid ColumnDefinitions="Auto,*" Margin="12,0" MinHeight="17">
-                    <TextBlock Grid.Column="0" Text="{Binding Time}" Width="66"
+                  <!--
+                    一行四格:时刻 60 / 服务 132 / 级别 38 / 正文。
+                    前三格定宽,眼睛才能沿着一条竖线往下扫;认不出级别的行留着空格子,
+                    不然认得出的那几行会比别的行往右挪 38px,整列就歪了。
+                  -->
+                  <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="12,0" MinHeight="17">
+                    <TextBlock Grid.Column="0" Text="{Binding Time}" Width="60" Margin="0,0,10,0"
                                FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize10}"
-                               Foreground="{DynamicResource DockerCodeComment}" VerticalAlignment="Center" />
-                    <SelectableTextBlock Grid.Column="1" Text="{Binding Text}"
+                               Foreground="{DynamicResource DockerCodeComment}" VerticalAlignment="Top" />
+                    <!-- 服务名:颜色跟着序号走。七个服务的日志混在一起时,
+                         靠颜色分辨来源比逐行读名字快得多 —— 与容器日志那边同一套调色。 -->
+                    <TextBlock Grid.Column="1" Text="{Binding Source}" Width="132" Margin="0,0,10,0"
+                               FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize10}"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Top"
+                               ToolTip.Tip="{Binding Source}"
+                               Foreground="{Binding SourceIndex, Converter={x:Static ui:Converters.SourceBrush}}" />
+                    <TextBlock Grid.Column="2" Text="{Binding LevelLabel}" Width="38" Margin="0,0,10,0"
+                               FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize9}"
+                               VerticalAlignment="Top"
+                               Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                    <!-- 折行而不是横向滚动:前面三格已经占掉 260px,窄一点的面板里
+                         不折行的长行会被直接截在右边界上,而虚拟化列表的横向滚动条
+                         只按"当前实现出来的那几十行"算宽度,拖起来会一跳一跳。 -->
+                    <SelectableTextBlock Grid.Column="3" Text="{Binding Text}" TextWrapping="Wrap"
                                          FontFamily="{DynamicResource VelaUiMonoFont}"
-                                         FontSize="{DynamicResource VelaFontSize11}" VerticalAlignment="Center">
+                                         FontSize="{DynamicResource VelaFontSize11}" VerticalAlignment="Top">
                       <SelectableTextBlock.Foreground>
-                        <Binding Path="IsError">
-                          <Binding.Converter>
-                            <ui:LogLineForegroundConverter />
-                          </Binding.Converter>
-                        </Binding>
+                        <MultiBinding>
+                          <MultiBinding.Converter>
+                            <ui:LogBodyBrushConverter />
+                          </MultiBinding.Converter>
+                          <Binding Path="IsError" />
+                          <Binding Path="Level" />
+                        </MultiBinding>
                       </SelectableTextBlock.Foreground>
                     </SelectableTextBlock>
                   </Grid>
@@ -478,7 +500,7 @@
       </StackPanel>
     </StackPanel>
 
-    <Border Grid.Column="3" Width="1" HorizontalAlignment="Left"
+    <Border Grid.Column="3" Width="1" HorizontalAlignment="Center"
             Background="{DynamicResource VelaBorderPrimary}" />
     <GridSplitter Grid.Column="3" x:Name="OutputSplitter" Background="Transparent"
                   ResizeDirection="Columns" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
@@ -539,6 +561,7 @@
                           </MultiBinding.Converter>
                           <Binding Path="IsError" />
                           <Binding Path="IsCommand" />
+                          <Binding Path="Level" />
                         </MultiBinding>
                       </SelectableTextBlock.Foreground>
                     </SelectableTextBlock>

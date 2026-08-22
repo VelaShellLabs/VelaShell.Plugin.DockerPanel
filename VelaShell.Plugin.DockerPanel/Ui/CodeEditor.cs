@@ -81,6 +81,12 @@ public sealed class CodeEditor : UserControl
         _editor.Options.IndentationSize = 2;
         _editor.Options.ConvertTabsToSpaces = true;
         _editor.Options.HighlightCurrentLine = true;
+        // 关掉链接识别。AvaloniaEdit 默认会把 http:// 与邮箱地址画成"超链接":
+        // 一个写死的蓝色加下划线,既不认主题也不认语法配色 —— 深色底上那个蓝几乎读不出来,
+        // 而在一份 compose.yaml 里,ZO_ROOT_USER_EMAIL 的值本来就只是一个字符串,
+        // 把它做成可点的链接既没用又抢眼。
+        _editor.Options.EnableHyperlinks = false;
+        _editor.Options.EnableEmailHyperlinks = false;
         _editor.TextChanged += (_, _) =>
         {
             if (_syncing)

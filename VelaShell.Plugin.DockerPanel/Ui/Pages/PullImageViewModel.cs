@@ -59,23 +59,11 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
     private readonly Dictionary<string, PullLayerItem> _layerMap = [];
     private CancellationTokenSource? _cts;
     private PanelTask? _task;
-    private PullStage _stage = PullStage.Form;
     private string _reference = "";
     private string _tag = "latest";
-    private string _platform = "";
-    private bool _allTags;
-    private string _error = "";
-    private double _progress;
-    private string _speedText = "";
-    private string _summaryText = "";
-    private string _authText = "";
-    private RegistryAuthState _authState = RegistryAuthState.NotRequired;
     private DateTimeOffset _startedAt;
     private long _lastBytes;
     private DateTimeOffset _lastSample;
-    private string _doneDigest = "";
-    private string _doneSize = "";
-    private string _doneElapsed = "";
 
     /// <summary>建对话框。</summary>
     public PullImageViewModel(DockerPanelViewModel shell, string? initialReference)
@@ -105,16 +93,16 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
     /// <summary>当前状态。</summary>
     public PullStage Stage
     {
-        get => _stage;
+        get;
         private set
         {
-            if (SetField(ref _stage, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsForm), nameof(IsRunning), nameof(IsDone), nameof(Title), nameof(ChipText));
                 StartCommand.RaiseCanExecuteChanged();
             }
         }
-    }
+    } = PullStage.Form;
 
     /// <summary>填表态。</summary>
     public bool IsForm => Stage == PullStage.Form;
@@ -172,23 +160,23 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
     /// <summary>平台。</summary>
     public string Platform
     {
-        get => _platform;
+        get;
         set
         {
-            if (SetField(ref _platform, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(CommandNote));
             }
         }
-    }
+    } = "";
 
     /// <summary>拉取全部标签。</summary>
     public bool AllTags
     {
-        get => _allTags;
+        get;
         set
         {
-            if (SetField(ref _allTags, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(FullReference), nameof(CommandPreview), nameof(CommandNote));
             }
@@ -223,22 +211,22 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
     /// <summary>仓库登录状态文本。</summary>
     public string AuthText
     {
-        get => _authText;
-        private set => SetField(ref _authText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>仓库登录状态。</summary>
     public RegistryAuthState AuthState
     {
-        get => _authState;
+        get;
         private set
         {
-            if (SetField(ref _authState, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(AuthOk), nameof(AuthWarn), nameof(AuthTone));
             }
         }
-    }
+    } = RegistryAuthState.NotRequired;
 
     /// <summary>凭据没问题。</summary>
     public bool AuthOk => AuthState is RegistryAuthState.Available or RegistryAuthState.NotRequired;
@@ -264,10 +252,10 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
     /// <summary>总进度 0–1。</summary>
     public double Progress
     {
-        get => _progress;
+        get;
         private set
         {
-            if (SetField(ref _progress, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(PercentText));
             }
@@ -280,16 +268,16 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
     /// <summary>速率文本。</summary>
     public string SpeedText
     {
-        get => _speedText;
-        private set => SetField(ref _speedText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>层摘要。</summary>
     public string SummaryText
     {
-        get => _summaryText;
-        private set => SetField(ref _summaryText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>字节进度文本。</summary>
     public string BytesText => _aggregator.TotalBytes > 0
@@ -310,15 +298,15 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
     /// <summary>错误(拉取失败时 daemon 的原话)。</summary>
     public string Error
     {
-        get => _error;
+        get;
         private set
         {
-            if (SetField(ref _error, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(HasError), nameof(Title), nameof(ChipText));
             }
         }
-    }
+    } = "";
 
     /// <summary>有没有出错。</summary>
     public bool HasError => Error.Length > 0;
@@ -326,23 +314,23 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
     /// <summary>完成后的摘要:摘要串。</summary>
     public string DoneDigest
     {
-        get => _doneDigest;
-        private set => SetField(ref _doneDigest, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>完成后的摘要:大小。</summary>
     public string DoneSize
     {
-        get => _doneSize;
-        private set => SetField(ref _doneSize, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>完成后的摘要:用时。</summary>
     public string DoneElapsed
     {
-        get => _doneElapsed;
-        private set => SetField(ref _doneElapsed, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>开始拉取。</summary>
     public RelayCommand StartCommand { get; }

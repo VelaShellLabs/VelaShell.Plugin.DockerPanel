@@ -34,11 +34,7 @@ public sealed class PanelTask : ObservableObject
 {
     private readonly CancellationTokenSource _cts = new();
     private string _title;
-    private string _detail = "";
-    private double _progress;
     private bool _indeterminate = true;
-    private PanelTaskState _state = PanelTaskState.Running;
-    private string _rightText = "";
 
     /// <summary>建一个任务。</summary>
     public PanelTask(string icon, string title, bool indeterminate)
@@ -61,15 +57,15 @@ public sealed class PanelTask : ObservableObject
     /// <summary>标题下面那行小字(层数、速率、当前目标)。</summary>
     public string Detail
     {
-        get => _detail;
-        set => SetField(ref _detail, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = "";
 
     /// <summary>0–1 的进度;仅 <see cref="Indeterminate" /> 为假时有意义。</summary>
     public double Progress
     {
-        get => _progress;
-        set => SetField(ref _progress, Math.Clamp(value, 0, 1));
+        get;
+        set => SetField(ref field, Math.Clamp(value, 0, 1));
     }
 
     /// <summary>是否不确定型。</summary>
@@ -82,22 +78,22 @@ public sealed class PanelTask : ObservableObject
     /// <summary>右侧的一小段文字(百分比 / “完成” / “部分失败”)。</summary>
     public string RightText
     {
-        get => _rightText;
-        set => SetField(ref _rightText, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = "";
 
     /// <summary>状态。</summary>
     public PanelTaskState State
     {
-        get => _state;
+        get;
         private set
         {
-            if (SetField(ref _state, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsRunning), nameof(IsFinished), nameof(CanCancel));
             }
         }
-    }
+    } = PanelTaskState.Running;
 
     /// <summary>还在跑。</summary>
     public bool IsRunning => State == PanelTaskState.Running;

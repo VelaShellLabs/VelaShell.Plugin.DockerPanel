@@ -28,12 +28,7 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
     private IPluginTerminalView? _view;
     private DockerExecSession? _session;
     private CancellationTokenSource? _sessionCts;
-    private string _shell = "/bin/bash";
-    private string _workingDir = "";
-    private string _user = "";
-    private bool _connected;
     private bool _starting;
-    private string _status = "未连接";
 
     /// <summary>终端控件(交给视图去承载;宿主给的是 Avalonia <c>Control</c>)。</summary>
     public object? TerminalControl => _view?.Control;
@@ -41,49 +36,49 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
     /// <summary>用哪个 shell。</summary>
     public string Shell
     {
-        get => _shell;
+        get;
         set
         {
-            if (SetField(ref _shell, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(HeaderText), nameof(ShellName));
             }
         }
-    }
+    } = "/bin/bash";
 
     /// <summary>工作目录;留空用镜像默认。</summary>
     public string WorkingDir
     {
-        get => _workingDir;
+        get;
         set
         {
-            if (SetField(ref _workingDir, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HeaderText));
             }
         }
-    }
+    } = "";
 
     /// <summary>以哪个用户执行;留空用镜像默认。</summary>
     public string User
     {
-        get => _user;
+        get;
         set
         {
-            if (SetField(ref _user, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HeaderText));
             }
         }
-    }
+    } = "";
 
     /// <summary>会话是否连着。</summary>
     public bool Connected
     {
-        get => _connected;
+        get;
         private set
         {
-            if (SetField(ref _connected, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(Disconnected), nameof(ConnectionTone));
             }
@@ -99,9 +94,9 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
     /// <summary>状态短语。</summary>
     public string Status
     {
-        get => _status;
-        private set => SetField(ref _status, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "未连接";
 
     /// <summary>头部那行小字。</summary>
     public string HeaderText
@@ -132,31 +127,23 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
     public string ExecIdText => _session is { } session ? Humanize.ShortId(session.ExecId) : "—";
 
     /// <summary>清屏。</summary>
-    public RelayCommand ClearCommand => _clear ??= new(_ =>
+    public RelayCommand ClearCommand => field ??= new(_ =>
     {
         _view?.Clear();
         return Task.CompletedTask;
     });
 
-    private RelayCommand? _clear;
-
     /// <summary>把屏幕上的文本复制走。</summary>
-    public RelayCommand CopyCommand => _copy ??= new(_ =>
+    public RelayCommand CopyCommand => field ??= new(_ =>
         _view is { } view
             ? shell.Context.Clipboard.SetTextAsync(view.GetText(2000), shell.Lifetime)
             : Task.CompletedTask);
 
-    private RelayCommand? _copy;
-
     /// <summary>结束这个 exec 会话。</summary>
-    public RelayCommand DisconnectCommand => _disconnect ??= new(_ => StopSessionAsync("会话已结束"));
-
-    private RelayCommand? _disconnect;
+    public RelayCommand DisconnectCommand => field ??= new(_ => StopSessionAsync("会话已结束"));
 
     /// <summary>重开一个会话(换 shell / 换用户之后用)。</summary>
-    public RelayCommand ReconnectCommand => _reconnect ??= new(_ => RestartAsync());
-
-    private RelayCommand? _reconnect;
+    public RelayCommand ReconnectCommand => field ??= new(_ => RestartAsync());
 
     /// <summary>
     /// 换用户 / 换 shell,然后重开会话。
@@ -165,14 +152,10 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
     /// 所以这里改完就直接重连,而不是让用户自己再想起来按一次刷新。
     /// </para>
     /// </summary>
-    public RelayCommand SwitchUserCommand => _switchUser ??= new(_ => SwitchUserAsync());
-
-    private RelayCommand? _switchUser;
+    public RelayCommand SwitchUserCommand => field ??= new(_ => SwitchUserAsync());
 
     /// <summary>换工作目录,然后重开会话。</summary>
-    public RelayCommand SwitchWorkingDirCommand => _switchDir ??= new(_ => SwitchWorkingDirAsync());
-
-    private RelayCommand? _switchDir;
+    public RelayCommand SwitchWorkingDirCommand => field ??= new(_ => SwitchWorkingDirAsync());
 
     private async Task SwitchUserAsync()
     {
@@ -204,9 +187,7 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
     /// 想让会话跟着 SSH 标签一起留着,还是宿主的终端更合适。
     /// </para>
     /// </summary>
-    public RelayCommand OpenInHostTerminalCommand => _openInHost ??= new(_ => OpenInHostTerminalAsync());
-
-    private RelayCommand? _openInHost;
+    public RelayCommand OpenInHostTerminalCommand => field ??= new(_ => OpenInHostTerminalAsync());
 
     /// <summary>能不能跳到宿主终端(本机端点没有 SSH 会话可跳)。</summary>
     public bool CanOpenInHostTerminal => shell.SelectedEndpoint?.IsLocal == false;

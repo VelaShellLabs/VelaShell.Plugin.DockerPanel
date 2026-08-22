@@ -5,20 +5,15 @@ namespace VelaShell.Plugin.DockerPanel.Ui;
 
 public sealed partial class DockerPanelViewModel
 {
-    private PanelForm? _activeForm;
     private TaskCompletionSource<bool>? _formPending;
-    private object? _activeDialog;
-    private RelayCommand? _formConfirm;
-    private RelayCommand? _formCancel;
-    private RelayCommand? _closeDialog;
 
     /// <summary>当前打开的表单;没有时为 <see langword="null" />。</summary>
     public PanelForm? ActiveForm
     {
-        get => _activeForm;
+        get;
         private set
         {
-            if (SetField(ref _activeForm, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasForm));
             }
@@ -31,10 +26,10 @@ public sealed partial class DockerPanelViewModel
     /// <summary>当前打开的自定义对话框(拉取镜像那种有自己状态机的)。</summary>
     public object? ActiveDialog
     {
-        get => _activeDialog;
+        get;
         set
         {
-            if (SetField(ref _activeDialog, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasDialog));
             }
@@ -45,7 +40,7 @@ public sealed partial class DockerPanelViewModel
     public bool HasDialog => ActiveDialog is not null;
 
     /// <summary>确认表单。</summary>
-    public RelayCommand FormConfirmCommand => _formConfirm ??= new(_ =>
+    public RelayCommand FormConfirmCommand => field ??= new(_ =>
     {
         if (ActiveForm is not { } form)
         {
@@ -66,7 +61,7 @@ public sealed partial class DockerPanelViewModel
     });
 
     /// <summary>取消表单。</summary>
-    public RelayCommand FormCancelCommand => _formCancel ??= new(_ => CompleteForm(false));
+    public RelayCommand FormCancelCommand => field ??= new(_ => CompleteForm(false));
 
     /// <summary>
     /// 关掉最上面那一层弹层(Esc 与点击遮罩都走这里)。
@@ -103,7 +98,7 @@ public sealed partial class DockerPanelViewModel
     }
 
     /// <summary>关掉自定义对话框。</summary>
-    public RelayCommand CloseDialogCommand => _closeDialog ??= new(_ =>
+    public RelayCommand CloseDialogCommand => field ??= new(_ =>
     {
         if (ActiveDialog is IAsyncDisposable disposable)
         {

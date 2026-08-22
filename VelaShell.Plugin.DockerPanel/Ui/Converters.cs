@@ -450,6 +450,29 @@ public sealed class LogLineForegroundConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>
+/// 合并日志正文的颜色:按级别分色。
+/// <para>
+/// 刻意<b>不</b>把 INFO 染成绿色。日志里绝大多数行都是 INFO,整屏绿字既刺眼又等于没分色 ——
+/// 分色的意义是让少数几行跳出来。所以只有 WARN 与 ERROR 换色,DEBUG 压暗,
+/// 其余保持正文色。stderr 一律按错误算:它走的是哪条流,这件事本身就是信息。
+/// </para>
+/// </summary>
+public sealed class LogBodyBrushConverter : IMultiValueConverter
+{
+    /// <inheritdoc />
+    public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        bool isError = values.Count > 0 && values[0] is true;
+        LogLevel level = values.Count > 1 && values[1] is LogLevel l ? l : LogLevel.None;
+        string key = isError || level == LogLevel.Error ? "VelaShellRed"
+            : level == LogLevel.Warn ? "VelaWarning"
+            : level == LogLevel.Debug ? "VelaTextTertiary"
+            : "VelaShellWhite";
+        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+    }
+}
+
 /// <summary>仓库凭据状态的图标:拿到了凭据用锁,没拿到用警示 —— 它决定拉取会不会 401。</summary>
 public sealed class AuthIconConverter : IValueConverter
 {
@@ -497,7 +520,13 @@ public sealed class OutputLineForegroundConverter : IMultiValueConverter
     {
         bool isError = values.Count > 0 && values[0] is true;
         bool isCommand = values.Count > 1 && values[1] is true;
-        string key = isCommand ? "VelaStatusConnected" : isError ? "VelaShellRed" : "VelaShellWhite";
+        LogLevel level = values.Count > 2 && values[2] is LogLevel l ? l : LogLevel.None;
+        // 命令本身 > 走 stderr > 正文里认出来的级别。最后这一档平时不会触发
+        // (compose 自己的输出没有级别),但 up 的时候服务把 ERROR 打到 stdout 是常有的事。
+        string key = isCommand ? "VelaStatusConnected"
+            : isError || level == LogLevel.Error ? "VelaShellRed"
+            : level == LogLevel.Warn ? "VelaWarning"
+            : "VelaShellWhite";
         return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
     }
 }

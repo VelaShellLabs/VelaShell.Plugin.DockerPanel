@@ -15,7 +15,6 @@ public sealed partial class DockerPanelViewModel
     private Task? _eventTask;
     private DispatcherTimer? _coalesceTimer;
     private DispatcherTimer? _fallbackTimer;
-    private bool _eventsConnected;
     private DateTimeOffset _eventsSince;
 
     /// <summary>
@@ -24,10 +23,10 @@ public sealed partial class DockerPanelViewModel
     /// </summary>
     public bool EventsConnected
     {
-        get => _eventsConnected;
+        get;
         private set
         {
-            if (SetField(ref _eventsConnected, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(EventsText), nameof(EventsDegraded), nameof(EventsDegradedText));
             }

@@ -44,17 +44,15 @@ public sealed class TunnelTransport(IRemoteTunnelApi tunnels, string sessionId, 
 /// </summary>
 public sealed class LocalTransport(string socketPath) : IDockerTransport
 {
-    private readonly string _socketPath = socketPath;
-
     /// <inheritdoc />
-    public string Description => _socketPath;
+    public string Description { get; } = socketPath;
 
     /// <inheritdoc />
     public async Task<Stream> ConnectAsync(CancellationToken cancellationToken = default)
     {
-        if (OperatingSystem.IsWindows() && _socketPath.StartsWith(@"\\.\pipe\", StringComparison.Ordinal))
+        if (OperatingSystem.IsWindows() && Description.StartsWith(@"\\.\pipe\", StringComparison.Ordinal))
         {
-            string pipeName = _socketPath[@"\\.\pipe\".Length..];
+            string pipeName = Description[@"\\.\pipe\".Length..];
             var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             try
             {
@@ -70,7 +68,7 @@ public sealed class LocalTransport(string socketPath) : IDockerTransport
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try
         {
-            await socket.ConnectAsync(new UnixDomainSocketEndPoint(_socketPath), cancellationToken).ConfigureAwait(false);
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(Description), cancellationToken).ConfigureAwait(false);
             return new NetworkStream(socket, ownsSocket: true);
         }
         catch

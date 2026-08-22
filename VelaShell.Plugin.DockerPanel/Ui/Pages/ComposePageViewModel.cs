@@ -5,11 +5,28 @@ using VelaShell.PluginSdk.RemoteExec;
 
 namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
 
-/// <summary>执行记录里的一行。</summary>
-public sealed class OutputLine(string time, string text, bool isError, bool isCommand)
+/// <summary>
+/// 执行记录 / 合并日志里的一行。
+/// <para>
+/// 合并日志多两样东西:这一行来自哪个服务(<c>compose logs</c> 把服务名写在
+/// <c>名字 | 正文</c> 的前缀里),以及正文认出来的级别。两者都只是用来<b>取颜色</b> ——
+/// 七个服务的日志混在一起时,靠颜色分辨来源比逐行读名字快得多,而级别决定正文的语气。
+/// </para>
+/// </summary>
+public sealed class OutputLine(string time, string text, bool isError, bool isCommand,
+    string source = "", int sourceIndex = 0)
 {
     /// <summary>时刻。</summary>
     public string Time { get; } = time;
+
+    /// <summary>来自哪个服务;执行记录里为空。</summary>
+    public string Source { get; } = source;
+
+    /// <summary>服务在项目里的序号 —— 界面按它取一个稳定的颜色。</summary>
+    public int SourceIndex { get; } = sourceIndex;
+
+    /// <summary>有没有服务名这一列。</summary>
+    public bool HasSource => Source.Length > 0;
 
     /// <summary>文本。</summary>
     public string Text { get; } = text;
@@ -19,6 +36,60 @@ public sealed class OutputLine(string time, string text, bool isError, bool isCo
 
     /// <summary>是不是那条命令本身。</summary>
     public bool IsCommand { get; } = isCommand;
+
+    /// <summary>认出来的级别。</summary>
+    public LogLevel Level { get; } = LogLevels.Detect(text);
+
+    /// <summary>级别文字;认不出来时为空。</summary>
+    public string LevelLabel => LogLevels.Label(Level);
+
+    /// <summary>有没有级别标记。</summary>
+    public bool HasLevel => Level != LogLevel.None;
+
+    /// <summary>
+    /// 这一行的语气。标准错误一律按错误算 —— 哪怕正文里没有 ERROR 字样,
+    /// 它走的是 stderr 这件事本身就是信息。
+    /// </summary>
+    public RowTone Tone => IsError ? RowTone.Danger : LogLevels.Tone(Level);
+}
+
+/// <summary>
+/// 拆 <c>docker compose logs</c> 的一行。
+/// <para>
+/// 它的格式是 <c>服务名   | 正文</c>(名字右侧补空格对齐)。看着好拆,但正文里完全可能
+/// 也有竖线 —— <c>2026-08-23 | INFO | ok</c> 这种自带竖线的日志格式很常见,
+/// 只按"第一根竖线"切会把时间戳当成服务名,日志本身就被改了样子。
+/// </para>
+/// <para>
+/// 所以前缀必须是一个**认得的**名字:调用方给一个判定,拿项目里真实的服务名 / 容器名去比。
+/// 认不出来就整行当正文 —— 最坏也只是少一列颜色。<c>Attaching to …</c> 这类 compose
+/// 自己说的话本来就没有前缀,走的也是这一条。
+/// </para>
+/// </summary>
+public static class MergedLog
+{
+    /// <summary>服务名最长认到这里。再长就不必拿去比了。</summary>
+    private const int MaxNameLength = 64;
+
+    /// <summary>拆出服务名与正文。</summary>
+    /// <param name="line">compose 吐出来的一行。</param>
+    /// <param name="known">这个名字是不是本项目的服务 / 容器。</param>
+    public static (string Source, string Body) Split(string line, Func<string, bool> known)
+    {
+        int bar = line.IndexOf('|');
+        if (bar is <= 0 or > MaxNameLength)
+        {
+            return ("", line);
+        }
+        string name = line[..bar].TrimEnd();
+        if (name.Length == 0 || name.AsSpan().ContainsAny(' ', '\t') || !known(name))
+        {
+            return ("", line);
+        }
+        // 竖线后面 compose 固定跟一个空格;没有也无所谓,别把正文的第一个字符吃掉。
+        string body = line[(bar + 1)..];
+        return (name, body.StartsWith(' ') ? body[1..] : body);
+    }
 }
 
 /// <summary>Compose 页的页签。</summary>
@@ -43,35 +114,29 @@ public enum ComposeTab
 /// <summary>Compose 页。</summary>
 public sealed class ComposePageViewModel : PageViewModel
 {
-    private ComposeProject? _selected;
-    private string _yaml = "";
     private string _originalYaml = "";
-    private string _env = "";
     private string _originalEnv = "";
-    private string _config = "";
-    private string _error = "";
-    private bool _running;
-    private bool _composeAvailable = true;
-    private ComposeTab _tab = ComposeTab.Yaml;
     private CancellationTokenSource? _logsCts;
     // 日志是一行一行涌进来的,但界面不该一行一行地排版 —— 见 LineBuffer。
     private readonly LineBuffer<OutputLine> _output;
     private readonly LineBuffer<OutputLine> _logs;
+    // 服务列表里没有的日志来源(已删掉的容器、一次性任务),各自也要一个稳定的颜色序号。
+    private readonly Dictionary<string, int> _extraSources = [];
     private int _lastExitCode;
 
     /// <summary>当前页签。</summary>
     public ComposeTab Tab
     {
-        get => _tab;
+        get;
         private set
         {
-            if (SetField(ref _tab, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsYamlTab), nameof(IsEnvTab), nameof(IsServicesTab),
                     nameof(IsConfigTab), nameof(IsLogsTab));
             }
         }
-    }
+    } = ComposeTab.Yaml;
 
     /// <summary>在 compose.yaml 页签。</summary>
     public bool IsYamlTab => Tab == ComposeTab.Yaml;
@@ -91,18 +156,18 @@ public sealed class ComposePageViewModel : PageViewModel
     /// <summary>项目的 <c>.env</c> 内容。</summary>
     public string Env
     {
-        get => _env;
+        get;
         set
         {
-            if (SetField(ref _env, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(EnvModified), nameof(EnvModifiedText));
             }
         }
-    }
+    } = "";
 
     /// <summary><c>.env</c> 改过了。</summary>
-    public bool EnvModified => _env != _originalEnv;
+    public bool EnvModified => Env != _originalEnv;
 
     /// <summary><c>.env</c> 的未保存提示。</summary>
     public string EnvModifiedText => EnvModified ? "未保存 · 保存需手打 save" : "";
@@ -110,18 +175,16 @@ public sealed class ComposePageViewModel : PageViewModel
     /// <summary>这个项目有没有 <c>.env</c>。</summary>
     public bool HasEnv
     {
-        get => _hasEnv;
-        private set => SetField(ref _hasEnv, value);
+        get;
+        private set => SetField(ref field, value);
     }
-
-    private bool _hasEnv;
 
     /// <summary><c>compose config</c> 展开后的结果。</summary>
     public string Config
     {
-        get => _config;
-        private set => SetField(ref _config, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>合并日志的行。</summary>
     public ObservableCollection<OutputLine> Logs { get; } = [];
@@ -129,11 +192,9 @@ public sealed class ComposePageViewModel : PageViewModel
     /// <summary>日志正在跟随。</summary>
     public bool LogsFollowing
     {
-        get => _logsFollowing;
-        private set => SetField(ref _logsFollowing, value);
+        get;
+        private set => SetField(ref field, value);
     }
-
-    private bool _logsFollowing;
 
     /// <summary>最近一次子命令的退出码文本(执行记录头上那个 chip)。</summary>
     public string ExitCodeText => _lastExitCode == 0 ? "退出码 0" : $"退出码 {_lastExitCode}";
@@ -251,10 +312,10 @@ public sealed class ComposePageViewModel : PageViewModel
     /// <summary>当前项目。</summary>
     public ComposeProject? Selected
     {
-        get => _selected;
+        get;
         private set
         {
-            if (SetField(ref _selected, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(HasSelection), nameof(ProjectName), nameof(ProjectStatus),
                     nameof(ProjectPrefix), nameof(ProjectFile));
@@ -282,18 +343,18 @@ public sealed class ComposePageViewModel : PageViewModel
     /// <summary>compose 文件内容。</summary>
     public string Yaml
     {
-        get => _yaml;
+        get;
         set
         {
-            if (SetField(ref _yaml, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsModified), nameof(ModifiedText));
             }
         }
-    }
+    } = "";
 
     /// <summary>改过了没有。</summary>
-    public bool IsModified => _yaml != _originalYaml && _originalYaml.Length > 0;
+    public bool IsModified => Yaml != _originalYaml && _originalYaml.Length > 0;
 
     /// <summary>改动摘要。</summary>
     public string ModifiedText => IsModified ? "未保存 · 保存需手打 save" : "";
@@ -301,15 +362,15 @@ public sealed class ComposePageViewModel : PageViewModel
     /// <summary>出错信息。</summary>
     public string Error
     {
-        get => _error;
+        get;
         private set
         {
-            if (SetField(ref _error, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasError));
             }
         }
-    }
+    } = "";
 
     /// <summary>有没有出错。</summary>
     public bool HasError => Error.Length > 0;
@@ -317,22 +378,22 @@ public sealed class ComposePageViewModel : PageViewModel
     /// <summary>有 compose 命令在跑。</summary>
     public bool Running
     {
-        get => _running;
-        private set => SetField(ref _running, value);
+        get;
+        private set => SetField(ref field, value);
     }
 
     /// <summary>这台机器上有没有 compose v2。</summary>
     public bool ComposeAvailable
     {
-        get => _composeAvailable;
+        get;
         private set
         {
-            if (SetField(ref _composeAvailable, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(UnavailableHint));
             }
         }
-    }
+    } = true;
 
     /// <summary>compose 用不了时的说明。</summary>
     public string UnavailableHint => Shell.Compose is { IsLocal: true }
@@ -429,6 +490,7 @@ public sealed class ComposePageViewModel : PageViewModel
         Services.Clear();
         _output.Clear();
         _logs.Clear();
+        _extraSources.Clear();
         Selected = null;
         Yaml = "";
         _originalYaml = "";
@@ -460,6 +522,8 @@ public sealed class ComposePageViewModel : PageViewModel
         Error = "";
         Config = "";
         _logs.Clear();
+        // 换项目就换一组服务,旧的颜色序号留着只会让新项目的颜色对不上名字。
+        _extraSources.Clear();
         Tab = ComposeTab.Yaml;
         await LoadServicesAsync(project, Shell.Lifetime).ConfigureAwait(true);
         await LoadYamlAsync(project).ConfigureAwait(true);
@@ -639,9 +703,8 @@ public sealed class ComposePageViewModel : PageViewModel
             try
             {
                 await compose.FollowLogsAsync(project, tail == "all" ? "all" : tail,
-                    new DirectProgress<ExecOutput>(output => _logs.Add(
-                        new(DateTimeOffset.Now.ToString("HH:mm:ss"), output.Line,
-                            output.Stream == ExecStream.StandardError, false))), token).ConfigureAwait(false);
+                    new DirectProgress<ExecOutput>(output => _logs.Add(MergedLine(output))), token)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -653,6 +716,61 @@ public sealed class ComposePageViewModel : PageViewModel
             }
             Ui.Post(() => LogsFollowing = false);
         }, token);
+    }
+
+    /// <summary>
+    /// 把 <c>compose logs</c> 的一行变成界面上的一行:拆出服务名,给它一个稳定的颜色序号。
+    /// <para>
+    /// 序号取自 <see cref="Services" /> 里的次序,而不是"第几个说话的" —— 后者会让
+    /// 同一个服务在两次打开日志时拿到不同的颜色,颜色就失去了指认的作用。
+    /// </para>
+    /// </summary>
+    private OutputLine MergedLine(ExecOutput output)
+    {
+        (string source, string body) = MergedLog.Split(output.Line, IsKnownSource);
+        return new(DateTimeOffset.Now.ToString("HH:mm:ss"), body,
+            output.Stream == ExecStream.StandardError, false, source, SourceIndex(source));
+    }
+
+    /// <summary>
+    /// 这个前缀是不是本项目里的一个服务。
+    /// <para>
+    /// compose logs 的前缀有时是服务名、有时是容器名(取决于 compose 的版本与
+    /// <c>container_name</c> 有没有写),两个都认。
+    /// </para>
+    /// </summary>
+    private bool IsKnownSource(string name)
+    {
+        foreach (ComposeService service in Services)
+        {
+            if (service.Service == name || service.Name == name)
+            {
+                return true;
+            }
+        }
+        return _extraSources.ContainsKey(name);
+    }
+
+    private int SourceIndex(string source)
+    {
+        if (source.Length == 0)
+        {
+            return 0;
+        }
+        for (int i = 0; i < Services.Count; i++)
+        {
+            if (Services[i].Service == source || Services[i].Name == source)
+            {
+                return i;
+            }
+        }
+        // 服务列表里没有的来源(还没刷新到的、一次性任务),各自也要一个稳定的序号。
+        if (!_extraSources.TryGetValue(source, out int extra))
+        {
+            extra = Services.Count + _extraSources.Count;
+            _extraSources[source] = extra;
+        }
+        return extra;
     }
 
     private async Task StopLogsAsync()
@@ -1117,10 +1235,6 @@ public sealed class NewComposeProjectForm : PanelForm
 /// </summary>
 public sealed class ComposeServiceColumns : ListColumns
 {
-    private GridLength _service = new(130);
-    private GridLength _name = new(190);
-    private GridLength _status = new(130);
-    private GridLength _ports = new(150);
 
     /// <inheritdoc />
     public override IReadOnlyList<string> Keys { get; } = ["service", "name", "status", "ports"];
@@ -1128,30 +1242,30 @@ public sealed class ComposeServiceColumns : ListColumns
     /// <summary>服务列。</summary>
     public GridLength Service
     {
-        get => _service;
-        set => SetField(ref _service, Clamp(value, "service"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "service"));
+    } = new(130);
 
     /// <summary>容器列。</summary>
     public GridLength Name
     {
-        get => _name;
-        set => SetField(ref _name, Clamp(value, "name"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "name"));
+    } = new(190);
 
     /// <summary>状态列。</summary>
     public GridLength Status
     {
-        get => _status;
-        set => SetField(ref _status, Clamp(value, "status"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "status"));
+    } = new(130);
 
     /// <summary>端口列。</summary>
     public GridLength Ports
     {
-        get => _ports;
-        set => SetField(ref _ports, Clamp(value, "ports"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "ports"));
+    } = new(150);
 
     /// <inheritdoc />
     public override double Get(string key) => key switch

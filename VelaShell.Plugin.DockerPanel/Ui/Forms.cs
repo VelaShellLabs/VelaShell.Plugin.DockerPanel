@@ -9,12 +9,11 @@ public sealed partial class RenameContainerForm : PanelForm
 {
     private readonly TextField _current;
     private readonly TextField _next;
-    private readonly string _project;
 
     /// <summary>建表单。</summary>
     public RenameContainerForm(string currentName, string composeProject)
     {
-        _project = composeProject;
+        ComposeWarning = composeProject;
         _current = new("当前名称") { Value = currentName, ReadOnly = true };
         _next = new("新名称") { Value = currentName, Placeholder = "只能是字母、数字与 _ . -" };
         Fields.Add(_current);
@@ -40,8 +39,8 @@ public sealed partial class RenameContainerForm : PanelForm
     /// <summary>
     /// compose 管着的容器改名后,compose 会认为那个服务不存在 —— 这句话必须说在前面。
     /// </summary>
-    public string ComposeWarning => _project.Length > 0
-        ? $"这个容器由 compose 项目 {_project} 管理。改名后 compose 会认为服务不存在,下次 up -d 会再建一个。要长期生效,请改 compose.yaml 里的 container_name。"
+    public string ComposeWarning => field.Length > 0
+        ? $"这个容器由 compose 项目 {field} 管理。改名后 compose 会认为服务不存在,下次 up -d 会再建一个。要长期生效,请改 compose.yaml 里的 container_name。"
         : "";
 
     /// <inheritdoc />

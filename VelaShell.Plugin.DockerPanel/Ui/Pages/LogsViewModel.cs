@@ -58,7 +58,6 @@ public sealed class LogLineItem(string timestamp, string source, int sourceIndex
 /// <summary>来源选择器里的一项。</summary>
 public sealed class LogSourceItem(LogSource source, string status, RowTone tone, int index) : ObservableObject
 {
-    private bool _selected;
 
     /// <summary>底层来源。</summary>
     public LogSource Source { get; } = source;
@@ -78,19 +77,17 @@ public sealed class LogSourceItem(LogSource source, string status, RowTone tone,
     /// <summary>过滤后是否显示。</summary>
     public bool Visible
     {
-        get => _visible;
-        set => SetField(ref _visible, value);
-    }
-
-    private bool _visible = true;
+        get;
+        set => SetField(ref field, value);
+    } = true;
 
     /// <summary>选中没有。</summary>
     public bool Selected
     {
-        get => _selected;
+        get;
         set
         {
-            if (SetField(ref _selected, value))
+            if (SetField(ref field, value))
             {
                 SelectionChanged?.Invoke();
             }
@@ -127,13 +124,7 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     private DispatcherTimer? _flushTimer;
     private Regex? _filter;
     private long _bufferedChars;
-    private bool _follow = true;
-    private bool _errorsOnly;
-    private string _search = "";
-    private bool _regex;
-    private int _matchCount;
     private bool _started;
-    private string _statusText = "";
 
     /// <summary>单容器(详情抽屉的日志页签)。</summary>
     public LogsViewModel(DockerPanelViewModel shell, string containerId, Func<bool> ttyAccessor)
@@ -180,10 +171,8 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     public bool CanRemoveSources => SourceRemover is not null;
 
     /// <summary>从合并流里摘掉一条来源。</summary>
-    public RelayCommand RemoveSourceCommand => _removeSource ??= new(p =>
+    public RelayCommand RemoveSourceCommand => field ??= new(p =>
         p is LogSource source && SourceRemover is { } remover ? remover(source) : Task.CompletedTask);
-
-    private RelayCommand? _removeSource;
 
     /// <summary>底部那句"几条流、跑了多久"。</summary>
     public string StreamSummary
@@ -220,16 +209,16 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     /// <summary>是否跟随(<c>-f</c>)。</summary>
     public bool Follow
     {
-        get => _follow;
+        get;
         set
         {
-            if (SetField(ref _follow, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(FollowLabel));
                 _ = RestartAsync();
             }
         }
-    }
+    } = true;
 
     /// <summary>跟随按钮上的字。开着时说"跟随中" —— 这颗按钮本身就是状态灯。</summary>
     public string FollowLabel => Follow ? "跟随中" : "跟随";
@@ -237,10 +226,10 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     /// <summary>只看标准错误。</summary>
     public bool ErrorsOnly
     {
-        get => _errorsOnly;
+        get;
         set
         {
-            if (SetField(ref _errorsOnly, value))
+            if (SetField(ref field, value))
             {
                 ApplyFilter();
             }
@@ -250,24 +239,24 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     /// <summary>搜索词。</summary>
     public string Search
     {
-        get => _search;
+        get;
         set
         {
-            if (SetField(ref _search, value))
+            if (SetField(ref field, value))
             {
                 CompileFilter();
                 ApplyFilter();
             }
         }
-    }
+    } = "";
 
     /// <summary>搜索按正则解释。</summary>
     public bool UseRegex
     {
-        get => _regex;
+        get;
         set
         {
-            if (SetField(ref _regex, value))
+            if (SetField(ref field, value))
             {
                 CompileFilter();
                 ApplyFilter();
@@ -278,10 +267,10 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     /// <summary>命中数。</summary>
     public int MatchCount
     {
-        get => _matchCount;
+        get;
         private set
         {
-            if (SetField(ref _matchCount, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(MatchText));
             }
@@ -294,9 +283,9 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     /// <summary>底部状态条那句话。</summary>
     public string StatusText
     {
-        get => _statusText;
-        private set => SetField(ref _statusText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>缓冲用量文本。</summary>
     public string BufferText => $"缓冲 {Humanize.Bytes(_bufferedChars)} / {Humanize.Bytes(MaxBufferedChars)}(按行截断)";
@@ -340,22 +329,18 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     }
 
     /// <summary>切换跟随。</summary>
-    public RelayCommand ToggleFollowCommand => _toggleFollow ??= new(_ => Follow = !Follow);
-
-    private RelayCommand? _toggleFollow;
+    public RelayCommand ToggleFollowCommand => field ??= new(_ => Follow = !Follow);
 
     /// <summary>清屏。</summary>
-    public RelayCommand ClearCommand => _clear ??= new(_ =>
+    public RelayCommand ClearCommand => field ??= new(_ =>
     {
         Lines.Clear();
         _bufferedChars = 0;
         OnPropertiesChanged(nameof(BufferText), nameof(LineCountText));
     });
 
-    private RelayCommand? _clear;
-
     /// <summary>复制全部。</summary>
-    public RelayCommand CopyCommand => _copy ??= new(_ =>
+    public RelayCommand CopyCommand => field ??= new(_ =>
     {
         var sb = new StringBuilder();
         foreach (LogLineItem line in Lines)
@@ -369,12 +354,8 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
         return shell.Context.Clipboard.SetTextAsync(sb.ToString(), shell.Lifetime);
     });
 
-    private RelayCommand? _copy;
-
     /// <summary>把当前缓冲里的行存成本地文件。</summary>
-    public RelayCommand DownloadCommand => _download ??= new(_ => DownloadAsync());
-
-    private RelayCommand? _download;
+    public RelayCommand DownloadCommand => field ??= new(_ => DownloadAsync());
 
     /// <summary>能不能弹本地文件对话框。</summary>
     public bool CanPickFiles => FilePicker.IsAvailable;
@@ -422,15 +403,13 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     }
 
     /// <summary>设置补历史的行数。</summary>
-    public RelayCommand SetTailCommand => _setTail ??= new(p =>
+    public RelayCommand SetTailCommand => field ??= new(p =>
     {
         if (p is string tail)
         {
             Tail = tail;
         }
     });
-
-    private RelayCommand? _setTail;
 
     /// <summary>第一次进这一页时才起流。</summary>
     public async Task EnsureStartedAsync()
@@ -547,7 +526,7 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
         }
         foreach (LogLineItem item in batch)
         {
-            if (_errorsOnly && !item.IsError)
+            if (ErrorsOnly && !item.IsError)
             {
                 continue;
             }
@@ -567,14 +546,14 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
 
     private void CompileFilter()
     {
-        if (_search.Length == 0)
+        if (Search.Length == 0)
         {
             _filter = null;
             return;
         }
         try
         {
-            _filter = new(_regex ? _search : Regex.Escape(_search),
+            _filter = new(UseRegex ? Search : Regex.Escape(Search),
                 RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
         }
         catch (ArgumentException)

@@ -36,13 +36,6 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
 {
     private readonly List<ContainerRow> _all = [];
     private readonly StatsSampler _sampler;
-    private ContainerFilter _filter = ContainerFilter.All;
-    private string? _project;
-    private string _search = "";
-    private int _selectedCount;
-    private ContainerDetailViewModel? _detail;
-    private LogsViewModel? _mergedLogs;
-    private string _logSourceSearch = "";
 
     /// <summary>建容器页。</summary>
     public ContainersPageViewModel(DockerPanelViewModel shell) : base(shell)
@@ -93,16 +86,16 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>当前筛选档。</summary>
     public ContainerFilter Filter
     {
-        get => _filter;
+        get;
         set
         {
-            if (SetField(ref _filter, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsAll), nameof(IsRunningFilter), nameof(IsStoppedFilter), nameof(IsProblemFilter));
                 ApplyView();
             }
         }
-    }
+    } = ContainerFilter.All;
 
     /// <summary>筛选:全部。</summary>
     public bool IsAll => Filter == ContainerFilter.All;
@@ -119,15 +112,15 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>搜索词(名字 / 镜像 / 项目)。</summary>
     public string Search
     {
-        get => _search;
+        get;
         set
         {
-            if (SetField(ref _search, value))
+            if (SetField(ref field, value))
             {
                 ApplyView();
             }
         }
-    }
+    } = "";
 
     /// <summary>全部数量。</summary>
     public int TotalCount => _all.Count;
@@ -153,10 +146,10 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>当前项目筛选;<see langword="null" /> 表示不按项目筛。</summary>
     public string? ProjectFilter
     {
-        get => _project;
+        get;
         private set
         {
-            if (SetField(ref _project, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(HasProjectFilter), nameof(ProjectFilterLabel));
                 ApplyView();
@@ -165,33 +158,29 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     }
 
     /// <summary>按项目筛着没有。</summary>
-    public bool HasProjectFilter => _project is not null;
+    public bool HasProjectFilter => ProjectFilter is not null;
 
     /// <summary>筛选按钮上显示的文字。</summary>
-    public string ProjectFilterLabel => _project switch
+    public string ProjectFilterLabel => ProjectFilter switch
     {
         null => "项目",
         "" => "不属于任何项目",
-        _ => _project
+        _ => ProjectFilter
     };
 
     /// <summary>选一个项目来筛;参数为 <see langword="null" /> 时清除。</summary>
-    public RelayCommand SetProjectFilterCommand => _setProject ??= new(p =>
+    public RelayCommand SetProjectFilterCommand => field ??= new(p =>
     {
         ProjectFilter = p as string;
         return Task.CompletedTask;
     });
 
-    private RelayCommand? _setProject;
-
     /// <summary>清除项目筛选。</summary>
-    public RelayCommand ClearProjectFilterCommand => _clearProject ??= new(_ =>
+    public RelayCommand ClearProjectFilterCommand => field ??= new(_ =>
     {
         ProjectFilter = null;
         return Task.CompletedTask;
     });
-
-    private RelayCommand? _clearProject;
 
     private void BuildProjectFilters()
     {
@@ -209,7 +198,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
             ProjectFilters.Add(new("", "(不属于任何项目)", loose));
         }
         // 筛着的项目没了(最后一个容器被删了)就自动松开,否则列表会空得莫名其妙。
-        if (_project is { } current && ProjectFilters.All(p => p.Name != current))
+        if (ProjectFilter is { } current && ProjectFilters.All(p => p.Name != current))
         {
             ProjectFilter = null;
         }
@@ -218,10 +207,10 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>已勾选的数量。</summary>
     public int SelectedCount
     {
-        get => _selectedCount;
+        get;
         private set
         {
-            if (SetField(ref _selectedCount, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(HasSelection), nameof(SelectionText));
             }
@@ -271,10 +260,10 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>详情抽屉;没打开时为 <see langword="null" />。</summary>
     public ContainerDetailViewModel? Detail
     {
-        get => _detail;
+        get;
         private set
         {
-            if (SetField(ref _detail, value))
+            if (SetField(ref field, value))
             {
                 Drawer.IsOpen = value is not null;
                 OnPropertyChanged(nameof(HasDetail));
@@ -351,19 +340,13 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// 「运行容器…」:去镜像页挑一个。
     /// 不直接开运行表单 —— 那张表单的镜像字段是只读的,得先有镜像才谈得上运行。
     /// </summary>
-    public RelayCommand RunFromImagesCommand => _runFromImages ??= new(_ => Shell.GoToAsync(PanelPage.Images));
-
-    private RelayCommand? _runFromImages;
+    public RelayCommand RunFromImagesCommand => field ??= new(_ => Shell.GoToAsync(PanelPage.Images));
 
     /// <summary>工具条上的「拉取镜像」:和镜像页那颗是同一个对话框。</summary>
-    public RelayCommand PullImageCommand => _pullImage ??= new(_ => Shell.ShowPullDialogAsync(null));
-
-    private RelayCommand? _pullImage;
+    public RelayCommand PullImageCommand => field ??= new(_ => Shell.ShowPullDialogAsync(null));
 
     /// <summary>空列表那一屏的「从 compose 起一套」。</summary>
-    public RelayCommand GoComposeCommand => _goCompose ??= new(_ => Shell.GoToAsync(PanelPage.Compose));
-
-    private RelayCommand? _goCompose;
+    public RelayCommand GoComposeCommand => field ??= new(_ => Shell.GoToAsync(PanelPage.Compose));
 
     /// <inheritdoc />
     public override async Task ActivateAsync(CancellationToken cancellationToken)
@@ -489,15 +472,15 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
 
     private void ApplyView()
     {
-        string needle = _search.Trim();
-        IEnumerable<ContainerRow> filtered = _all.Where(row => _filter switch
+        string needle = Search.Trim();
+        IEnumerable<ContainerRow> filtered = _all.Where(row => Filter switch
         {
             ContainerFilter.Running => row.IsRunning,
             ContainerFilter.Stopped => !row.IsRunning && !row.IsPaused,
             ContainerFilter.Problem => row.IsUnhealthy || row.IsFailed,
             _ => Shell.Settings.ShowStopped || row.IsRunning || row.IsPaused
         });
-        if (_project is { } project)
+        if (ProjectFilter is { } project)
         {
             filtered = filtered.Where(row => row.Project == project);
         }
@@ -605,17 +588,15 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>批量进行中的原地进度;没有时为 <see langword="null" />。</summary>
     public BatchProgressState? BatchProgress
     {
-        get => _batchProgress;
+        get;
         private set
         {
-            if (SetField(ref _batchProgress, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasBatchProgress));
             }
         }
     }
-
-    private BatchProgressState? _batchProgress;
 
     /// <summary>批量正在跑。</summary>
     public bool HasBatchProgress => BatchProgress is not null;
@@ -623,32 +604,28 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>批量结束后的结果条(只在有失败时出现)。</summary>
     public BatchSummaryState? BatchSummary
     {
-        get => _batchSummary;
+        get;
         private set
         {
-            if (SetField(ref _batchSummary, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasBatchSummary));
             }
         }
     }
 
-    private BatchSummaryState? _batchSummary;
-
     /// <summary>有失败结果要展示。</summary>
     public bool HasBatchSummary => BatchSummary is not null;
 
     /// <summary>关掉结果条。</summary>
-    public RelayCommand DismissBatchCommand => _dismissBatch ??= new(_ =>
+    public RelayCommand DismissBatchCommand => field ??= new(_ =>
     {
         BatchSummary = null;
         return Task.CompletedTask;
     });
 
-    private RelayCommand? _dismissBatch;
-
     /// <summary>只对失败的那几个再跑一遍。</summary>
-    public RelayCommand RetryFailedCommand => _retryFailed ??= new(_ =>
+    public RelayCommand RetryFailedCommand => field ??= new(_ =>
     {
         if (BatchSummary is not { } summary)
         {
@@ -657,8 +634,6 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         BatchSummary = null;
         return BatchAsync(summary.Verb, summary.FailedRows, summary.Action);
     });
-
-    private RelayCommand? _retryFailed;
 
     private async Task KillAsync(IReadOnlyList<ContainerRow> targets)
     {
@@ -753,10 +728,10 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// </summary>
     public LogsViewModel? MergedLogs
     {
-        get => _mergedLogs;
+        get;
         private set
         {
-            if (SetField(ref _mergedLogs, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsLogsMode), nameof(ListVisible));
             }
@@ -772,15 +747,15 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>来源过滤词。</summary>
     public string LogSourceSearch
     {
-        get => _logSourceSearch;
+        get;
         set
         {
-            if (SetField(ref _logSourceSearch, value))
+            if (SetField(ref field, value))
             {
                 ApplyLogSourceView();
             }
         }
-    }
+    } = "";
 
     /// <summary>选中的来源数。</summary>
     public int SelectedSourceCount => LogSources.Count(s => s.Selected);
@@ -794,14 +769,10 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     };
 
     /// <summary>进入日志模式(用当前勾选的容器,没勾就用参数那一个)。</summary>
-    public RelayCommand ViewLogsCommand => _viewLogs ??= new(p => EnterLogsModeAsync(Targets(p)));
-
-    private RelayCommand? _viewLogs;
+    public RelayCommand ViewLogsCommand => field ??= new(p => EnterLogsModeAsync(Targets(p)));
 
     /// <summary>回到列表。</summary>
-    public RelayCommand ExitLogsCommand => _exitLogs ??= new(_ => ExitLogsModeAsync());
-
-    private RelayCommand? _exitLogs;
+    public RelayCommand ExitLogsCommand => field ??= new(_ => ExitLogsModeAsync());
 
     /// <summary>
     /// 从合并流里摘掉一条来源。
@@ -816,7 +787,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     }
 
     /// <summary>来源全选 / 全不选。</summary>
-    public RelayCommand ToggleAllSourcesCommand => _toggleAll ??= new(_ =>
+    public RelayCommand ToggleAllSourcesCommand => field ??= new(_ =>
     {
         bool select = LogSources.Any(s => !s.Selected);
         foreach (LogSourceItem item in LogSources)
@@ -825,8 +796,6 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         }
         return Task.CompletedTask;
     });
-
-    private RelayCommand? _toggleAll;
 
     private async Task EnterLogsModeAsync(IReadOnlyList<ContainerRow> seed)
     {
@@ -907,7 +876,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
 
     private void ApplyLogSourceView()
     {
-        string needle = _logSourceSearch.Trim();
+        string needle = LogSourceSearch.Trim();
         foreach (LogSourceItem item in LogSources)
         {
             item.Visible = needle.Length == 0
@@ -918,52 +887,36 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     // ── 行级动作(右键菜单 / 命令面板都走这几个)────────────────────
 
     /// <summary>看这一个容器的日志(详情抽屉的日志页签)。</summary>
-    public RelayCommand RowLogsCommand => _rowLogs ??= new(p =>
+    public RelayCommand RowLogsCommand => field ??= new(p =>
         p is ContainerRow row ? OpenDetailAtTabAsync(row, DetailTab.Logs) : Task.CompletedTask);
 
-    private RelayCommand? _rowLogs;
-
     /// <summary>进这一个容器的终端。</summary>
-    public RelayCommand RowTerminalCommand => _rowTerminal ??= new(p =>
+    public RelayCommand RowTerminalCommand => field ??= new(p =>
         p is ContainerRow row ? OpenDetailAtTabAsync(row, DetailTab.Terminal) : Task.CompletedTask);
 
-    private RelayCommand? _rowTerminal;
-
     /// <summary>浏览这一个容器的文件。</summary>
-    public RelayCommand RowFilesCommand => _rowFiles ??= new(p =>
+    public RelayCommand RowFilesCommand => field ??= new(p =>
         p is ContainerRow row ? OpenDetailAtTabAsync(row, DetailTab.Files) : Task.CompletedTask);
 
-    private RelayCommand? _rowFiles;
-
     /// <summary>看这一个容器的实时统计。</summary>
-    public RelayCommand RowStatsCommand => _rowStats ??= new(p =>
+    public RelayCommand RowStatsCommand => field ??= new(p =>
         p is ContainerRow row ? OpenDetailAtTabAsync(row, DetailTab.Stats) : Task.CompletedTask);
 
-    private RelayCommand? _rowStats;
-
     /// <summary>重命名。</summary>
-    public RelayCommand RowRenameCommand => _rowRename ??= new(p =>
+    public RelayCommand RowRenameCommand => field ??= new(p =>
         p is ContainerRow row ? RowDetailActionAsync(row, d => d.RenameCommand) : Task.CompletedTask);
 
-    private RelayCommand? _rowRename;
-
     /// <summary>改重启策略。</summary>
-    public RelayCommand RowRestartPolicyCommand => _rowPolicy ??= new(p =>
+    public RelayCommand RowRestartPolicyCommand => field ??= new(p =>
         p is ContainerRow row ? RowDetailActionAsync(row, d => d.RestartPolicyCommand) : Task.CompletedTask);
 
-    private RelayCommand? _rowPolicy;
-
     /// <summary>复制容器 id。</summary>
-    public RelayCommand RowCopyIdCommand => _rowCopyId ??= new(p =>
+    public RelayCommand RowCopyIdCommand => field ??= new(p =>
         p is ContainerRow row ? CopyAsync(row.Id, "容器 ID") : Task.CompletedTask);
 
-    private RelayCommand? _rowCopyId;
-
     /// <summary>复制等价的 <c>docker run</c> 命令。</summary>
-    public RelayCommand RowCopyRunCommand => _rowCopyRun ??= new(p =>
+    public RelayCommand RowCopyRunCommand => field ??= new(p =>
         p is ContainerRow row ? CopyRunCommandAsync(row) : Task.CompletedTask);
-
-    private RelayCommand? _rowCopyRun;
 
     private async Task OpenDetailAtTabAsync(ContainerRow row, DetailTab tab)
     {
@@ -1097,8 +1050,6 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
 /// </summary>
 public sealed class BatchProgressState(string verb, int total, PanelTask task) : ObservableObject
 {
-    private int _done;
-    private string _wait = "";
 
     /// <summary>动作名。</summary>
     public string Verb { get; } = verb;
@@ -1109,10 +1060,10 @@ public sealed class BatchProgressState(string verb, int total, PanelTask task) :
     /// <summary>已完成数。</summary>
     public int Done
     {
-        get => _done;
+        get;
         private set
         {
-            if (SetField(ref _done, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(CountText), nameof(Progress));
             }
@@ -1131,18 +1082,16 @@ public sealed class BatchProgressState(string verb, int total, PanelTask task) :
     /// <summary>当前在等什么。</summary>
     public string WaitText
     {
-        get => _wait;
-        private set => SetField(ref _wait, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>取消剩下的。</summary>
-    public RelayCommand CancelCommand => _cancel ??= new(_ =>
+    public RelayCommand CancelCommand => field ??= new(_ =>
     {
         task.Cancel();
         return Task.CompletedTask;
     });
-
-    private RelayCommand? _cancel;
 
     /// <summary>推进一格。</summary>
     public void Advance(int done, string current, string wait)
@@ -1199,12 +1148,6 @@ public sealed class BatchSummaryState(
 /// </summary>
 public sealed class ContainerColumns : ListColumns
 {
-    private GridLength _name = new(240);
-    private GridLength _image = new(260);
-    private GridLength _ports = new(118);
-    private GridLength _cpu = new(108);
-    private GridLength _mem = new(84);
-    private GridLength _uptime = new(78);
 
     /// <inheritdoc />
     public override IReadOnlyList<string> Keys { get; } = ["name", "image", "ports", "cpu", "mem", "uptime"];
@@ -1212,44 +1155,44 @@ public sealed class ContainerColumns : ListColumns
     /// <summary>名称列。</summary>
     public GridLength Name
     {
-        get => _name;
-        set => SetField(ref _name, Clamp(value, "name"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "name"));
+    } = new(240);
 
     /// <summary>镜像列。</summary>
     public GridLength Image
     {
-        get => _image;
-        set => SetField(ref _image, Clamp(value, "image"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "image"));
+    } = new(260);
 
     /// <summary>端口列。</summary>
     public GridLength Ports
     {
-        get => _ports;
-        set => SetField(ref _ports, Clamp(value, "ports"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "ports"));
+    } = new(118);
 
     /// <summary>CPU 列。</summary>
     public GridLength Cpu
     {
-        get => _cpu;
-        set => SetField(ref _cpu, Clamp(value, "cpu"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "cpu"));
+    } = new(108);
 
     /// <summary>内存列。</summary>
     public GridLength Mem
     {
-        get => _mem;
-        set => SetField(ref _mem, Clamp(value, "mem"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "mem"));
+    } = new(84);
 
     /// <summary>运行时长列。</summary>
     public GridLength Uptime
     {
-        get => _uptime;
-        set => SetField(ref _uptime, Clamp(value, "uptime"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "uptime"));
+    } = new(78);
 
     /// <inheritdoc />
     public override double Get(string key) => key switch

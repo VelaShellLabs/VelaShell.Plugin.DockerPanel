@@ -103,8 +103,6 @@ public sealed record ConfirmRequest
 /// </summary>
 public sealed class ConfirmGate : ObservableObject
 {
-    private ConfirmRequest? _request;
-    private string _typedWord = "";
     private TaskCompletionSource<bool>? _pending;
 
     /// <summary>建一个闸门。</summary>
@@ -119,11 +117,9 @@ public sealed class ConfirmGate : ObservableObject
     /// </summary>
     public bool Precaution
     {
-        get => _precaution;
-        set => SetField(ref _precaution, value);
-    }
-
-    private bool _precaution = true;
+        get;
+        set => SetField(ref field, value);
+    } = true;
 
     /// <summary>这次闸门有没有提供那个勾选。</summary>
     public bool HasPrecaution => Request?.PrecautionLabel is { Length: > 0 };
@@ -134,10 +130,10 @@ public sealed class ConfirmGate : ObservableObject
     /// <summary>当前请求;没有待确认的事情时为 <see langword="null" />。</summary>
     public ConfirmRequest? Request
     {
-        get => _request;
+        get;
         private set
         {
-            if (SetField(ref _request, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsOpen), nameof(IsDataLoss), nameof(HasTargets),
                     nameof(HasConsequences), nameof(HasCommandNote), nameof(CanConfirm), nameof(RemainingHint),
@@ -219,16 +215,16 @@ public sealed class ConfirmGate : ObservableObject
     /// <summary>用户手打的确认串。</summary>
     public string TypedWord
     {
-        get => _typedWord;
+        get;
         set
         {
-            if (SetField(ref _typedWord, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(CanConfirm), nameof(RemainingHint));
                 ConfirmCommand.RaiseCanExecuteChanged();
             }
         }
-    }
+    } = "";
 
     /// <summary>确认按钮能不能按。</summary>
     public bool CanConfirm =>

@@ -81,37 +81,19 @@ public sealed record SocketHint(string Path, string Source);
 /// </summary>
 public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDisposable
 {
-    private readonly IPluginContext _context;
-    private string _socketPathInput = "";
     private int _countContainers;
     private int _countImages;
     private int _countVolumes;
     private readonly CancellationTokenSource _lifetime = new();
 
-    private EndpointItem? _selectedEndpoint;
-    private DockerClient? _client;
-    private ComposeCli? _compose;
-    private RegistryAuthProvider? _registryAuth;
-    private PanelConnectionState _state = PanelConnectionState.NoEndpoint;
-    private string _errorTitle = "";
-    private string _errorDetail = "";
-    private string _errorHint = "";
-    private string _errorIcon = "Icon.circle-alert";
     // 落地页是总览:刚连上时,用户第一件想知道的是"这台机器现在怎么样",
     // 而不是"这里有哪些容器"—— 后者是他确认前者之后才要往下走的一步。
-    private PanelPage _currentPage = PanelPage.Overview;
     private PageViewModel? _activePage;
-    private string _engineVersion = "";
-    private string _apiVersion = "";
-    private string _countsText = "";
-    private bool _endpointMenuOpen;
-    private bool _taskCenterOpen;
-    private bool _settingsOpen;
 
     /// <summary>建外壳。</summary>
     public DockerPanelViewModel(IPluginContext context)
     {
-        _context = context;
+        Context = context;
         Settings = new(context.Storage);
         Confirm = new();
         Tasks = new();
@@ -134,7 +116,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             }
         });
         RefreshCommand = new RelayCommand(_ => RefreshActiveAsync(force: true), _ => IsReady);
-        ReconnectCommand = new RelayCommand(_ => ConnectAsync(_selectedEndpoint));
+        ReconnectCommand = new RelayCommand(_ => ConnectAsync(SelectedEndpoint));
         SelectEndpointCommand = new RelayCommand(p =>
         {
             EndpointMenuOpen = false;
@@ -187,7 +169,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     }
 
     /// <summary>宿主上下文。</summary>
-    public IPluginContext Context => _context;
+    public IPluginContext Context { get; }
 
     /// <summary>面板设置。</summary>
     public PanelSettings Settings { get; }
@@ -202,13 +184,13 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     public Feedback Feedback { get; }
 
     /// <summary>当前端点的客户端;没连上时为 <see langword="null" />。</summary>
-    public DockerClient? Client => _client;
+    public DockerClient? Client { get; private set; }
 
     /// <summary>Compose 通道;没连上时为 <see langword="null" />。</summary>
-    public ComposeCli? Compose => _compose;
+    public ComposeCli? Compose { get; private set; }
 
     /// <summary>仓库凭据。</summary>
-    public RegistryAuthProvider? RegistryAuth => _registryAuth;
+    public RegistryAuthProvider? RegistryAuth { get; private set; }
 
     /// <summary>面板生命周期令牌。</summary>
     public CancellationToken Lifetime => _lifetime.Token;
@@ -219,19 +201,15 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     public ObservableCollection<EndpointItem> Endpoints { get; } = [];
 
     /// <summary>当前端点。</summary>
-    public EndpointItem? SelectedEndpoint
-    {
-        get => _selectedEndpoint;
-        private set
+    public EndpointItem? SelectedEndpoint { get; private set
         {
-            if (SetField(ref _selectedEndpoint, value))
+            if (SetField(ref field, value))
             {
                 SocketPathInput = value?.Endpoint.SocketPath ?? "";
                 OnPropertiesChanged(nameof(EndpointName), nameof(EndpointDetail), nameof(HasEndpoint),
                     nameof(ComposeAvailable), nameof(SocketPathDefault), nameof(SocketPathChanged));
             }
-        }
-    }
+        } }
 
     /// <summary>顶栏显示的主机名。</summary>
     public string EndpointName => SelectedEndpoint?.DisplayName ?? "选择目标";
@@ -252,17 +230,13 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// 补救按钮把设置抽屉打开却没有这个框,等于把用户领到一堵墙前面。
     /// </para>
     /// </summary>
-    public string SocketPathInput
-    {
-        get => _socketPathInput;
-        set
+    public string SocketPathInput { get; set
         {
-            if (SetField(ref _socketPathInput, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(SocketPathChanged));
             }
-        }
-    }
+        } } = "";
 
     /// <summary>当前端点默认的 socket 路径(用来判断"是不是改过了")。</summary>
     public string SocketPathDefault =>
@@ -275,11 +249,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         SocketPathInput.Trim().Length > 0 && SocketPathInput.Trim() != SocketPathDefault;
 
     /// <summary>主机切换器是否展开。</summary>
-    public bool EndpointMenuOpen
-    {
-        get => _endpointMenuOpen;
-        set => SetField(ref _endpointMenuOpen, value);
-    }
+    public bool EndpointMenuOpen { get; set => SetField(ref field, value); }
 
     /// <summary>
     /// Compose 页可不可用。
@@ -289,24 +259,20 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// 是 Compose 页自己 <c>compose version</c> 探出来的,不该在这里猜。
     /// </para>
     /// </summary>
-    public bool ComposeAvailable => _compose is not null;
+    public bool ComposeAvailable => Compose is not null;
 
     // ── 连接状态 ──────────────────────────────────────────────────
 
     /// <summary>连接状态。</summary>
-    public PanelConnectionState State
-    {
-        get => _state;
-        private set
+    public PanelConnectionState State { get; private set
         {
-            if (SetField(ref _state, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsConnecting), nameof(IsReady), nameof(IsFailed), nameof(NeedsEndpoint),
                     nameof(EventsDegraded));
                 RefreshCommand.RaiseCanExecuteChanged();
             }
-        }
-    }
+        } } = PanelConnectionState.NoEndpoint;
 
     /// <summary>还没选端点。</summary>
     public bool NeedsEndpoint => State == PanelConnectionState.NoEndpoint;
@@ -321,32 +287,16 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     public bool IsFailed => State == PanelConnectionState.Failed;
 
     /// <summary>连不上时的标题。</summary>
-    public string ErrorTitle
-    {
-        get => _errorTitle;
-        private set => SetField(ref _errorTitle, value);
-    }
+    public string ErrorTitle { get; private set => SetField(ref field, value); } = "";
 
     /// <summary>连不上时的正文。</summary>
-    public string ErrorDetail
-    {
-        get => _errorDetail;
-        private set => SetField(ref _errorDetail, value);
-    }
+    public string ErrorDetail { get; private set => SetField(ref field, value); } = "";
 
     /// <summary>连不上时下面那行等宽小字(daemon 的原话)。</summary>
-    public string ErrorHint
-    {
-        get => _errorHint;
-        private set => SetField(ref _errorHint, value);
-    }
+    public string ErrorHint { get; private set => SetField(ref field, value); } = "";
 
     /// <summary>连不上时的图标。</summary>
-    public string ErrorIcon
-    {
-        get => _errorIcon;
-        private set => SetField(ref _errorIcon, value);
-    }
+    public string ErrorIcon { get; private set => SetField(ref field, value); } = "Icon.circle-alert";
 
     /// <summary>连不上时给的出路。</summary>
     public ObservableCollection<RecoveryAction> RecoveryActions { get; } = [];
@@ -378,18 +328,14 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     public IReadOnlyList<PageViewModel> AllPages { get; }
 
     /// <summary>当前页标识(左导航栏据此选中)。</summary>
-    public PanelPage CurrentPage
-    {
-        get => _currentPage;
-        private set
+    public PanelPage CurrentPage { get; private set
         {
-            if (SetField(ref _currentPage, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsOverview), nameof(IsContainers), nameof(IsImages),
                     nameof(IsVolumes), nameof(IsNetworks), nameof(IsCompose), nameof(IsSystem));
             }
-        }
-    }
+        } } = PanelPage.Overview;
 
     /// <summary>当前页的视图模型。</summary>
     public PageViewModel? ActivePage
@@ -422,39 +368,19 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     // ── 状态栏 ────────────────────────────────────────────────────
 
     /// <summary>daemon 版本。</summary>
-    public string EngineVersion
-    {
-        get => _engineVersion;
-        private set => SetField(ref _engineVersion, value);
-    }
+    public string EngineVersion { get; private set => SetField(ref field, value); } = "";
 
     /// <summary>API 版本。</summary>
-    public string ApiVersion
-    {
-        get => _apiVersion;
-        private set => SetField(ref _apiVersion, value);
-    }
+    public string ApiVersion { get; private set => SetField(ref field, value); } = "";
 
     /// <summary>“18 容器 · 34 镜像 · 9 卷”。</summary>
-    public string CountsText
-    {
-        get => _countsText;
-        private set => SetField(ref _countsText, value);
-    }
+    public string CountsText { get; private set => SetField(ref field, value); } = "";
 
     /// <summary>任务中心弹层是否展开。</summary>
-    public bool TaskCenterOpen
-    {
-        get => _taskCenterOpen;
-        set => SetField(ref _taskCenterOpen, value);
-    }
+    public bool TaskCenterOpen { get; set => SetField(ref field, value); }
 
     /// <summary>设置抽屉是否展开。</summary>
-    public bool SettingsOpen
-    {
-        get => _settingsOpen;
-        set => SetField(ref _settingsOpen, value);
-    }
+    public bool SettingsOpen { get; set => SetField(ref field, value); }
 
     // ── 命令 ──────────────────────────────────────────────────────
 
@@ -602,8 +528,8 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     public async Task InitializeAsync()
     {
         await Settings.LoadAsync(_lifetime.Token).ConfigureAwait(true);
-        _context.Events.SessionConnected += OnSessionChanged;
-        _context.Events.SessionDisconnected += OnSessionChanged;
+        Context.Events.SessionConnected += OnSessionChanged;
+        Context.Events.SessionDisconnected += OnSessionChanged;
         await ReloadEndpointsAsync().ConfigureAwait(true);
         // 只有一个可用端点时直接连上 —— 让用户为一个没得选的选择再点一次没有意义。
         EndpointItem[] usable = [.. Endpoints.Where(e => e.Available)];
@@ -619,7 +545,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         IReadOnlyList<SessionInfo> sessions;
         try
         {
-            sessions = await _context.Sessions.ListAsync(_lifetime.Token).ConfigureAwait(true);
+            sessions = await Context.Sessions.ListAsync(_lifetime.Token).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -664,14 +590,14 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             return;
         }
         await StopEventStreamAsync().ConfigureAwait(true);
-        if (_client is not null)
+        if (Client is not null)
         {
-            await _client.DisposeAsync().ConfigureAwait(true);
-            _client = null;
+            await Client.DisposeAsync().ConfigureAwait(true);
+            Client = null;
         }
         // 通道跟着连接一起作废 —— 留着旧的,导航栏会显示 Compose 可点,
         // 点进去却是上一台机器的项目。
-        _compose = null;
+        Compose = null;
         OnPropertyChanged(nameof(ComposeAvailable));
         foreach (PageViewModel page in AllPages)
         {
@@ -691,16 +617,16 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         SocketPathInput = endpoint.SocketPath;
         IDockerTransport transport = endpoint.Kind == DockerEndpointKind.Local
             ? new LocalTransport(endpoint.SocketPath)
-            : new TunnelTransport(_context.RemoteTunnel, endpoint.SessionId, endpoint.SocketPath);
+            : new TunnelTransport(Context.RemoteTunnel, endpoint.SessionId, endpoint.SocketPath);
         var client = new DockerClient(endpoint, transport);
         try
         {
             SystemVersion version = await client.PingAsync(_lifetime.Token).ConfigureAwait(true);
-            _client = client;
-            _registryAuth = new(_context.RemoteFs, endpoint);
+            Client = client;
+            RegistryAuth = new(Context.RemoteFs, endpoint);
             // compose 只有 CLI,所以要一条"跑命令"的通道:远端是 SSH,本机是本地进程。
-            _compose = new ComposeCli(endpoint.Kind == DockerEndpointKind.Remote
-                ? new RemoteComposeHost(_context.RemoteExec, _context.RemoteFs, endpoint.SessionId)
+            Compose = new ComposeCli(endpoint.Kind == DockerEndpointKind.Remote
+                ? new RemoteComposeHost(Context.RemoteExec, Context.RemoteFs, endpoint.SessionId)
                 : new LocalComposeHost());
             OnPropertyChanged(nameof(ComposeAvailable));
             EngineVersion = version.Version is { Length: > 0 } v ? $"Engine {v}" : "";
@@ -766,7 +692,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         }
         try
         {
-            await _context.Terminal.WriteAsync(endpoint.SessionId, command + "\n", _lifetime.Token)
+            await Context.Terminal.WriteAsync(endpoint.SessionId, command + "\n", _lifetime.Token)
                           .ConfigureAwait(true);
             Feedback.Notify(FeedbackKind.Info, "已送到宿主终端", command);
         }
@@ -858,7 +784,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             ErrorHint = "";
         }
         RecoveryActions.Add(new("重试", "Icon.refresh-cw", RecoveryActions.Count == 0, () => _ = ConnectAsync(item)));
-        _context.Log.Warn($"connect to docker failed: {ex.Message}");
+        Context.Log.Warn($"connect to docker failed: {ex.Message}");
     }
 
     /// <summary>切页。</summary>
@@ -957,8 +883,8 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        _context.Events.SessionConnected -= OnSessionChanged;
-        _context.Events.SessionDisconnected -= OnSessionChanged;
+        Context.Events.SessionConnected -= OnSessionChanged;
+        Context.Events.SessionDisconnected -= OnSessionChanged;
         Confirm.CancelPending();
         Tasks.CancelAll();
         await _lifetime.CancelAsync().ConfigureAwait(false);
@@ -970,10 +896,10 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
                 await disposable.DisposeAsync().ConfigureAwait(false);
             }
         }
-        if (_client is not null)
+        if (Client is not null)
         {
-            await _client.DisposeAsync().ConfigureAwait(false);
-            _client = null;
+            await Client.DisposeAsync().ConfigureAwait(false);
+            Client = null;
         }
         _lifetime.Dispose();
     }
