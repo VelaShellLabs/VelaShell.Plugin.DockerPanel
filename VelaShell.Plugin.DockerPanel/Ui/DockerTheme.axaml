@@ -133,13 +133,19 @@
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="Template">
       <ControlTemplate>
+        <!-- 对齐与内边距一律走 TemplateBinding。
+             写死成 Center 的话,调用方那些 HorizontalContentAlignment="Stretch" + Padding
+             会被静默吃掉 —— 拿它当整行按钮用的地方(命令面板、文件树、卷/网络列表、
+             端点菜单)就会变成"每一行各自居中、宽度跟着文字长短跑"。
+             默认值仍是 Center,所以纯图标按钮的行为不变。 -->
         <Border Background="{TemplateBinding Background}"
-                CornerRadius="{TemplateBinding CornerRadius}">
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
           <ContentPresenter Content="{TemplateBinding Content}"
                             ContentTemplate="{TemplateBinding ContentTemplate}"
                             Foreground="{TemplateBinding Foreground}"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center" />
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
         </Border>
       </ControlTemplate>
     </Setter>

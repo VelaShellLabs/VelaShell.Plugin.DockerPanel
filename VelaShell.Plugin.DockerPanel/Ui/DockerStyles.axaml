@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:VelaShell.Plugin.DockerPanel.Ui">
 
   <!--
     面板通用版式。几何对齐宿主:40px 顶栏 / 32px 数据行 / 26px 列头 / 24px 状态条。
@@ -285,6 +286,17 @@
   </Style>
   <Style Selector="Border.row.selected">
     <Setter Property="Background" Value="{DynamicResource VelaAccentDim}" />
+  </Style>
+
+  <!--
+    拖拽手柄。平时完全看不见 —— 列头和抽屉边缘不该多出一条竖线;
+    指针压上去才亮成一条强调色的窄条,告诉用户"这里可以拖"。
+  -->
+  <Style Selector="ui|ResizeGrip:pointerover">
+    <Setter Property="Background" Value="{DynamicResource VelaAccentDim}" />
+  </Style>
+  <Style Selector="ui|ResizeGrip:pressed">
+    <Setter Property="Background" Value="{DynamicResource VelaAccent}" />
   </Style>
 
   <!-- 面板里所有列表都不要 Fluent 默认的圆角与内边距。 -->

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 
@@ -112,6 +113,30 @@ public static class Converters
         new FuncValueConverter<bool, TextWrapping>(v => v ? TextWrapping.Wrap : TextWrapping.NoWrap);
 
     /// <summary>
+    /// 「换行」开关 → 横向滚动条。
+    /// <para>
+    /// 两者必须互斥:开着横向滚动,正文就是在无限宽里量的,<c>TextWrapping.Wrap</c> 永远折不了行;
+    /// 关掉横向滚动而又不折行,超出去的那半行则彻底没办法看到。
+    /// </para>
+    /// </summary>
+    public static readonly IValueConverter WrapScroll =
+        new FuncValueConverter<bool, ScrollBarVisibility>(wrap =>
+            wrap ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
+
+    /// <summary>最大化 / 还原是同一颗键,图标要跟着当前状态走 —— 否则铺开之后没人看得出怎么回去。</summary>
+    public static readonly IValueConverter MaximizeIcon =
+        new FuncValueConverter<bool, string>(max => max ? "Docker.minimize-2" : "Docker.maximize-2");
+
+    /// <summary>
+    /// 控件宽度 ≥ 参数(像素)才为真。
+    /// <para>
+    /// 抽屉是用户拖出来的,同一条工具条要在 440 和 1400 两种宽度下都成立 ——
+    /// 靠它把次要的那几颗按钮按宽度逐级收起,而不是让它们溢出到屏幕外。
+    /// </para>
+    /// </summary>
+    public static readonly IValueConverter WiderThan = new WiderThanConverter();
+
+    /// <summary>
     /// CPU 高负载 → 警示色,否则强调色。
     /// <para>
     /// 行内 sparkline 与它旁边那个百分比共用这一条:两者必须同时变色,
@@ -171,6 +196,17 @@ public static class Converters
             };
             return Resolve(key, Brushes.Gray);
         }
+
+        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class WiderThanConverter : IValueConverter
+    {
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+            value is double width && !double.IsNaN(width) &&
+            double.TryParse(parameter as string, NumberStyles.Float, CultureInfo.InvariantCulture, out double least) &&
+            width >= least;
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
             throw new NotSupportedException();

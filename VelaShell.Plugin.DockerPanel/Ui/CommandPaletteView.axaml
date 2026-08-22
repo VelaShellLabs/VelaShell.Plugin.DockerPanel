@@ -9,8 +9,11 @@
     这一个管当前这台 Docker 主机上的容器、镜像、卷。搜的是不同的东西。
   -->
 
+  <!-- 底色走 VelaBgContentHeader(映射表里 bg-elevated 的那一档)。
+       原来写的 VelaBgElevated 宿主根本没有这个键 —— DynamicResource 查不到就不画,
+       于是整个命令面板是透明的,后面的卡片全透出来。 -->
   <Border Width="560" MaxHeight="480" CornerRadius="8"
-          Background="{DynamicResource VelaBgElevated}"
+          Background="{DynamicResource VelaBgContentHeader}"
           BorderBrush="{DynamicResource VelaBorderSecondary}" BorderThickness="1"
           BoxShadow="0 12 32 0 #66000000">
     <DockPanel>

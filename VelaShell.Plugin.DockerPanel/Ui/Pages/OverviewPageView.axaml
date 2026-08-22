@@ -74,9 +74,9 @@
           </Border>
         </Grid>
 
-        <Grid ColumnDefinitions="*,14,420">
+        <Grid ColumnDefinitions="*,12,420">
 
-          <StackPanel Name="MidLeft" Grid.Column="0" Spacing="14">
+          <StackPanel Name="MidLeft" Grid.Column="0" Spacing="12">
             <!-- 趋势 -->
             <Border Classes="card" Padding="14,12">
               <StackPanel Spacing="9">
@@ -203,17 +203,20 @@
         底部这一排横跨整个宽度:「需要关注」是这一页真正的行动清单,
         窝在左半栏里会被上面那两张图压成脚注。
       -->
-      <Grid ColumnDefinitions="*,12,420">
+      <!-- 高度按设计稿钉死 146:「需要关注」一个异常容器一条,不封顶的话
+           一台有几十个 exited 容器的机器会把这张卡撑到几屏高。超出的在卡内滚。 -->
+      <Grid ColumnDefinitions="*,12,420" Height="146">
         <!-- 需要关注 -->
-        <Border Grid.Column="0" Classes="card" Padding="14,12">
-          <StackPanel Spacing="9">
-            <Grid ColumnDefinitions="Auto,Auto,*">
+        <Border Grid.Column="0" Classes="card" Padding="14,12" ClipToBounds="True">
+          <DockPanel>
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*" Height="20" Margin="0,0,0,8">
               <TextBlock Grid.Column="0" Text="需要关注" Classes="h3" />
               <TextBlock Grid.Column="1" Text="{Binding Attention.Count, StringFormat='{}{0} 项'}"
                          Classes="meta" Margin="9,0,0,0" />
             </Grid>
-            <TextBlock Text="一切正常 —— 没有不健康、异常退出或被暂停的容器。" Classes="hint"
-                       IsVisible="{Binding !HasAttention}" />
+            <TextBlock DockPanel.Dock="Top" Text="一切正常 —— 没有不健康、异常退出或被暂停的容器。"
+                       Classes="hint" IsVisible="{Binding !HasAttention}" />
+            <ScrollViewer>
             <ItemsControl ItemsSource="{Binding Attention}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="pages:AttentionItem">
@@ -231,7 +234,8 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-          </StackPanel>
+            </ScrollViewer>
+          </DockPanel>
         </Border>
 
         <!--

@@ -27,9 +27,11 @@
             <ui:Glyph Key="Docker.pin" Size="13"
                       Brush="{Binding Pinned, Converter={x:Static ui:Converters.FeedbackBrush}, ConverterParameter=ok}" />
           </Button>
+          <!-- 铺开之后,回去的路就是这一颗 —— 图标必须跟着状态换,不然它看起来还是"再铺开一次" -->
           <Button Theme="{StaticResource DockerIconButton}" ToolTip.Tip="最大化 / 还原"
                   Command="{Binding ToggleMaximizeCommand}">
-            <ui:Glyph Key="Docker.maximize-2" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+            <ui:Glyph Key="{Binding Owner.DetailMaximized, Converter={x:Static ui:Converters.MaximizeIcon}}"
+                      Size="13" Brush="{DynamicResource VelaTextTertiary}" />
           </Button>
           <Button Theme="{StaticResource DockerIconButton}" ToolTip.Tip="关闭"
                   Command="{Binding CloseCommand}">

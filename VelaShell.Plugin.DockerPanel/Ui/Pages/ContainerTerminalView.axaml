@@ -11,13 +11,21 @@
   -->
 
   <DockPanel>
-    <Border DockPanel.Dock="Top" Classes="toolbar">
+    <!-- 这条工具条同样要在整屏和 440px 的抽屉里都成立:窄下来时先收标题与两颗
+         "换个会话"的按钮文字,再收按钮本身 —— 它们都是重开一个 exec 的入口,
+         而不是这一屏正在用的东西。 -->
+    <Border DockPanel.Dock="Top" Classes="toolbar" ClipToBounds="True">
       <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
         <ui:Glyph Grid.Column="0" Key="Icon.terminal" Size="15" VerticalAlignment="Center"
                   Brush="{DynamicResource VelaTextSecondary}" />
-        <TextBlock Grid.Column="1" Text="终端" Classes="h1" Margin="8,0,0,0" />
+        <TextBlock Grid.Column="1" Text="终端" Classes="h1" Margin="8,0,0,0"
+                   IsVisible="{Binding $parent[UserControl].Bounds.Width,
+                                       Converter={x:Static ui:Converters.WiderThan}, ConverterParameter=560}" />
         <!-- "这条命令会以谁的身份、在哪个目录里跑" —— 终端里最要紧的一行小字。 -->
-        <TextBlock Grid.Column="2" Text="{Binding HeaderText}" Classes="cell" Margin="9,0,0,0"
+        <!-- 坐在弹性列里而不是自己的 Auto 列里:窄下来时它该被省略号截断,
+             而不是把右边那一排按钮顶出去。 -->
+        <TextBlock Grid.Column="3" Text="{Binding HeaderText}" Classes="cell" Margin="9,0,9,0"
+                   ToolTip.Tip="{Binding HeaderText}"
                    Foreground="{DynamicResource VelaTextTertiary}" />
 
         <Border Grid.Column="4" Classes="chip" Margin="0,0,9,0"
@@ -37,6 +45,7 @@
           <StackPanel Orientation="Horizontal" Spacing="6">
             <ui:Glyph Key="Docker.users" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
             <TextBlock Text="切换用户" FontSize="{DynamicResource VelaFontSize11}"
+                       IsVisible="{Binding $parent[UserControl].Bounds.Width, Converter={x:Static ui:Converters.WiderThan}, ConverterParameter=760}"
                        Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
@@ -46,6 +55,7 @@
           <StackPanel Orientation="Horizontal" Spacing="6">
             <ui:Glyph Key="Icon.folder" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
             <TextBlock Text="工作目录" FontSize="{DynamicResource VelaFontSize11}"
+                       IsVisible="{Binding $parent[UserControl].Bounds.Width, Converter={x:Static ui:Converters.WiderThan}, ConverterParameter=760}"
                        Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
@@ -73,13 +83,14 @@
     </Border>
 
     <!-- 底部:与宿主终端标签同一套元信息 -->
-    <Border DockPanel.Dock="Bottom" Height="26" Padding="12,0"
+    <Border DockPanel.Dock="Bottom" Height="26" Padding="12,0" ClipToBounds="True"
             Background="{DynamicResource VelaBgSurface}"
             BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,1,0,0">
       <Grid ColumnDefinitions="Auto,Auto,*,Auto">
         <ui:Glyph Grid.Column="0" Key="Icon.info" Size="12" VerticalAlignment="Center"
                   Brush="{DynamicResource VelaTextTertiary}" />
         <TextBlock Grid.Column="1" Text="命令与输出不写入宿主会话日志 · Ctrl+D 或关掉会话即结束 exec"
+                   IsVisible="{Binding $parent[UserControl].Bounds.Width, Converter={x:Static ui:Converters.WiderThan}, ConverterParameter=700}"
                    Margin="6,0,0,0" FontSize="{DynamicResource VelaFontSize10}"
                    Foreground="{DynamicResource VelaTextTertiary}" VerticalAlignment="Center" />
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">

@@ -292,23 +292,27 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
 
     private bool _pinned;
 
-    /// <summary>抽屉最大化(占满面板宽度)。</summary>
+    /// <summary>
+    /// 抽屉最大化(占满整个页签)。
+    /// <para>
+    /// 状态存在**页面**上:抽屉的宽度与最大化是外层那张 Grid 的布局,
+    /// 而换一个容器就是换一个抽屉视图模型 —— 存在这里会一点行就丢。
+    /// </para>
+    /// </summary>
     public bool Maximized
     {
-        get => _maximized;
-        private set
-        {
-            if (SetField(ref _maximized, value))
-            {
-                OnPropertyChanged(nameof(DrawerWidth));
-            }
-        }
+        get => _page.DetailMaximized;
+        private set => _page.DetailMaximized = value;
     }
 
-    private bool _maximized;
-
-    /// <summary>抽屉宽度。最大化时用一个很大的值,布局会被面板本身夹住。</summary>
-    public double DrawerWidth => Maximized ? 4000 : 440;
+    /// <summary>
+    /// 抽屉所在的页面。
+    /// <para>
+    /// 界面要绑页面上的布局状态(最大化与否)。绕道 <see cref="Maximized" /> 不行 ——
+    /// 通知是页面发的,而这个视图模型不会替它转发一遍。
+    /// </para>
+    /// </summary>
+    public ContainersPageViewModel Owner => _page;
 
     /// <summary>切换钉住。</summary>
     public RelayCommand TogglePinCommand => _togglePin ??= new(_ =>
@@ -544,11 +548,12 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     private async Task SetTabAsync(DetailTab tab)
     {
         Tab = tab;
-        // 文件页是设计稿里的整屏三栏(文件树 / 编辑器 / 属性),440px 的抽屉装不下 ——
-        // 切过去就自动铺开。用户仍然可以手动还原。
+        // 文件页是设计稿里的整屏三栏(文件树 / 编辑器 / 属性),440px 的抽屉装不下。
+        // 但"直接铺满整个页签"太狠:列表整个没了,回去的路只剩头上那颗还原键。
+        // 撑到够摆开三栏就停,列表还在旁边,手柄也还在,用户随时能往回拖。
         if (tab is DetailTab.Files)
         {
-            Maximized = true;
+            _page.EnsureDrawerAtLeast(820);
         }
         switch (tab)
         {

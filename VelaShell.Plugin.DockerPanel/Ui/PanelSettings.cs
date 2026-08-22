@@ -19,7 +19,7 @@ public sealed class PanelSettings(IPluginStorage storage) : ObservableObject
     private bool _compactRows = true;
     private string _logTail = "500";
     private bool _logTimestamps = true;
-    private bool _logWrap;
+    private bool _logWrap = true;
     private bool _autoRefreshFallback = true;
 
     /// <summary>列表里显示已停止的容器。</summary>
@@ -79,7 +79,10 @@ public sealed class PanelSettings(IPluginStorage storage) : ObservableObject
         set { if (SetField(ref _logTimestamps, value)) { Changed?.Invoke(); } }
     }
 
-    /// <summary>日志自动换行。</summary>
+    /// <summary>
+    /// 日志自动换行。默认开:面板里的日志既可能占满整屏,也可能挤在 440px 的详情抽屉里,
+    /// 而后者关掉换行就等于把长行截在右边界上 —— 看不到的那一半往往正是要看的那一半。
+    /// </summary>
     public bool LogWrap
     {
         get => _logWrap;
@@ -166,7 +169,7 @@ public sealed class PanelSettings(IPluginStorage storage) : ObservableObject
         public bool CompactRows { get; init; } = true;
         public string? LogTail { get; init; }
         public bool LogTimestamps { get; init; } = true;
-        public bool LogWrap { get; init; }
+        public bool LogWrap { get; init; } = true;
         public bool AutoRefreshFallback { get; init; } = true;
     }
 

@@ -42,6 +42,12 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     private ContainerDetailViewModel? _detail;
     private LogsViewModel? _mergedLogs;
     private string _logSourceSearch = "";
+    private double _drawerWidth = 440;
+    private double _maxDrawerWidth = 1200;
+    private bool _detailMaximized;
+
+    /// <summary>抽屉再窄就摆不下头里那一行了。</summary>
+    private const double MinDrawerWidth = 360;
 
     /// <summary>建容器页。</summary>
     public ContainersPageViewModel(DockerPanelViewModel shell) : base(shell)
@@ -267,13 +273,99 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         {
             if (SetField(ref _detail, value))
             {
-                OnPropertyChanged(nameof(HasDetail));
+                OnPropertiesChanged(nameof(HasDetail), nameof(CanResizeDrawer));
             }
         }
     }
 
     /// <summary>详情抽屉开着没有。</summary>
     public bool HasDetail => Detail is not null;
+
+    /// <summary>
+    /// 列表的列宽。列头与几百行数据行共用这一份 —— 拖列头的手柄改的就是它。
+    /// <para>
+    /// 放在**页面**上而不是行上:列宽是这张表的属性,不是某一行的。
+    /// </para>
+    /// </summary>
+    public ContainerColumns Columns { get; } = new();
+
+    /// <summary>
+    /// 详情抽屉的宽度(用户拖出来的)。
+    /// <para>
+    /// 放在页面上而不是抽屉自己身上:换一个容器就是换一个抽屉视图模型,
+    /// 宽度要是跟着抽屉走,用户每点一行就得重拖一次。
+    /// </para>
+    /// </summary>
+    public double DrawerWidth
+    {
+        get => _drawerWidth;
+        set
+        {
+            if (SetField(ref _drawerWidth, Clamp(value)))
+            {
+                OnPropertyChanged(nameof(DrawerContentWidth));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 抽屉能拖到多宽 —— 由面板自己的宽度定(视图在 SizeChanged 里喂进来)。
+    /// <para>
+    /// 必须夹住:抽屉比面板还宽时,它的头(还原 / 关闭那两颗)就被顶到屏幕外面去了,
+    /// 用户再也没有回到列表的路。
+    /// </para>
+    /// </summary>
+    public double MaxDrawerWidth
+    {
+        get => _maxDrawerWidth;
+        set
+        {
+            if (SetField(ref _maxDrawerWidth, Math.Max(MinDrawerWidth, value)))
+            {
+                DrawerWidth = _drawerWidth;
+            }
+        }
+    }
+
+    /// <summary>抽屉最大化(占满整个页签)。</summary>
+    public bool DetailMaximized
+    {
+        get => _detailMaximized;
+        set
+        {
+            if (SetField(ref _detailMaximized, value))
+            {
+                OnPropertiesChanged(nameof(ListVisible), nameof(CanResizeDrawer),
+                    nameof(DetailColumn), nameof(DetailColumnSpan), nameof(DrawerContentWidth));
+            }
+        }
+    }
+
+    /// <summary>抽屉落在外层哪一列:最大化时从第 0 列起跨满,平时坐在最右那一列。</summary>
+    public int DetailColumn => DetailMaximized ? 0 : 2;
+
+    /// <summary>抽屉跨几列。</summary>
+    public int DetailColumnSpan => DetailMaximized ? 3 : 1;
+
+    /// <summary>抽屉的实际宽度;最大化时交给布局(<c>NaN</c> = 由跨列撑满)。</summary>
+    public double DrawerContentWidth => DetailMaximized ? double.NaN : DrawerWidth;
+
+    /// <summary>抽屉的拖拽手柄要不要露出来。</summary>
+    public bool CanResizeDrawer => HasDetail && !DetailMaximized;
+
+    /// <summary>列表这一块要不要露出来(日志模式取代它,抽屉最大化盖住它)。</summary>
+    public bool ListVisible => !IsLogsMode && !DetailMaximized;
+
+    /// <summary>
+    /// 把抽屉至少撑到这么宽。
+    /// <para>
+    /// 文件页那种三栏在 440px 里根本摆不开;但"撑满整个页签"又太狠 ——
+    /// 撑到够用就停,列表还在旁边,用户也还能接着往回拖。
+    /// </para>
+    /// </summary>
+    public void EnsureDrawerAtLeast(double width) => DrawerWidth = Math.Max(DrawerWidth, width);
+
+    private double Clamp(double width) => Math.Clamp(width, MinDrawerWidth, Math.Max(MinDrawerWidth, _maxDrawerWidth));
 
     /// <summary>切筛选。</summary>
     public RelayCommand SetFilterCommand { get; }
@@ -722,7 +814,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         {
             if (SetField(ref _mergedLogs, value))
             {
-                OnPropertyChanged(nameof(IsLogsMode));
+                OnPropertiesChanged(nameof(IsLogsMode), nameof(ListVisible));
             }
         }
     }
@@ -1046,6 +1138,9 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         {
             _ = detail.DisposeAsync();
             Detail = null;
+            // 最大化是抽屉的状态,抽屉没了它也就该没了 ——
+            // 不然下一次开抽屉会莫名其妙地直接铺满整页。
+            DetailMaximized = false;
             MarkCurrent(null);
         }
     }
@@ -1169,4 +1264,59 @@ public sealed class BatchSummaryState(
 
     /// <summary>有折叠起来的成功项。</summary>
     public bool HasCollapsed => result.SucceededCount > 0;
+}
+
+/// <summary>
+/// 容器列表的列宽。
+/// <para>
+/// 列头和数据行绑的是同一份实例,拖动列头的手柄改的就是这里 ——
+/// 这也是让列头与单元格真正对齐的唯一办法(Avalonia 没有 <c>SharedSizeGroup</c>)。
+/// </para>
+/// <para>
+/// 只有「镜像」是弹性列。名称在设计稿里是 240px,让它跟着窗口一起长,
+/// 到 2000px 宽的屏幕上就会变成一条一千多像素的空白 —— 而真正读不完的是镜像名。
+/// </para>
+/// </summary>
+public sealed class ContainerColumns : ObservableObject
+{
+    private double _name = 240;
+    private double _ports = 118;
+    private double _cpu = 108;
+    private double _mem = 84;
+    private double _uptime = 78;
+
+    /// <summary>名称列。</summary>
+    public double Name
+    {
+        get => _name;
+        set => SetField(ref _name, Math.Clamp(value, 140, 640));
+    }
+
+    /// <summary>端口列。</summary>
+    public double Ports
+    {
+        get => _ports;
+        set => SetField(ref _ports, Math.Clamp(value, 70, 400));
+    }
+
+    /// <summary>CPU 列。</summary>
+    public double Cpu
+    {
+        get => _cpu;
+        set => SetField(ref _cpu, Math.Clamp(value, 78, 300));
+    }
+
+    /// <summary>内存列。</summary>
+    public double Mem
+    {
+        get => _mem;
+        set => SetField(ref _mem, Math.Clamp(value, 62, 240));
+    }
+
+    /// <summary>运行时长列。</summary>
+    public double Uptime
+    {
+        get => _uptime;
+        set => SetField(ref _uptime, Math.Clamp(value, 62, 260));
+    }
 }
