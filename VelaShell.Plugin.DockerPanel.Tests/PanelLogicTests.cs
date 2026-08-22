@@ -24,14 +24,14 @@ public class PanelLogicTests
             (target, _) => target == "b"
                 ? throw new DockerApiException(System.Net.HttpStatusCode.Conflict,
                     "conflict: container is being used by api-gateway")
-                : Task.CompletedTask);
+                : Task.CompletedTask, cancellationToken: TestContext.CancellationToken);
 
         // 一个目标失败不能把后面的目标一起拖下水 —— 界面要报"成功 2、失败 1",
         // 而不是把整批说成"操作失败"。
         Assert.AreEqual(2, result.SucceededCount);
         Assert.AreEqual(1, result.FailedCount);
         Assert.AreEqual("postgres-main", result.Failures.Single().Target);
-        StringAssert.Contains(result.Failures.Single().Failure!, "api-gateway");
+        Assert.Contains("api-gateway", result.Failures.Single().Failure!);
     }
 
     [TestMethod]
@@ -44,12 +44,12 @@ public class PanelLogicTests
             {
                 attempts++;
                 throw new DockerUnreachableException("连接断了", DockerUnreachableReason.SessionUnavailable);
-            });
+            }, cancellationToken: TestContext.CancellationToken);
 
         // 连接没了就没必要继续戳后面的目标 —— 它们只会拿到同一条错误。
         Assert.AreEqual(1, attempts);
         Assert.AreEqual(3, result.FailedCount);
-        StringAssert.Contains(result.Outcomes[2].Failure!, "没有执行");
+        Assert.Contains("没有执行", result.Outcomes[2].Failure!);
     }
 
     [TestMethod]
@@ -59,9 +59,9 @@ public class PanelLogicTests
         await BatchRunner.RunAsync(
             [("a", "one"), ("b", "two")],
             (_, _) => Task.CompletedTask,
-            (done, total, _) => progress.Add((done, total)));
+            (done, total, _) => progress.Add((done, total)), TestContext.CancellationToken);
 
-        CollectionAssert.AreEqual(new[] { (0, 2), (1, 2), (2, 2) }, progress);
+        Assert.AreSequenceEqual([(0, 2), (1, 2), (2, 2)], progress);
     }
 
     // ── 拉取进度聚合 ──────────────────────────────────────────
@@ -147,7 +147,7 @@ public class PanelLogicTests
 
         collection.Merge([new Item("c"), new Item("a"), new Item("d")], (_, _) => { });
 
-        CollectionAssert.AreEqual(new[] { "c", "a", "d" }, collection.Select(i => i.Id).ToArray());
+        Assert.AreSequenceEqual(["c", "a", "d"], [.. collection.Select(i => i.Id)]);
     }
 
     // ── 确认闸门 ──────────────────────────────────────────────
@@ -169,7 +169,7 @@ public class PanelLogicTests
 
         gate.TypedWord = "delet";
         Assert.IsFalse(gate.CanConfirm);
-        StringAssert.Contains(gate.RemainingHint, "还差 1");
+        Assert.Contains("还差 1", gate.RemainingHint);
 
         gate.TypedWord = "DELETE";
         // 大小写不同就是不同 —— 这道闸门的全部意义就是"必须精确地打对"。
@@ -233,7 +233,7 @@ public class PanelLogicTests
 
         SetText(form, "新名称", "nginx-proxy-2");
         Assert.IsTrue(form.Validate());
-        StringAssert.Contains(form.ComposeWarning, "web-stack");
+        Assert.Contains("web-stack", form.ComposeWarning);
     }
 
     [TestMethod]
@@ -244,7 +244,7 @@ public class PanelLogicTests
 
         // Docker 自己会拒掉这个组合,但等它拒不如现在就说清楚。
         Assert.IsFalse(form.Validate());
-        StringAssert.Contains(form.FormError!, "互斥");
+        Assert.Contains("互斥", form.FormError!);
     }
 
     [TestMethod]
@@ -276,17 +276,15 @@ public class PanelLogicTests
 
         Assert.AreEqual("nginx:1.27-alpine", request.Image);
         Assert.AreEqual("8081", request.HostConfig!.PortBindings!["80/tcp"][0].HostPort);
-        CollectionAssert.AreEqual(new[] { "/srv/conf:/etc/nginx/conf.d" }, request.HostConfig.Binds);
-        CollectionAssert.AreEqual(new[] { "KEY=value" }, request.Env);
-        StringAssert.Contains(form.CommandNote, "-p 8081:80");
+        Assert.AreSequenceEqual(["/srv/conf:/etc/nginx/conf.d"], [.. request.HostConfig.Binds!]);
+        Assert.AreSequenceEqual(["KEY=value"], [.. request.Env!]);
+        Assert.Contains("-p 8081:80", form.CommandNote);
     }
 
     [TestMethod]
     public void SplitArguments_RespectsQuotes()
     {
-        CollectionAssert.AreEqual(
-            new[] { "nginx", "-g", "daemon off;" },
-            RunContainerForm.SplitArguments("nginx -g 'daemon off;'"));
+        Assert.AreSequenceEqual(["nginx", "-g", "daemon off;"], RunContainerForm.SplitArguments("nginx -g 'daemon off;'"));
     }
 
     [TestMethod]
@@ -312,7 +310,7 @@ public class PanelLogicTests
 
         // 直接置灰而不是让用户去撞一条 daemon 的错误。
         Assert.IsFalse(overlay.Enabled);
-        StringAssert.Contains(overlay.DisabledReason, "swarm");
+        Assert.Contains("swarm", overlay.DisabledReason);
     }
 
     [TestMethod]
@@ -369,4 +367,6 @@ public class PanelLogicTests
 
     private static void SetToggle(PanelForm form, string label, bool value) =>
         form.Fields.OfType<ToggleField>().Single(f => f.Label == label).Value = value;
+
+    public TestContext TestContext { get; set; }
 }

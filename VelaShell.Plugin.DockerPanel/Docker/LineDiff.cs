@@ -94,7 +94,7 @@ public static class LineDiff
     /// </summary>
     private static List<DiffLine> Pair(List<DiffLine> lines)
     {
-        List<DiffLine> paired = new(lines.Count);
+        List<DiffLine> paired = [with(lines.Count)];
         for (int k = 0; k < lines.Count; k++)
         {
             DiffLine current = lines[k];

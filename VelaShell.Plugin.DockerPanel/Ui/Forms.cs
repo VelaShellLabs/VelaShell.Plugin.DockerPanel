@@ -122,7 +122,7 @@ public sealed class RestartPolicyForm : PanelForm
     /// <inheritdoc />
     public override bool Validate()
     {
-        if (_policy.Value == "on-failure" && !int.TryParse(_retries.Value.Trim(), out int n))
+        if (_policy.Value == "on-failure" && !int.TryParse(_retries.Value.Trim(), out _))
         {
             _retries.Error = "要一个整数。";
             return false;

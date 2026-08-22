@@ -456,7 +456,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <inheritdoc />
     public override void Reset()
     {
-        CloseDetail(force: true);
+        _ = CloseDetail(force: true);
         _ = ExitLogsModeAsync();
         _sampler.Stop();
         _all.Clear();
@@ -700,17 +700,17 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         {
             return;
         }
-        CloseDetailIfRemoved(targets);
+        await CloseDetailIfRemoved(targets);
         await BatchAsync("删除", targets, (c, id, ct) => c.RemoveContainerAsync(id, anyRunning, false, ct)).ConfigureAwait(true);
         ClearSelection();
     }
 
-    private void CloseDetailIfRemoved(IReadOnlyList<ContainerRow> targets)
+    private async Task CloseDetailIfRemoved(IReadOnlyList<ContainerRow> targets)
     {
         // 钉住也拦不住这一条:容器都删了,留一个指向它的抽屉没有意义。
         if (Detail is { } detail && targets.Any(t => t.Id == detail.ContainerId))
         {
-            CloseDetail(force: true);
+            await CloseDetail(force: true);
         }
     }
 
@@ -1001,7 +1001,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
             return;
         }
         // 换容器时钉住也要让位 —— 用户明确点了另一行。
-        CloseDetail(force: true);
+        await CloseDetail(force: true);
         var detail = new ContainerDetailViewModel(Shell, this, row);
         Detail = detail;
         MarkCurrent(row.Id);
@@ -1009,11 +1009,11 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     }
 
     /// <summary>关抽屉。钉住的抽屉只有 <paramref name="force" /> 才关得掉。</summary>
-    private void CloseDetail(bool force = false)
+    private async Task CloseDetail(bool force = false)
     {
         if (Detail is { } detail && (force || !detail.Pinned))
         {
-            _ = detail.DisposeAsync();
+            await detail.DisposeAsync();
             Detail = null;
             MarkCurrent(null);
         }
@@ -1034,7 +1034,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        CloseDetail(force: true);
+        await CloseDetail(force: true);
         await ExitLogsModeAsync().ConfigureAwait(false);
         await _sampler.DisposeAsync().ConfigureAwait(false);
     }
@@ -1135,7 +1135,6 @@ public sealed class BatchSummaryState(
     /// <summary>有折叠起来的成功项。</summary>
     public bool HasCollapsed => result.SucceededCount > 0;
 }
-
 
 /// <summary>
 /// 容器列表的列宽。

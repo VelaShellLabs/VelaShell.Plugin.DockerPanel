@@ -163,8 +163,7 @@ public sealed partial class DockerClient : IAsyncDisposable
         HttpResponseMessage response;
         try
         {
-            response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                                  .ConfigureAwait(false);
+            response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -184,8 +183,7 @@ public sealed partial class DockerClient : IAsyncDisposable
         return response;
     }
 
-    private static HttpContent? JsonBody(object? body) =>
-        body is null ? null : JsonContent.Create(body, options: DockerJson.Options);
+    private static JsonContent? JsonBody(object? body) => body is null ? null : JsonContent.Create(body, options: DockerJson.Options);
 
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? content,
         CancellationToken cancellationToken)

@@ -1176,11 +1176,7 @@ public sealed class NewComposeProjectForm : PanelForm
     {
         get
         {
-            if (_name.Value.Trim() is { Length: > 0 } explicitName)
-            {
-                return explicitName;
-            }
-            return ComposePath.LastSegment(Directory);
+            return _name.Value.Trim() is { Length: > 0 } explicitName ? explicitName : ComposePath.LastSegment(Directory);
         }
     }
 

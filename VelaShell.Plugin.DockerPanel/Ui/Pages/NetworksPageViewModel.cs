@@ -604,7 +604,7 @@ public sealed class NetworksPageViewModel : PageViewModel
             return;
         }
         BatchResult result = await BatchRunner.RunAsync(
-            [.. form.SelectedIds.Select(id => (Target: id, Name: containers.First(c => c.Id == id).Name))],
+            [.. form.SelectedIds.Select(id => (Target: id, containers.First(c => c.Id == id).Name))],
             (id, ct) => client.ConnectNetworkAsync(row.Id, id, form.Aliases.Length > 0 ? form.Aliases : null, ct),
             null, Shell.Lifetime).ConfigureAwait(true);
         Shell.Feedback.ReportBatch("接入", result, Shell.CurrentPage == PanelPage.Networks);

@@ -15,8 +15,7 @@ namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
 /// <param name="Value">主数值。</param>
 /// <param name="Sub">底下那行小字。</param>
 /// <param name="Tone">数值的语气。</param>
-public readonly record struct SystemStat(string Icon, string Label, string Value, string Sub,
-    RowTone Tone = RowTone.Idle);
+public readonly record struct SystemStat(string Icon, string Label, string Value, string Sub, RowTone Tone = RowTone.Idle);
 
 /// <summary>磁盘占用表里的一行。</summary>
 /// <param name="Kind">类型。</param>
@@ -35,8 +34,7 @@ public readonly record struct DiskRow(string Kind, string Total, string Active, 
 public readonly record struct DiskSegment(string Label, long Bytes, double Weight, string Brush);
 
 /// <summary>一张回收卡片。</summary>
-public sealed class PruneCard(string icon, string title, string description, string tag, RowTone tone, RelayCommand command)
-    : ObservableObject
+public sealed class PruneCard(string icon, string title, string description, string tag, RowTone tone, RelayCommand command) : ObservableObject
 {
 
     /// <summary>图标。</summary>
@@ -255,6 +253,8 @@ public sealed class SystemPageViewModel : PageViewModel
     /// <summary>宿主磁盘那一句;拿不到时为空。</summary>
     public string HostDiskText { get; private set; } = "";
 
+    private static readonly string[] request = ["POST /volumes/prune"];
+
     /// <summary>解一行 <c>df -PB1</c>。返回 (总量, 已用)。</summary>
     internal static (long Total, long Used)? ParseDf(string output)
     {
@@ -442,7 +442,7 @@ public sealed class SystemPageViewModel : PageViewModel
                 "POST /images/prune?filters={\"dangling\":[\"false\"]}",
                 "POST /networks/prune",
                 "POST /build/prune",
-                .. withVolumes ? new[] { "POST /volumes/prune" } : []
+                .. withVolumes ? request : []
             ],
             CommandNote = $"等价于  docker system prune -a{(withVolumes ? " --volumes" : "")}",
             Consequences = withVolumes

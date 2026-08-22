@@ -22,24 +22,18 @@ public enum FeedbackKind
 }
 
 /// <summary>面板右下角的一条 toast。</summary>
-public sealed class Toast : ObservableObject
+/// <remarks>建一条 toast。</remarks>
+public sealed class Toast(FeedbackKind kind, string title, string detail) : ObservableObject
 {
-    /// <summary>建一条 toast。</summary>
-    public Toast(FeedbackKind kind, string title, string detail)
-    {
-        Kind = kind;
-        Title = title;
-        Detail = detail;
-    }
 
     /// <summary>语气。</summary>
-    public FeedbackKind Kind { get; }
+    public FeedbackKind Kind { get; } = kind;
 
     /// <summary>标题。</summary>
-    public string Title { get; }
+    public string Title { get; } = title;
 
     /// <summary>正文。</summary>
-    public string Detail { get; }
+    public string Detail { get; } = detail;
 
     /// <summary>可点的动作(文字 → 回调)。</summary>
     public ObservableCollection<ToastAction> Actions { get; } = [];

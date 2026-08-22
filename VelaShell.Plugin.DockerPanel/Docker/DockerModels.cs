@@ -25,6 +25,8 @@ public static class DockerJson
         NumberHandling = JsonNumberHandling.AllowReadingFromString
     };
 
+    private static readonly JsonSerializerOptions HumanJson = new() { WriteIndented = true };
+
     /// <summary>把一段 JSON 反序列化成 <typeparamref name="T" />;失败返回 <see langword="null" />。</summary>
     /// <remarks>
     /// 先看一眼首字符再解析。这条路上最常见的输入根本不是 JSON —— 反代挡下来的 HTML、
@@ -54,7 +56,7 @@ public static class DockerJson
         try
         {
             using JsonDocument doc = JsonDocument.Parse(json);
-            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(doc.RootElement, HumanJson);
         }
         catch (JsonException)
         {

@@ -35,7 +35,7 @@ public static class ProcessTable
         int cpu = IndexOf(titles, "%CPU", "TIME", "PCPU");
         int command = IndexOf(titles, "COMMAND", "CMD", "ARGS");
 
-        List<ProcessRow> normalized = new(rows.Length);
+        List<ProcessRow> normalized = [with(rows.Length)];
         foreach (string[] row in rows)
         {
             // 命令列认不出来时退回"最后一列":ps 的输出里命令永远排在末尾,

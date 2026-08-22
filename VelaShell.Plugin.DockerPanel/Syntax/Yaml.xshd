@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!-- YAML。docker-compose / k8s / ansible 都靠它,AvaloniaEdit 未内置。
      name 与调色板角色对齐,这里的颜色只是缺省:CodeEditor 会按当前主题重着色。 -->
 <SyntaxDefinition name="Docker.Yaml" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">

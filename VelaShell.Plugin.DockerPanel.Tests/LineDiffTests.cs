@@ -70,7 +70,7 @@ public class LineDiffTests
         IReadOnlyList<DiffLine> diff = LineDiff.Compute("a\nb\nc", "a\nb\nc");
 
         Assert.AreEqual(0, LineDiff.CountChanged(diff));
-        Assert.AreEqual(3, diff.Count);
+        Assert.HasCount(3, diff);
     }
 
     [TestMethod]
@@ -85,7 +85,7 @@ public class LineDiffTests
     [TestMethod]
     public void HandlesEmptySides()
     {
-        Assert.AreEqual(0, LineDiff.Compute("", "").Count);
+        Assert.IsEmpty(LineDiff.Compute("", ""));
         Assert.AreEqual(2, LineDiff.Compute("", "a\nb").Count(l => l.Marker == DiffMarker.Added));
         Assert.AreEqual(2, LineDiff.Compute("a\nb", "").Count(l => l.Marker == DiffMarker.Removed));
     }

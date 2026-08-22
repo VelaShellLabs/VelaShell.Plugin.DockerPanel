@@ -26,7 +26,7 @@ public class InspectionTests
 
         IReadOnlyList<ProcessRow> rows = ProcessTable.Normalize(top);
 
-        Assert.AreEqual(1, rows.Count);
+        Assert.HasCount(1, rows);
         Assert.AreEqual("1234", rows[0].Pid);
         Assert.AreEqual("root", rows[0].User);
         Assert.AreEqual("00:00:03", rows[0].Cpu);
@@ -84,7 +84,7 @@ public class InspectionTests
 
     [TestMethod]
     public void ProcessTable_EmptyResultIsEmptyNotAnError() =>
-        Assert.AreEqual(0, ProcessTable.Normalize(null).Count);
+        Assert.IsEmpty(ProcessTable.Normalize(null));
 
     [TestMethod]
     public void ProcessTable_NamesTheCpuColumnAfterWhatTheRemotePsActuallyGave()
@@ -208,7 +208,7 @@ public class InspectionTests
     {
         string text = Humanize.AgoFromIso(DateTimeOffset.UtcNow.AddHours(-3).ToString("O"));
 
-        StringAssert.EndsWith(text, "前");
+        Assert.EndsWith("前", text);
         // 列表接口给 unix 秒、inspect 给 RFC3339,两条路要落到同一句话上。
         Assert.AreEqual("—", Humanize.AgoFromIso("not a timestamp"));
         Assert.AreEqual("—", Humanize.AgoFromIso(null));

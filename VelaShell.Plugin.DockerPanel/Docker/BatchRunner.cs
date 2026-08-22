@@ -50,7 +50,7 @@ public static class BatchRunner
         Action<int, int, string>? onProgress = null,
         CancellationToken cancellationToken = default)
     {
-        List<BatchOutcome> outcomes = new(targets.Count);
+        List<BatchOutcome> outcomes = [with(targets.Count)];
         for (int i = 0; i < targets.Count; i++)
         {
             (T target, string name) = targets[i];

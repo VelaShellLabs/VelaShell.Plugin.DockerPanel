@@ -46,16 +46,14 @@ public static class FilePicker
     /// <param name="extension">默认扩展名,不带点。</param>
     public static async Task<IStorageFile?> PickSaveAsync(string title, string suggestedName, string? extension = null)
     {
-        if (_accessor?.Invoke()?.StorageProvider is not { } storage)
-        {
-            return null;
-        }
-        return await storage.SaveFilePickerAsync(new()
-        {
-            Title = title,
-            SuggestedFileName = suggestedName,
-            DefaultExtension = extension,
-            ShowOverwritePrompt = true
-        }).ConfigureAwait(true);
+        return _accessor?.Invoke()?.StorageProvider is not { } storage
+            ? null
+            : await storage.SaveFilePickerAsync(new()
+            {
+                Title = title,
+                SuggestedFileName = suggestedName,
+                DefaultExtension = extension,
+                ShowOverwritePrompt = true
+            }).ConfigureAwait(true);
     }
 }

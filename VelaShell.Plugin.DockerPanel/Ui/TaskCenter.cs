@@ -30,28 +30,19 @@ public enum PanelTaskState
 /// 给后者编一个假的百分比,只会让用户在 90% 处等上两分钟。
 /// </para>
 /// </summary>
-public sealed class PanelTask : ObservableObject
+/// <remarks>建一个任务。</remarks>
+public sealed class PanelTask(string icon, string title, bool indeterminate) : ObservableObject
 {
     private readonly CancellationTokenSource _cts = new();
-    private string _title;
-    private bool _indeterminate = true;
-
-    /// <summary>建一个任务。</summary>
-    public PanelTask(string icon, string title, bool indeterminate)
-    {
-        Icon = icon;
-        _title = title;
-        _indeterminate = indeterminate;
-    }
 
     /// <summary>图标资源键。</summary>
-    public string Icon { get; }
+    public string Icon { get; } = icon;
 
     /// <summary>任务标题。</summary>
     public string Title
     {
-        get => _title;
-        set => SetField(ref _title, value);
+        get => title;
+        set => SetField(ref title, value);
     }
 
     /// <summary>标题下面那行小字(层数、速率、当前目标)。</summary>
@@ -71,8 +62,8 @@ public sealed class PanelTask : ObservableObject
     /// <summary>是否不确定型。</summary>
     public bool Indeterminate
     {
-        get => _indeterminate;
-        set => SetField(ref _indeterminate, value);
+        get => indeterminate;
+        set => SetField(ref indeterminate, value);
     }
 
     /// <summary>右侧的一小段文字(百分比 / “完成” / “部分失败”)。</summary>
