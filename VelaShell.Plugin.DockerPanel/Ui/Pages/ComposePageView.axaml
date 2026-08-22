@@ -8,11 +8,34 @@
 
   <!--
     三栏:项目列表 / compose.yaml 编辑器 + 服务表 / 执行记录。
-    compose 走的是远端的 docker compose CLI —— Engine API 里没有 compose 这一块,
-    在面板里重写一遍只会与远端装的那个版本行为不一致。
+    compose 走的是 docker compose CLI —— Engine API 里没有 compose 这一块,
+    在面板里重写一遍只会与那台机器上装的版本行为不一致。
+    远端由 SSH 会话执行,本机起一个本地进程;两边都要求那台机器上真有 compose v2。
   -->
 
-  <Grid ColumnDefinitions="260,*,400">
+  <!--
+    AvaloniaEdit 的控件模板随其主题提供;宿主 App.axaml 里也并了一份,
+    但插件不该假定宿主的资源里有什么 —— 缺了它 CodeEditor 无模板、内容不渲染。
+  -->
+  <UserControl.Styles>
+    <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
+  </UserControl.Styles>
+
+  <!--
+    三栏都能拖:左边列出的项目路径动辄一长串,右边的执行记录里是命令原文,
+    哪一栏够宽只有当下这个用户知道。分割条与容器页抽屉那条同一路数 ——
+    1px 的线画在下面,上面压一条透明的 GridSplitter 当抓手。
+  -->
+  <Grid x:Name="Root">
+    <Grid.ColumnDefinitions>
+      <!-- 下限不是审美,是功能:项目列表窄过 180 连项目名都摆不下,
+           中间窄过 560 工具条上那七颗按钮会被挤掉,执行记录窄过 240 每条命令都要折三行。 -->
+      <ColumnDefinition Width="260" MinWidth="180" />
+      <ColumnDefinition Width="5" />
+      <ColumnDefinition Width="*" MinWidth="560" />
+      <ColumnDefinition Width="5" />
+      <ColumnDefinition Width="400" MinWidth="240" />
+    </Grid.ColumnDefinitions>
 
     <!-- 项目 -->
     <Border Grid.Column="0" Background="{DynamicResource VelaBgDockDocument}"
@@ -83,8 +106,14 @@
       </DockPanel>
     </Border>
 
+    <Border Grid.Column="1" Width="1" HorizontalAlignment="Left"
+            Background="{DynamicResource VelaBorderPrimary}" />
+    <GridSplitter Grid.Column="1" x:Name="ProjectsSplitter" Background="Transparent"
+                  ResizeDirection="Columns" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  ToolTip.Tip="拖动改项目列表宽度" />
+
     <!-- 编辑器 + 服务 -->
-    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding HasSelection}">
+    <Grid Grid.Column="2" RowDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding HasSelection}">
       <Border Grid.Row="0" Height="48" Padding="14,0" Background="{DynamicResource VelaBgContentHeader}"
               BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
         <Grid ColumnDefinitions="Auto,*,Auto">
@@ -100,51 +129,42 @@
             <!-- 项目名 / compose 文件 / 项目目录 三个参数一起钉住,少一个都出错 -->
             <TextBlock Text="{Binding ProjectPrefix}" Classes="meta" FontSize="9" />
           </StackPanel>
+          <!--
+            按钮上写中文、tooltip 里给等效命令。原来直接把 `up -d` 印在按钮上,
+            对着 compose 用了很久的人当然一眼就懂,但对第一次点进来的人,
+            "down" 与 "down -v" 长得几乎一样,而它们的后果差着一整套数据。
+            填充色一律走 Classes 而不是就地写 Background:
+            主题的 :pointerover 改的就是模板里那块 Border,写在按钮上会在指针压上去的
+            那一刻被抹成灰底 —— 那正是"移上去反而看起来坏了"。
+          -->
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
             <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
-                    Command="{Binding PullCommand}">
-              <TextBlock Text="pull" FontFamily="{DynamicResource VelaUiMonoFont}"
-                         FontSize="{DynamicResource VelaFontSize11}"
-                         Foreground="{DynamicResource VelaTextSecondary}" />
-            </Button>
+                    ToolTip.Tip="docker compose pull —— 只拉镜像,不动正在跑的容器"
+                    Content="拉取" Command="{Binding PullCommand}" />
             <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
-                    Command="{Binding BuildCommand}">
-              <TextBlock Text="build" FontFamily="{DynamicResource VelaUiMonoFont}"
-                         FontSize="{DynamicResource VelaFontSize11}"
-                         Foreground="{DynamicResource VelaTextSecondary}" />
-            </Button>
+                    ToolTip.Tip="docker compose build —— 重建带 build: 段的服务镜像"
+                    Content="构建" Command="{Binding BuildCommand}" />
             <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
-                    Command="{Binding RestartCommand}">
-              <TextBlock Text="restart" FontFamily="{DynamicResource VelaUiMonoFont}"
-                         FontSize="{DynamicResource VelaFontSize11}"
-                         Foreground="{DynamicResource VelaTextSecondary}" />
-            </Button>
+                    ToolTip.Tip="docker compose restart —— 容器不重建,只重启"
+                    Content="重启" Command="{Binding RestartCommand}" />
             <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
-                    Command="{Binding StopCommand}">
-              <TextBlock Text="stop" FontFamily="{DynamicResource VelaUiMonoFont}"
-                         FontSize="{DynamicResource VelaFontSize11}"
-                         Foreground="{DynamicResource VelaTextSecondary}" />
-            </Button>
-            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
-                    BorderBrush="{DynamicResource VelaShellRedDim}" Command="{Binding DownCommand}">
-              <TextBlock Text="down" FontFamily="{DynamicResource VelaUiMonoFont}"
-                         FontSize="{DynamicResource VelaFontSize11}"
-                         Foreground="{DynamicResource VelaError}" />
-            </Button>
-            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
-                    Background="{DynamicResource VelaError}" BorderBrush="Transparent"
-                    ToolTip.Tip="down -v 会把这个项目的命名卷一起删掉" Command="{Binding DownVolumesCommand}">
-              <TextBlock Text="down -v" FontFamily="{DynamicResource VelaUiMonoFont}"
-                         FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium" Foreground="#FFFFFF" />
-            </Button>
-            <Button Theme="{StaticResource DockerToolButton}" Height="26" IsEnabled="{Binding !Running}"
-                    Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
+                    ToolTip.Tip="docker compose stop —— 停下来,容器还在,随时能再起"
+                    Content="停止" Command="{Binding StopCommand}" />
+            <Button Theme="{StaticResource DockerToolButton}" Classes="danger" Height="26"
+                    IsEnabled="{Binding !Running}"
+                    ToolTip.Tip="docker compose down —— 停止并删除这个项目的容器与网络;命名卷不动"
+                    Content="停止并删除" Command="{Binding DownCommand}" />
+            <Button Theme="{StaticResource DockerToolButton}" Classes="danger-solid" Height="26"
+                    IsEnabled="{Binding !Running}"
+                    ToolTip.Tip="docker compose down -v —— 连这个项目的命名卷一起删,数据永久丢失"
+                    Content="连卷一起删" Command="{Binding DownVolumesCommand}" />
+            <Button Theme="{StaticResource DockerToolButton}" Classes="primary" Height="26"
+                    IsEnabled="{Binding !Running}"
+                    ToolTip.Tip="docker compose up -d —— 按 compose.yaml 创建并在后台启动"
                     Command="{Binding UpCommand}">
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <ui:Glyph Key="Icon.play" Size="12" Brush="{DynamicResource VelaAccentForeground}" />
-                <TextBlock Text="up -d" FontFamily="{DynamicResource VelaUiMonoFont}"
-                           FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
-                           Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
+                <ui:Glyph Key="Icon.play" Size="12" Brush="{Binding $parent[Button].Foreground}" />
+                <TextBlock Text="启动" FontWeight="Medium" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
           </StackPanel>
@@ -231,12 +251,12 @@
         </Border>
         <Border Classes="terminal">
           <Grid>
-            <TextBox Text="{Binding Yaml}" AcceptsReturn="True" AcceptsTab="True"
-                     Background="Transparent" BorderThickness="0" Padding="14,10"
-                     FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize11}"
-                     Foreground="{DynamicResource VelaShellWhite}"
-                     CaretBrush="{DynamicResource VelaAccent}"
-                     SelectionBrush="{DynamicResource VelaAccentDim}" TextWrapping="NoWrap" />
+            <!-- 高亮在 compose.yaml 上不是装饰:这是一种"缩进错一格就全错"的格式,
+                 键与值分色之后,少一个冒号、多一层缩进,不用等 config 报错就看得出来。 -->
+            <ui:CodeEditor Text="{Binding Yaml, Mode=TwoWay}" Language="Yaml"
+                           FontFamily="{DynamicResource VelaUiMonoFont}"
+                           FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaShellWhite}" />
             <TextBlock IsVisible="{Binding HasError}" Text="{Binding Error}" Classes="hint"
                        Foreground="{DynamicResource VelaError}" VerticalAlignment="Center"
                        HorizontalAlignment="Center" TextAlignment="Center" MaxWidth="420" />
@@ -272,12 +292,10 @@
         </Border>
         <Border Classes="terminal">
           <Grid>
-            <TextBox Text="{Binding Env}" AcceptsReturn="True" AcceptsTab="True"
-                     Background="Transparent" BorderThickness="0" Padding="14,10"
-                     FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize11}"
-                     Foreground="{DynamicResource VelaShellWhite}"
-                     CaretBrush="{DynamicResource VelaAccent}"
-                     SelectionBrush="{DynamicResource VelaAccentDim}" TextWrapping="NoWrap" />
+            <ui:CodeEditor Text="{Binding Env, Mode=TwoWay}" Language="DotEnv"
+                           FontFamily="{DynamicResource VelaUiMonoFont}"
+                           FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaShellWhite}" />
             <StackPanel IsVisible="{Binding !HasEnv}" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Spacing="8" MaxWidth="380">
               <TextBlock Text="这个项目没有 .env" Classes="h3" HorizontalAlignment="Center" />
@@ -288,27 +306,70 @@
         </Border>
       </DockPanel>
 
-      <!-- 服务表:每行带日志 / 终端 / 重启 -->
+      <!--
+        服务表:每行带日志 / 终端 / 重启。
+        列宽与其它四张表同一路数 —— 列头和每一行绑同一份 ColumnLayout,
+        列与列之间那条 6px 的轨道就是抓手(双击自适应)。
+      -->
       <ScrollViewer Grid.Row="2" Grid.RowSpan="2" IsVisible="{Binding IsServicesTab}">
         <StackPanel>
           <Border Classes="header-row" Padding="14,0">
-            <Grid ColumnDefinitions="110,180,*,170,100" VerticalAlignment="Center">
-              <TextBlock Grid.Column="0" Text="服务" Classes="col" />
-              <TextBlock Grid.Column="1" Text="容器" Classes="col" />
-              <TextBlock Grid.Column="2" Text="状态" Classes="col" />
-              <TextBlock Grid.Column="3" Text="端口" Classes="col" />
+            <Grid x:Name="ServicesHeader" VerticalAlignment="Center">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding Columns.Service}" MinWidth="80" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="{Binding Columns.Name}" MinWidth="110" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="{Binding Columns.Status}" MinWidth="90" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="{Binding Columns.Ports}" MinWidth="90" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="84" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="服务" Classes="col" Margin="0,0,6,0" />
+              <Border Grid.Column="1" Classes="colgrip" Tag="service">
+                <Border Classes="colline" />
+              </Border>
+              <TextBlock Grid.Column="2" Text="容器" Classes="col" Margin="0,0,6,0" />
+              <Border Grid.Column="3" Classes="colgrip" Tag="name">
+                <Border Classes="colline" />
+              </Border>
+              <TextBlock Grid.Column="4" Text="状态" Classes="col" Margin="0,0,6,0" />
+              <Border Grid.Column="5" Classes="colgrip" Tag="status">
+                <Border Classes="colline" />
+              </Border>
+              <TextBlock Grid.Column="6" Text="端口" Classes="col" Margin="0,0,6,0" />
+              <Border Grid.Column="7" Classes="colgrip" Tag="ports">
+                <Border Classes="colline" />
+              </Border>
             </Grid>
           </Border>
           <ItemsControl ItemsSource="{Binding Services}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="docker:ComposeService">
-                <Grid Height="32" ColumnDefinitions="110,180,*,170,100" Margin="14,0">
-                  <TextBlock Grid.Column="0" Text="{Binding Service}" Classes="name" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="cell" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="2" Text="{Binding Status}" Classes="cell" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="3" Text="{Binding PortsText}" Classes="cell" VerticalAlignment="Center"
-                             Foreground="{DynamicResource VelaInfo}" />
-                  <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right"
+                <Grid Height="32" Margin="14,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="{Binding $parent[ItemsControl].((pages:ComposePageViewModel)DataContext).Columns.Service}" />
+                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="{Binding $parent[ItemsControl].((pages:ComposePageViewModel)DataContext).Columns.Name}" />
+                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="{Binding $parent[ItemsControl].((pages:ComposePageViewModel)DataContext).Columns.Status}" />
+                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="{Binding $parent[ItemsControl].((pages:ComposePageViewModel)DataContext).Columns.Ports}" />
+                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="84" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Column="0" Text="{Binding Service}" Classes="name" VerticalAlignment="Center"
+                             Margin="0,0,6,0" />
+                  <TextBlock Grid.Column="2" Text="{Binding Name}" Classes="cell" VerticalAlignment="Center"
+                             Margin="0,0,6,0" />
+                  <TextBlock Grid.Column="4" Text="{Binding Status}" Classes="cell" VerticalAlignment="Center"
+                             Margin="0,0,6,0" />
+                  <TextBlock Grid.Column="6" Text="{Binding PortsText}" Classes="cell" VerticalAlignment="Center"
+                             Margin="0,0,6,0" Foreground="{DynamicResource VelaInfo}" />
+                  <StackPanel Grid.Column="9" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right"
                               VerticalAlignment="Center">
                     <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="这个服务的日志"
                             Command="{Binding $parent[ItemsControl].((pages:ComposePageViewModel)DataContext).ServiceLogsCommand}"
@@ -334,11 +395,12 @@
       </ScrollViewer>
 
       <!-- config 展开 -->
+      <!-- config 展开是 compose 算出来的结果,改它没有意义 —— 只读,但仍要能选能复制。 -->
       <Border Grid.Row="2" Grid.RowSpan="2" Classes="terminal" IsVisible="{Binding IsConfigTab}">
-        <ScrollViewer>
-          <SelectableTextBlock Text="{Binding Config}" Classes="code" Margin="14,10"
-                               Foreground="{DynamicResource VelaShellWhite}" />
-        </ScrollViewer>
+        <ui:CodeEditor Text="{Binding Config}" Language="Yaml" IsReadOnly="True"
+                       FontFamily="{DynamicResource VelaUiMonoFont}"
+                       FontSize="{DynamicResource VelaFontSize11}"
+                       Foreground="{DynamicResource VelaShellWhite}" />
       </Border>
 
       <!-- 合并日志:交给 compose logs -f 去并,它认得项目里有哪些服务 -->
@@ -364,8 +426,8 @@
           </Grid>
         </Border>
         <Border Classes="terminal">
-          <ScrollViewer>
-            <ItemsControl ItemsSource="{Binding Logs}" Margin="0,6">
+            <ItemsControl Theme="{StaticResource DockerLogList}" ItemsSource="{Binding Logs}"
+                          ui:AutoScroll.Source="{Binding Logs}" Padding="0,6">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="pages:OutputLine">
                   <Grid ColumnDefinitions="Auto,*" Margin="12,0" MinHeight="17">
@@ -387,15 +449,14 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-          </ScrollViewer>
         </Border>
       </DockPanel>
     </Grid>
 
-    <StackPanel Grid.Column="1" IsVisible="{Binding !HasSelection}" VerticalAlignment="Center"
+    <StackPanel Grid.Column="2" IsVisible="{Binding !HasSelection}" VerticalAlignment="Center"
                 HorizontalAlignment="Center" Spacing="10" MaxWidth="380">
       <TextBlock Text="选一个 compose 项目" Classes="h2" HorizontalAlignment="Center" />
-      <TextBlock Text="左边列出的是「起过至少一次」的项目;还没起过的,给一个远端路径就能打开。"
+      <TextBlock Text="左边列出的是「起过至少一次」的项目;还没起过的,给一个绝对路径就能打开。"
                  Classes="hint" TextAlignment="Center" />
       <!-- 正文里点名了两个动作,却一颗按钮都没有 —— 让用户自己回到左上角去找。 -->
       <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
@@ -417,8 +478,14 @@
       </StackPanel>
     </StackPanel>
 
+    <Border Grid.Column="3" Width="1" HorizontalAlignment="Left"
+            Background="{DynamicResource VelaBorderPrimary}" />
+    <GridSplitter Grid.Column="3" x:Name="OutputSplitter" Background="Transparent"
+                  ResizeDirection="Columns" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  ToolTip.Tip="拖动改执行记录宽度" />
+
     <!-- 执行记录 -->
-    <Border Grid.Column="2" Background="{DynamicResource VelaBgSurface}"
+    <Border Grid.Column="4" Background="{DynamicResource VelaBgSurface}"
             BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
       <DockPanel>
         <Border DockPanel.Dock="Top" Height="44" Padding="14,0"
@@ -451,8 +518,10 @@
           <TextBlock Text="保留最近 2000 行 · stdout 与 stderr 分色" Classes="meta" VerticalAlignment="Center" />
         </Border>
         <Border Classes="terminal">
-          <ScrollViewer Padding="12,8">
-            <ItemsControl ItemsSource="{Binding Output}">
+          <!-- 执行记录也跟着往下走:一条 up -d 会刷出几十行,
+               不跟的话用户得一边看一边手动往下拖。 -->
+            <ItemsControl Theme="{StaticResource DockerLogList}" ItemsSource="{Binding Output}"
+                          ui:AutoScroll.Source="{Binding Output}" Padding="12,8">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="pages:OutputLine">
                   <Grid ColumnDefinitions="56,*" MinHeight="17">
@@ -477,7 +546,6 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-          </ScrollViewer>
         </Border>
       </DockPanel>
     </Border>

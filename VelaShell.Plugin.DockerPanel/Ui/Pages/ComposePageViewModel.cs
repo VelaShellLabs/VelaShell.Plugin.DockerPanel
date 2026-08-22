@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Controls;
 using VelaShell.Plugin.DockerPanel.Docker;
 using VelaShell.PluginSdk.RemoteExec;
 
@@ -53,6 +54,9 @@ public sealed class ComposePageViewModel : PageViewModel
     private bool _composeAvailable = true;
     private ComposeTab _tab = ComposeTab.Yaml;
     private CancellationTokenSource? _logsCts;
+    // 日志是一行一行涌进来的,但界面不该一行一行地排版 —— 见 LineBuffer。
+    private readonly LineBuffer<OutputLine> _output;
+    private readonly LineBuffer<OutputLine> _logs;
     private int _lastExitCode;
 
     /// <summary>当前页签。</summary>
@@ -140,6 +144,8 @@ public sealed class ComposePageViewModel : PageViewModel
     /// <summary>建 Compose 页。</summary>
     public ComposePageViewModel(DockerPanelViewModel shell) : base(shell)
     {
+        _output = new(Output, 2000);
+        _logs = new(Logs, 5000);
         SelectCommand = new RelayCommand(p => p is ComposeProject project ? SelectAsync(project) : Task.CompletedTask);
         UpCommand = new RelayCommand(_ => RunAsync("up -d", "启动项目"));
         StopCommand = new RelayCommand(_ => RunAsync("stop", "停止项目"));
@@ -151,7 +157,7 @@ public sealed class ComposePageViewModel : PageViewModel
         ConfigCommand = new RelayCommand(_ => ShowConfigAsync());
         SaveCommand = new RelayCommand(_ => SaveYamlAsync());
         RevertCommand = new RelayCommand(_ => Yaml = _originalYaml);
-        ClearOutputCommand = new RelayCommand(_ => Output.Clear());
+        ClearOutputCommand = new RelayCommand(_ => _output.Clear());
         OpenByPathCommand = new RelayCommand(_ => OpenByPathAsync());
         RefreshCommand = new RelayCommand(_ => RefreshAsync(Shell.Lifetime));
         SetTabCommand = new RelayCommand(p => p is ComposeTab tab ? SetTabAsync(tab) : Task.CompletedTask);
@@ -173,7 +179,7 @@ public sealed class ComposePageViewModel : PageViewModel
         ToggleLogsCommand = new RelayCommand(_ => ToggleLogsAsync());
         ClearLogsCommand = new RelayCommand(_ =>
         {
-            Logs.Clear();
+            _logs.Clear();
             return Task.CompletedTask;
         });
         CopyOutputCommand = new RelayCommand(_ => Shell.Context.Clipboard.SetTextAsync(
@@ -222,6 +228,22 @@ public sealed class ComposePageViewModel : PageViewModel
 
     /// <summary>选中项目的服务。</summary>
     public ObservableCollection<ComposeService> Services { get; } = [];
+
+    /// <summary>服务表的列宽。</summary>
+    public ComposeServiceColumns Columns { get; } = new();
+
+    /// <inheritdoc />
+    public override ListColumns ColumnLayout => Columns;
+
+    /// <inheritdoc />
+    public override IEnumerable<string> ColumnTexts(string key) => key switch
+    {
+        "service" => Services.Select(s => s.Service),
+        "name" => Services.Select(s => s.Name),
+        "status" => Services.Select(s => s.Status ?? ""),
+        "ports" => Services.Select(s => s.PortsText),
+        _ => []
+    };
 
     /// <summary>执行记录。</summary>
     public ObservableCollection<OutputLine> Output { get; } = [];
@@ -299,7 +321,7 @@ public sealed class ComposePageViewModel : PageViewModel
         private set => SetField(ref _running, value);
     }
 
-    /// <summary>远端有没有 compose v2。</summary>
+    /// <summary>这台机器上有没有 compose v2。</summary>
     public bool ComposeAvailable
     {
         get => _composeAvailable;
@@ -313,8 +335,9 @@ public sealed class ComposePageViewModel : PageViewModel
     }
 
     /// <summary>compose 用不了时的说明。</summary>
-    public string UnavailableHint =>
-        "远端没有 docker compose(v2)。compose v1 那个独立的 docker-compose 没有 ls 子命令,面板列不出项目。";
+    public string UnavailableHint => Shell.Compose is { IsLocal: true }
+        ? "本机的 PATH 上找不到 docker compose(v2)。Docker Desktop 自带它,若刚装好请重开一次终端 / 宿主程序让 PATH 生效;compose v1 那个独立的 docker-compose 没有 ls 子命令,面板列不出项目。"
+        : "远端没有 docker compose(v2)。compose v1 那个独立的 docker-compose 没有 ls 子命令,面板列不出项目。";
 
     /// <summary>列表空了。</summary>
     public bool IsEmpty => LoadedOnce && Projects.Count == 0;
@@ -404,7 +427,8 @@ public sealed class ComposePageViewModel : PageViewModel
     {
         Projects.Clear();
         Services.Clear();
-        Output.Clear();
+        _output.Clear();
+        _logs.Clear();
         Selected = null;
         Yaml = "";
         _originalYaml = "";
@@ -435,7 +459,7 @@ public sealed class ComposePageViewModel : PageViewModel
         Selected = project;
         Error = "";
         Config = "";
-        Logs.Clear();
+        _logs.Clear();
         Tab = ComposeTab.Yaml;
         await LoadServicesAsync(project, Shell.Lifetime).ConfigureAwait(true);
         await LoadYamlAsync(project).ConfigureAwait(true);
@@ -447,7 +471,7 @@ public sealed class ComposePageViewModel : PageViewModel
         Tab = tab;
         switch (tab)
         {
-            // config 展开要跑一次远端命令,只在进这一页时跑,而且只跑一次。
+            // config 展开要跑一次 compose 命令,只在进这一页时跑,而且只跑一次。
             case ComposeTab.Config when Config.Length == 0:
                 await ShowConfigAsync().ConfigureAwait(true);
                 break;
@@ -498,11 +522,13 @@ public sealed class ComposePageViewModel : PageViewModel
             Icon = "Docker.shield-alert",
             Tier = ConfirmTier.DataLoss,
             ConfirmWord = "save",
-            ConfirmLabel = "写回远端",
+            ConfirmLabel = compose.IsLocal ? "写回本机" : "写回远端",
             ConfirmIcon = "Icon.save",
             HostName = "",
-            Commands = [$"SFTP PUT {path}"],
-            CommandNote = ".env 经 SFTP 覆盖写,不经 shell。",
+            Commands = [compose.IsLocal ? $"WRITE {path}" : $"SFTP PUT {path}"],
+            CommandNote = compose.IsLocal
+                ? ".env 直接落盘覆盖,不经 shell。"
+                : ".env 经 SFTP 覆盖写,不经 shell。",
             DataLossHeadline = "原文件会被整体覆盖,无法撤销",
             DataLossPoints =
             [
@@ -530,6 +556,17 @@ public sealed class ComposePageViewModel : PageViewModel
         }
     }
 
+    /// <summary>
+    /// 把界面上那串固定写法(<c>"up -d"</c>)切成 argv。
+    /// <para>
+    /// 这些串全是代码里的字面量、不含用户输入,所以按空格切是安全的;
+    /// 项目名、文件路径这些真会带空格的东西从来不走这里,它们由 <c>ComposeCli</c>
+    /// 自己按 argv 拼进前缀。
+    /// </para>
+    /// </summary>
+    private static string[] Argv(string arguments) =>
+        arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
     private async Task RunForServiceAsync(string arguments, ComposeService service, string title)
     {
         if (Shell.Compose is not { } compose || Selected is not { } project || Running)
@@ -540,7 +577,7 @@ public sealed class ComposePageViewModel : PageViewModel
         Log($"$ docker compose {ProjectPrefix} {arguments} {service.Service}", isCommand: true);
         try
         {
-            int exit = await compose.RunForServiceAsync(project, arguments, service.Service,
+            int exit = await compose.RunForServiceAsync(project, Argv(arguments), service.Service,
                 new DirectProgress<ExecOutput>(output =>
                     Log(output.Line, output.Stream == ExecStream.StandardError)),
                 Shell.Lifetime).ConfigureAwait(true);
@@ -556,6 +593,8 @@ public sealed class ComposePageViewModel : PageViewModel
         }
         finally
         {
+            // 最后那几行不必再等一个 120ms 的节拍。
+            _output.Flush();
             Running = false;
         }
     }
@@ -600,23 +639,17 @@ public sealed class ComposePageViewModel : PageViewModel
             try
             {
                 await compose.FollowLogsAsync(project, tail == "all" ? "all" : tail,
-                    new DirectProgress<ExecOutput>(output => Ui.Post(() =>
-                    {
-                        Logs.Add(new(DateTimeOffset.Now.ToString("HH:mm:ss"), output.Line,
-                            output.Stream == ExecStream.StandardError, false));
-                        while (Logs.Count > 5000)
-                        {
-                            Logs.RemoveAt(0);
-                        }
-                    })), token).ConfigureAwait(false);
+                    new DirectProgress<ExecOutput>(output => _logs.Add(
+                        new(DateTimeOffset.Now.ToString("HH:mm:ss"), output.Line,
+                            output.Stream == ExecStream.StandardError, false))), token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
             }
             catch (Exception ex)
             {
-                Ui.Post(() => Logs.Add(new(DateTimeOffset.Now.ToString("HH:mm:ss"),
-                    $"日志流断开:{ex.Message}", true, false)));
+                _logs.Add(new(DateTimeOffset.Now.ToString("HH:mm:ss"),
+                    $"日志流断开:{ex.Message}", true, false));
             }
             Ui.Post(() => LogsFollowing = false);
         }, token);
@@ -646,12 +679,12 @@ public sealed class ComposePageViewModel : PageViewModel
         {
             return;
         }
-        var form = new NewComposeProjectForm();
+        var form = new NewComposeProjectForm(compose.IsLocal);
         if (!await Shell.ShowFormAsync(form).ConfigureAwait(true))
         {
             return;
         }
-        string path = $"{form.Directory.TrimEnd('/')}/compose.yaml";
+        string path = ComposePath.Combine(form.Directory, "compose.yaml");
         try
         {
             await compose.WriteFileAsync(path, NewComposeProjectForm.Skeleton(form.ProjectName), Shell.Lifetime)
@@ -691,7 +724,7 @@ public sealed class ComposePageViewModel : PageViewModel
         }
         try
         {
-            // 走 SFTP 直接读,不经 shell —— 免得被登录 shell 的输出、locale 与引用规则搅进来。
+            // 直接读文件,不经 shell —— 免得被登录 shell 的输出、locale 与引用规则搅进来。
             _originalYaml = await compose.ReadFileAsync(project.PrimaryFile, Shell.Lifetime).ConfigureAwait(true);
             Yaml = _originalYaml;
             Error = "";
@@ -704,17 +737,8 @@ public sealed class ComposePageViewModel : PageViewModel
         }
     }
 
-    private void Log(string text, bool isError = false, bool isCommand = false)
-    {
-        Ui.Post(() =>
-        {
-            Output.Add(new(DateTimeOffset.Now.ToString("HH:mm:ss"), text, isError, isCommand));
-            while (Output.Count > 2000)
-            {
-                Output.RemoveAt(0);
-            }
-        });
-    }
+    private void Log(string text, bool isError = false, bool isCommand = false) =>
+        _output.Add(new(DateTimeOffset.Now.ToString("HH:mm:ss"), text, isError, isCommand));
 
     private async Task RunAsync(string arguments, string title)
     {
@@ -727,7 +751,7 @@ public sealed class ComposePageViewModel : PageViewModel
         Log($"$ docker compose {ProjectPrefix} {arguments}", isCommand: true);
         try
         {
-            int exit = await compose.RunAsync(project, arguments,
+            int exit = await compose.RunAsync(project, Argv(arguments),
                 new DirectProgress<ExecOutput>(output =>
                     Log(output.Line, output.Stream == ExecStream.StandardError)),
                 task.Token).ConfigureAwait(true);
@@ -763,6 +787,8 @@ public sealed class ComposePageViewModel : PageViewModel
         }
         finally
         {
+            // 最后那几行不必再等一个 120ms 的节拍。
+            _output.Flush();
             Running = false;
         }
     }
@@ -843,15 +869,15 @@ public sealed class ComposePageViewModel : PageViewModel
             Icon = "Docker.shield-alert",
             Tier = ConfirmTier.DataLoss,
             ConfirmWord = "save",
-            ConfirmLabel = "写回远端",
+            ConfirmLabel = compose.IsLocal ? "写回本机" : "写回远端",
             ConfirmIcon = "Icon.save",
             HostName = "",
-            Commands = [$"SFTP PUT {project.PrimaryFile}"],
-            CommandNote = "经 SFTP 直接写,不经过 shell。",
-            DataLossHeadline = "远端那份 compose 文件会被整体覆盖",
+            Commands = [compose.IsLocal ? $"WRITE {project.PrimaryFile}" : $"SFTP PUT {project.PrimaryFile}"],
+            CommandNote = compose.IsLocal ? "直接写这个文件,不经过 shell。" : "经 SFTP 直接写,不经过 shell。",
+            DataLossHeadline = compose.IsLocal ? "这份 compose 文件会被整体覆盖" : "远端那份 compose 文件会被整体覆盖",
             DataLossPoints =
             [
-                "面板不做备份,远端也没有版本历史 —— 除非那个目录在 git 里。",
+                "面板不做备份,那个位置也没有版本历史 —— 除非那个目录在 git 里。",
                 "保存不会自动 up:改动要等下一次 up -d 才生效。",
                 "保存前建议先跑一次 config 确认语法能解析。"
             ]
@@ -865,7 +891,7 @@ public sealed class ComposePageViewModel : PageViewModel
             await compose.WriteFileAsync(project.PrimaryFile, Yaml, Shell.Lifetime).ConfigureAwait(true);
             _originalYaml = Yaml;
             OnPropertiesChanged(nameof(IsModified), nameof(ModifiedText));
-            Shell.Feedback.Notify(FeedbackKind.Success, "已写回远端", project.PrimaryFile);
+            Shell.Feedback.Notify(FeedbackKind.Success, "已写回", project.PrimaryFile);
             Log($"✔ 已写回 {project.PrimaryFile}");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -876,7 +902,11 @@ public sealed class ComposePageViewModel : PageViewModel
 
     private async Task OpenByPathAsync()
     {
-        var form = new OpenComposeForm();
+        if (Shell.Compose is not { } compose)
+        {
+            return;
+        }
+        var form = new OpenComposeForm(compose.IsLocal);
         if (!await Shell.ShowFormAsync(form).ConfigureAwait(true))
         {
             return;
@@ -909,10 +939,16 @@ public sealed class OpenComposeForm : PanelForm
     private readonly TextField _path;
     private readonly TextField _name;
 
-    /// <summary>建表单。</summary>
-    public OpenComposeForm()
+    private readonly bool _isLocal;
+
+    /// <summary>建表单。<paramref name="isLocal" /> 决定占位示例写成哪种路径。</summary>
+    public OpenComposeForm(bool isLocal)
     {
-        _path = new("compose 文件路径") { Placeholder = "/srv/stacks/web-stack/compose.yaml" };
+        _isLocal = isLocal;
+        _path = new("compose 文件路径")
+        {
+            Placeholder = isLocal ? @"D:\stacks\web-stack\compose.yaml" : "/srv/stacks/web-stack/compose.yaml"
+        };
         _name = new("项目名") { Hint = "留空按目录名推导", Placeholder = "web-stack" };
         Watch(_path);
         Watch(_name);
@@ -943,11 +979,8 @@ public sealed class OpenComposeForm : PanelForm
             {
                 return explicitName;
             }
-            string directory = FilePath.TrimEnd('/');
-            int lastSlash = directory.LastIndexOf('/');
-            directory = lastSlash > 0 ? directory[..lastSlash] : directory;
-            int nameSlash = directory.LastIndexOf('/');
-            return nameSlash >= 0 ? directory[(nameSlash + 1)..] : directory;
+            // 项目名默认取**文件所在目录**的名字 —— compose 自己也是这么推的。
+            return ComposePath.LastSegment(ComposePath.DirectoryOf(FilePath));
         }
     }
 
@@ -959,9 +992,11 @@ public sealed class OpenComposeForm : PanelForm
             _path.Error = "路径不能为空。";
             return false;
         }
-        if (!FilePath.StartsWith('/'))
+        if (!ComposePath.IsAbsolute(FilePath))
         {
-            _path.Error = "要用绝对路径 —— 相对路径会以登录目录为基准,那多半不是你想要的。";
+            _path.Error = _isLocal
+                ? "要用绝对路径(带盘符,或 / 打头)—— 相对路径会以面板的工作目录为基准,那多半不是你想要的。"
+                : "要用绝对路径 —— 相对路径会以登录目录为基准,那多半不是你想要的。";
             return false;
         }
         return true;
@@ -987,10 +1022,13 @@ public sealed class NewComposeProjectForm : PanelForm
     private readonly TextField _directory;
     private readonly TextField _name;
 
-    /// <summary>建表单。</summary>
-    public NewComposeProjectForm()
+    private readonly bool _isLocal;
+
+    /// <summary>建表单。<paramref name="isLocal" /> 决定占位示例写成哪种路径。</summary>
+    public NewComposeProjectForm(bool isLocal)
     {
-        _directory = new("项目目录") { Placeholder = "/srv/stacks/new-stack" };
+        _isLocal = isLocal;
+        _directory = new("项目目录") { Placeholder = isLocal ? @"D:\stacks\new-stack" : "/srv/stacks/new-stack" };
         _name = new("项目名") { Hint = "留空按目录名推导", Placeholder = "new-stack" };
         Watch(_directory);
         Watch(_name);
@@ -1024,9 +1062,7 @@ public sealed class NewComposeProjectForm : PanelForm
             {
                 return explicitName;
             }
-            string directory = Directory.TrimEnd('/');
-            int slash = directory.LastIndexOf('/');
-            return slash >= 0 ? directory[(slash + 1)..] : directory;
+            return ComposePath.LastSegment(Directory);
         }
     }
 
@@ -1053,9 +1089,11 @@ public sealed class NewComposeProjectForm : PanelForm
             _directory.Error = "目录不能为空。";
             return false;
         }
-        if (!Directory.StartsWith('/'))
+        if (!ComposePath.IsAbsolute(Directory))
         {
-            _directory.Error = "要用绝对路径 —— 相对路径会以登录目录为基准,那多半不是你想要的。";
+            _directory.Error = _isLocal
+                ? "要用绝对路径(带盘符,或 / 打头)—— 相对路径会以面板的工作目录为基准,那多半不是你想要的。"
+                : "要用绝对路径 —— 相对路径会以登录目录为基准,那多半不是你想要的。";
             return false;
         }
         return true;
@@ -1064,7 +1102,95 @@ public sealed class NewComposeProjectForm : PanelForm
     /// <inheritdoc />
     protected override void UpdatePreview()
     {
-        CommandPreview = $"SFTP PUT {Directory.TrimEnd('/')}/compose.yaml";
+        CommandPreview = $"{(_isLocal ? "WRITE" : "SFTP PUT")} {ComposePath.Combine(Directory, "compose.yaml")}";
         CommandNote = $"随后用 -p {ProjectName} 打开它。目录必须已经存在 —— 面板不替你 mkdir。";
     }
+}
+
+/// <summary>
+/// 服务表的列宽。
+/// <para>
+/// 缺省值合计 600,加上行首行尾的固定占位与四条轨道之后仍给中间那根 * 留了余量 ——
+/// 四列一上来就把宽度占满的话,每一列的"还能拖多宽"当场就是 0,拖谁都只会缩到下限。
+/// 端口那一列最容易长(一个服务映射四五个端口是常事),所以它的自适应上限放得比别的宽。
+/// </para>
+/// </summary>
+public sealed class ComposeServiceColumns : ListColumns
+{
+    private GridLength _service = new(130);
+    private GridLength _name = new(190);
+    private GridLength _status = new(130);
+    private GridLength _ports = new(150);
+
+    /// <inheritdoc />
+    public override IReadOnlyList<string> Keys { get; } = ["service", "name", "status", "ports"];
+
+    /// <summary>服务列。</summary>
+    public GridLength Service
+    {
+        get => _service;
+        set => SetField(ref _service, Clamp(value, "service"));
+    }
+
+    /// <summary>容器列。</summary>
+    public GridLength Name
+    {
+        get => _name;
+        set => SetField(ref _name, Clamp(value, "name"));
+    }
+
+    /// <summary>状态列。</summary>
+    public GridLength Status
+    {
+        get => _status;
+        set => SetField(ref _status, Clamp(value, "status"));
+    }
+
+    /// <summary>端口列。</summary>
+    public GridLength Ports
+    {
+        get => _ports;
+        set => SetField(ref _ports, Clamp(value, "ports"));
+    }
+
+    /// <inheritdoc />
+    public override double Get(string key) => key switch
+    {
+        "service" => Service.Value,
+        "name" => Name.Value,
+        "status" => Status.Value,
+        _ => Ports.Value
+    };
+
+    /// <inheritdoc />
+    public override void Set(string key, double width)
+    {
+        GridLength value = new(width);
+        switch (key)
+        {
+            case "service":
+                Service = value;
+                break;
+            case "name":
+                Name = value;
+                break;
+            case "status":
+                Status = value;
+                break;
+            default:
+                Ports = value;
+                break;
+        }
+    }
+
+    /// <inheritdoc />
+    public override double Min(string key) => key switch
+    {
+        "service" => 80,
+        "name" => 110,
+        _ => 90
+    };
+
+    /// <inheritdoc />
+    public override double MaxAutoFit(string key) => key == "ports" ? 520 : 420;
 }

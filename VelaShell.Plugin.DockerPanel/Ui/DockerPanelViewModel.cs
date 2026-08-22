@@ -204,7 +204,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// <summary>当前端点的客户端;没连上时为 <see langword="null" />。</summary>
     public DockerClient? Client => _client;
 
-    /// <summary>Compose(只有远端端点有)。</summary>
+    /// <summary>Compose 通道;没连上时为 <see langword="null" />。</summary>
     public ComposeCli? Compose => _compose;
 
     /// <summary>仓库凭据。</summary>
@@ -281,8 +281,15 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         set => SetField(ref _endpointMenuOpen, value);
     }
 
-    /// <summary>compose 页可不可用(本机端点没有)。</summary>
-    public bool ComposeAvailable => SelectedEndpoint?.Endpoint.SupportsCompose == true;
+    /// <summary>
+    /// Compose 页可不可用。
+    /// <para>
+    /// 只取决于**有没有连上** —— 远端与本机都有各自的执行通道
+    /// (见 <see cref="IComposeHost" />)。至于那台机器上到底装没装 <c>docker compose</c>,
+    /// 是 Compose 页自己 <c>compose version</c> 探出来的,不该在这里猜。
+    /// </para>
+    /// </summary>
+    public bool ComposeAvailable => _compose is not null;
 
     // ── 连接状态 ──────────────────────────────────────────────────
 
@@ -662,6 +669,10 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             await _client.DisposeAsync().ConfigureAwait(true);
             _client = null;
         }
+        // 通道跟着连接一起作废 —— 留着旧的,导航栏会显示 Compose 可点,
+        // 点进去却是上一台机器的项目。
+        _compose = null;
+        OnPropertyChanged(nameof(ComposeAvailable));
         foreach (PageViewModel page in AllPages)
         {
             page.Reset();
@@ -687,9 +698,11 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             SystemVersion version = await client.PingAsync(_lifetime.Token).ConfigureAwait(true);
             _client = client;
             _registryAuth = new(_context.RemoteFs, endpoint);
-            _compose = endpoint.SupportsCompose
-                ? new ComposeCli(_context.RemoteExec, _context.RemoteFs, endpoint.SessionId)
-                : null;
+            // compose 只有 CLI,所以要一条"跑命令"的通道:远端是 SSH,本机是本地进程。
+            _compose = new ComposeCli(endpoint.Kind == DockerEndpointKind.Remote
+                ? new RemoteComposeHost(_context.RemoteExec, _context.RemoteFs, endpoint.SessionId)
+                : new LocalComposeHost());
+            OnPropertyChanged(nameof(ComposeAvailable));
             EngineVersion = version.Version is { Length: > 0 } v ? $"Engine {v}" : "";
             ApiVersion = version.ApiVersion is { Length: > 0 } a ? $"API v{a}" : "";
             State = PanelConnectionState.Ready;
@@ -699,14 +712,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             // 容器列表 + 统计采样在后台先跑起来:总览页那几张卡靠它喂,
             // 而用户可能整段时间都不会点开容器页。
             _ = Containers.PrimeAsync(_lifetime.Token);
-            if (!ComposeAvailable && CurrentPage == PanelPage.Compose)
-            {
-                await GoToAsync(PanelPage.Overview).ConfigureAwait(true);
-            }
-            else
-            {
-                await RefreshActiveAsync(force: true).ConfigureAwait(true);
-            }
+            await RefreshActiveAsync(force: true).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -860,7 +866,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     {
         if (page == PanelPage.Compose && !ComposeAvailable)
         {
-            Feedback.Status(FeedbackKind.Info, "本机端点没有 Compose 页 —— compose 是远端 CLI 上的东西。");
+            Feedback.Status(FeedbackKind.Info, "还没连上 Docker —— Compose 页要等通道建立之后才能用。");
             return;
         }
         CurrentPage = page;

@@ -189,17 +189,14 @@ public class ModelTests
         Assert.AreEqual(DockerEndpointKind.Local, local.Kind);
         Assert.AreEqual(OperatingSystem.IsWindows() ? DockerEndpoint.DefaultWindowsPipe : DockerEndpoint.DefaultUnixSocket,
             local.SocketPath);
-        // 本机端点没有 compose:那需要在宿主机上跑进程,不在插件的职责里。
-        Assert.IsFalse(local.SupportsCompose);
     }
 
     [TestMethod]
-    public void DockerEndpoint_RemoteDefaultsToTheStandardSocketAndSupportsCompose()
+    public void DockerEndpoint_RemoteDefaultsToTheStandardSocket()
     {
         DockerEndpoint remote = DockerEndpoint.Remote("session-1", "prod-sg-01", "deploy@10.24.8.11");
 
         Assert.AreEqual(DockerEndpoint.DefaultUnixSocket, remote.SocketPath);
-        Assert.IsTrue(remote.SupportsCompose);
     }
 
     [TestMethod]
