@@ -11,12 +11,13 @@
     抽屉在右不在下:详情与列表同屏对照,而底部抽屉会把列表挤成三行 ——
     偏偏那正是用户要在里面找东西的地方。
 
-    外层三列:列表 / 抽屉的拖拽手柄 / 抽屉。抽屉最大化时改跨满三列(DetailColumn +
-    DetailColumnSpan),而不是给它一个很大的宽度 —— 后者会把抽屉自己的头顶到屏幕外面去,
-    连"还原"那颗键都点不着。
+    外层三列:列表 / 5px 分割条 / 抽屉。三列的宽度都由代码在开关、最大化、拖动时设 ——
+    分割条改的就是列定义本身,再往上套一层绑定只会两边打架(宿主的侧栏也是这么写的)。
+    最大化 = 列表列收成 0、抽屉列吃满,而不是给抽屉一个很大的宽度:
+    后者会把抽屉自己的头顶到屏幕外面去,连"还原"那颗键都点不着。
   -->
 
-  <Grid ColumnDefinitions="*,Auto,Auto" SizeChanged="OnRootSizeChanged">
+  <Grid x:Name="Root" ColumnDefinitions="*,0,0" SizeChanged="OnRootSizeChanged">
 
     <!-- ── 日志模式:来源选择器 + 合并流,取代列表 ──────────────────────
          取代而不是叠加:合并多条流时左边要放来源选择器,而那块地方原本就是列表的 -->
@@ -387,48 +388,83 @@
       </Border>
 
       <!--
-        列头。列宽与下面的数据行**共用同一份视图模型状态**(Columns) ——
-        Avalonia 没有 SharedSizeGroup,这是让列头与几百行单元格始终对齐的唯一办法。
-        列定义本身写成 Auto,真正的宽度挂在每个单元格自己的 Width 上;
-        「镜像」是唯一的弹性列(*),它才是这张表里读不完的那一列。
+        列头。
+        列宽是一组 GridLength(Columns),**列头和每一行的 ColumnDefinitions 绑同一份** ——
+        Avalonia 没有 SharedSizeGroup,这是让列头与几百行单元格始终对齐的唯一办法;
+        与宿主文件浏览器的做法一致。
 
-        每颗手柄贴在它所改的那一列的右边缘 —— 拖它就是拖这一列的宽度,
-        多出来 / 让出来的像素由镜像列吞掉,别的列一根像素都不动。
+        六列全是定宽可拖的,富余的宽度交给「运行时长」与行尾动作之间的填充列(*)——
+        留一个弹性列的话,它的边界是**算**出来的、拖不动,
+        而那往往正是最想拖的那一条(名称跟着窗口长到一千多像素,就是这么来的)。
+
+        每条列界线是一条 6px 的轨道:1px 的细线画在中间,一块透明的抓取区盖在上面 ——
+        与宿主侧栏、文件面板那几条分割条同款(视觉轻、抓取区宽)。
+        Tag 告诉代码这条轨道改的是哪一列;双击自适应内容宽度。
       -->
       <Border Grid.Row="2" Classes="header-row" ClipToBounds="True">
-        <Grid ColumnDefinitions="3,26,Auto,*,Auto,Auto,Auto,Auto,92">
+        <Grid x:Name="HeaderGrid">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3" />
+            <ColumnDefinition Width="26" />
+            <ColumnDefinition Width="{Binding Columns.Name}" MinWidth="140" />
+            <ColumnDefinition Width="6" />
+            <ColumnDefinition Width="{Binding Columns.Image}" MinWidth="120" />
+            <ColumnDefinition Width="6" />
+            <ColumnDefinition Width="{Binding Columns.Ports}" MinWidth="70" />
+            <ColumnDefinition Width="6" />
+            <ColumnDefinition Width="{Binding Columns.Cpu}" MinWidth="78" />
+            <ColumnDefinition Width="6" />
+            <ColumnDefinition Width="{Binding Columns.Mem}" MinWidth="62" />
+            <ColumnDefinition Width="6" />
+            <ColumnDefinition Width="{Binding Columns.Uptime}" MinWidth="62" />
+            <ColumnDefinition Width="6" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="92" />
+          </Grid.ColumnDefinitions>
+
           <CheckBox Grid.Column="1" Classes="compact" IsThreeState="True"
                     HorizontalAlignment="Center"
                     ToolTip.Tip="全选当前筛选出的这些行"
                     IsChecked="{Binding AllSelected}" />
-          <Grid Grid.Column="2" Width="{Binding Columns.Name}">
-            <TextBlock Text="名称" Classes="col" Margin="2,0,8,0" />
-            <ui:ResizeGrip Value="{Binding Columns.Name, Mode=TwoWay}" Minimum="140" Maximum="640"
-                           HorizontalAlignment="Right" Margin="0,0,-3,0" ToolTip.Tip="拖动改列宽" />
-          </Grid>
-          <TextBlock Grid.Column="3" Text="镜像" Classes="col" Margin="0,0,8,0" />
-          <Grid Grid.Column="4" Width="{Binding Columns.Ports}">
-            <TextBlock Text="端口" Classes="col" Margin="0,0,8,0" />
-            <ui:ResizeGrip Value="{Binding Columns.Ports, Mode=TwoWay}" Minimum="70" Maximum="400"
-                           HorizontalAlignment="Right" Margin="0,0,-3,0" ToolTip.Tip="拖动改列宽" />
-          </Grid>
-          <Grid Grid.Column="5" Width="{Binding Columns.Cpu}">
-            <TextBlock Text="CPU" Classes="col" Margin="0,0,8,0" />
-            <ui:ResizeGrip Value="{Binding Columns.Cpu, Mode=TwoWay}" Minimum="78" Maximum="300"
-                           HorizontalAlignment="Right" Margin="0,0,-3,0" ToolTip.Tip="拖动改列宽" />
-          </Grid>
-          <Grid Grid.Column="6" Width="{Binding Columns.Mem}">
-            <TextBlock Text="内存" Classes="col" Margin="0,0,8,0" />
-            <ui:ResizeGrip Value="{Binding Columns.Mem, Mode=TwoWay}" Minimum="62" Maximum="240"
-                           HorizontalAlignment="Right" Margin="0,0,-3,0" ToolTip.Tip="拖动改列宽" />
-          </Grid>
-          <Grid Grid.Column="7" Width="{Binding Columns.Uptime}">
-            <TextBlock Text="运行时长" Classes="col" Margin="0,0,8,0" />
-            <ui:ResizeGrip Value="{Binding Columns.Uptime, Mode=TwoWay}" Minimum="62" Maximum="260"
-                           HorizontalAlignment="Right" Margin="0,0,-3,0" ToolTip.Tip="拖动改列宽" />
-          </Grid>
+
+          <TextBlock Grid.Column="2" Text="名称" Classes="col" Margin="2,0,6,0" />
+          <Border Grid.Column="3" Classes="colgrip" Tag="name"
+                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+            <Border Classes="colline" />
+          </Border>
+
+          <TextBlock Grid.Column="4" Text="镜像" Classes="col" Margin="0,0,6,0" />
+          <Border Grid.Column="5" Classes="colgrip" Tag="image"
+                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+            <Border Classes="colline" />
+          </Border>
+
+          <TextBlock Grid.Column="6" Text="端口" Classes="col" Margin="0,0,6,0" />
+          <Border Grid.Column="7" Classes="colgrip" Tag="ports"
+                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+            <Border Classes="colline" />
+          </Border>
+
+          <TextBlock Grid.Column="8" Text="CPU" Classes="col" Margin="0,0,6,0" />
+          <Border Grid.Column="9" Classes="colgrip" Tag="cpu"
+                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+            <Border Classes="colline" />
+          </Border>
+
+          <TextBlock Grid.Column="10" Text="内存" Classes="col" Margin="0,0,6,0" />
+          <Border Grid.Column="11" Classes="colgrip" Tag="mem"
+                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+            <Border Classes="colline" />
+          </Border>
+
+          <TextBlock Grid.Column="12" Text="运行时长" Classes="col" Margin="0,0,6,0" />
+          <Border Grid.Column="13" Classes="colgrip" Tag="uptime"
+                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+            <Border Classes="colline" />
+          </Border>
         </Grid>
       </Border>
+
 
       <!-- 列表 -->
       <Grid Grid.Row="3" Background="{DynamicResource VelaBgSurface}">
@@ -506,40 +542,54 @@
                                  IsIndeterminate="{Binding BusyProgress, Converter={x:Static ui:Converters.IsZero}}"
                                  Foreground="{DynamicResource VelaAccent}"
                                  Background="{DynamicResource VelaBgActive}" />
-                    <!-- 列定义与列头**逐字一致**,宽度同样来自 Owner.Columns —— 两处必须一起改 -->
-                    <Grid Height="32" ColumnDefinitions="3,26,Auto,*,Auto,Auto,Auto,Auto,92"
-                          ClipToBounds="True">
+                    <!-- 列定义与列头**逐字一致**,宽度回绑列头那份 Columns —— 两处必须一起改。
+                         6px 的那几列是列头上拖拽轨道的位置,行里只留出同样的空当。 -->
+                    <Grid Height="32" ClipToBounds="True">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3" />
+                        <ColumnDefinition Width="26" />
+                        <ColumnDefinition Width="{Binding Owner.Columns.Name}" MinWidth="140" />
+                        <ColumnDefinition Width="6" />
+                        <ColumnDefinition Width="{Binding Owner.Columns.Image}" MinWidth="120" />
+                        <ColumnDefinition Width="6" />
+                        <ColumnDefinition Width="{Binding Owner.Columns.Ports}" MinWidth="70" />
+                        <ColumnDefinition Width="6" />
+                        <ColumnDefinition Width="{Binding Owner.Columns.Cpu}" MinWidth="78" />
+                        <ColumnDefinition Width="6" />
+                        <ColumnDefinition Width="{Binding Owner.Columns.Mem}" MinWidth="62" />
+                        <ColumnDefinition Width="6" />
+                        <ColumnDefinition Width="{Binding Owner.Columns.Uptime}" MinWidth="62" />
+                        <ColumnDefinition Width="6" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="92" />
+                      </Grid.ColumnDefinitions>
                       <!-- 左侧状态色条 -->
                       <Border Grid.Column="0" Background="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
                       <CheckBox Grid.Column="1" Classes="compact" IsChecked="{Binding Selected}"
                                 HorizontalAlignment="Center" />
                       <!-- 名称格是 Grid 不是 StackPanel:名字要在列宽收窄时省略号截断,
                            而横向 StackPanel 给孩子的是无限宽,截断永远不会发生。 -->
-                      <!-- 单元格的**外框**宽度必须与列头那一格逐像素相同,内边距一律放在里面 ——
-                           把 8px 写成外层的 Margin,这一列就比列头宽 8px,越往右错得越多。 -->
-                      <Grid Grid.Column="2" Width="{Binding Owner.Columns.Name}"
-                            ColumnDefinitions="Auto,*,Auto" ClipToBounds="True">
+                      <Grid Grid.Column="2" ColumnDefinitions="Auto,*,Auto" ClipToBounds="True">
                         <Ellipse Grid.Column="0" Width="6" Height="6" Margin="2,0,0,0" VerticalAlignment="Center"
                                  Fill="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
                         <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="name" Margin="7,0" />
-                        <Border Grid.Column="2" Classes="chip" Height="16" Margin="0,0,8,0"
+                        <Border Grid.Column="2" Classes="chip" Height="16" Margin="0,0,12,0"
                                 IsVisible="{Binding HasProject}"
                                 Background="{DynamicResource VelaShellMagentaDim}">
                           <TextBlock Text="{Binding Project}" FontSize="{DynamicResource VelaFontSize9}"
                                      Foreground="{DynamicResource VelaShellMagenta}" VerticalAlignment="Center" />
                         </Border>
                       </Grid>
-                      <TextBlock Grid.Column="3" Text="{Binding Image}" Classes="cell" Margin="0,0,8,0"
+                      <TextBlock Grid.Column="4" Text="{Binding Image}" Classes="cell" Margin="0,0,6,0"
                                  ToolTip.Tip="{Binding Image}" />
                       <!-- 端口在列表里退到 Tertiary:整列都是端口,染成信息色反而让人以为
                            每一行都有话要说。抽屉里的「端口映射」才用 info。 -->
-                      <TextBlock Grid.Column="4" Text="{Binding Ports}" Classes="cell"
-                                 Width="{Binding Owner.Columns.Ports}" Padding="0,0,8,0"
+                      <TextBlock Grid.Column="6" Text="{Binding Ports}" Classes="cell" Margin="0,0,6,0"
                                  ToolTip.Tip="{Binding Ports}"
                                  Foreground="{DynamicResource VelaTextTertiary}" />
                       <!-- 行内 sparkline + 百分比 -->
-                      <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
-                                  Width="{Binding Owner.Columns.Cpu}" ClipToBounds="True">
+                      <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                                  ClipToBounds="True">
                         <ItemsControl ItemsSource="{Binding CpuSamples}" Height="16" VerticalAlignment="Center">
                           <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -559,12 +609,11 @@
                         <TextBlock Text="{Binding CpuText}" Classes="cell"
                                    Foreground="{Binding CpuHot, Converter={x:Static ui:Converters.HotText}}" />
                       </StackPanel>
-                      <TextBlock Grid.Column="6" Text="{Binding MemText}" Classes="cell"
-                                 Width="{Binding Owner.Columns.Mem}" Padding="0,0,8,0" />
-                      <TextBlock Grid.Column="7" Text="{Binding Uptime}" Classes="cell"
-                                 Width="{Binding Owner.Columns.Uptime}" Padding="0,0,8,0"
+                      <TextBlock Grid.Column="10" Text="{Binding MemText}" Classes="cell" Margin="0,0,6,0" />
+                      <TextBlock Grid.Column="12" Text="{Binding Uptime}" Classes="cell" Margin="0,0,6,0"
                                  Foreground="{DynamicResource VelaTextTertiary}" />
-                      <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="1" HorizontalAlignment="Right"
+                      <!-- 行尾动作钉在最右:第 14 列是填充列,富余的宽度全归它 -->
+                      <StackPanel Grid.Column="15" Orientation="Horizontal" Spacing="1" HorizontalAlignment="Right"
                                   Margin="0,0,6,0" VerticalAlignment="Center">
                         <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22"
                                 ToolTip.Tip="停止 / 启动"
@@ -635,23 +684,21 @@
       </Grid>
     </Grid>
 
-    <!-- 抽屉的拖拽手柄。Inverted:手柄贴在抽屉**左**边,往左拖是把抽屉拖宽。
-         上限由面板自己的宽度定(见 OnRootSizeChanged),不让抽屉宽过它所在的那块地方。 -->
-    <ui:ResizeGrip Grid.Column="1" IsVisible="{Binding CanResizeDrawer}" Inverted="True"
-                   Value="{Binding DrawerWidth, Mode=TwoWay}" Minimum="360"
-                   Maximum="{Binding MaxDrawerWidth}" ToolTip.Tip="拖动改抽屉宽度" />
+    <!-- 抽屉分割条:5px 透明抓取区上画一条 1px 细线 —— 与宿主侧栏、文件面板同款。
+         这一列的宽度、抽屉那一列的宽窄与上下限,统统由代码在开关抽屉时设(见 ApplyDrawerLayout)。 -->
+    <Border Grid.Column="1" Width="1" HorizontalAlignment="Center"
+            IsVisible="{Binding CanResizeDrawer}"
+            Background="{DynamicResource VelaBorderPrimary}" />
+    <GridSplitter Grid.Column="1" x:Name="DrawerSplitter" Background="Transparent"
+                  ResizeDirection="Columns" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  IsVisible="{Binding CanResizeDrawer}" ToolTip.Tip="拖动改抽屉宽度" />
 
     <!-- 详情抽屉。
          宽度是页面的状态而不是抽屉自己的:换一个容器就是换一个抽屉视图模型,
          宽度跟着它走的话,用户每点一行都得重拖一次。
          ClipToBounds:抽屉里那几页(日志 / 文件 / 终端)都是按整屏设计的,
-         窄下来时超出去的部分要被剪掉,而不是画到抽屉外面。
-         MaxWidth 是最后一道保险:最大化时抽屉的宽度由内容决定(Width=NaN),
-         而里面那几页(尤其是文件页的三栏)在窗口很窄时"想要"的宽度会超过整块面板,
-         溢出的话头上那三颗键又会被顶出可视区。夹在面板宽度上,永远越不过去。 -->
-    <Border Grid.Column="{Binding DetailColumn}" Grid.ColumnSpan="{Binding DetailColumnSpan}"
-            Width="{Binding DrawerContentWidth}" MaxWidth="{Binding $parent[Grid].Bounds.Width}"
-            ClipToBounds="True"
+         窄下来时超出去的部分要被剪掉,而不是画到抽屉外面。 -->
+    <Border Grid.Column="2" ClipToBounds="True"
             IsVisible="{Binding HasDetail}"
             Background="{DynamicResource VelaBgSurface}"
             BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">

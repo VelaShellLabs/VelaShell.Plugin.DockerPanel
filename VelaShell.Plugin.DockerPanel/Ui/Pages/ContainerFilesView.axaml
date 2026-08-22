@@ -21,10 +21,17 @@
     抽屉窄下来时右栏(文件属性)整栏让位:它是"这个文件是什么"的旁注,
     而编辑器是正文。列宽写成 Auto + 子元素定宽,收起时整列自然收成 0。
   -->
-  <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" DragDrop.AllowDrop="True">
+  <Grid DragDrop.AllowDrop="True">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="300" MinWidth="180" MaxWidth="560" />
+      <ColumnDefinition Width="5" />
+      <ColumnDefinition Width="*" MinWidth="200" />
+      <ColumnDefinition Width="Auto" />
+      <ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
 
     <!-- ── 左栏:文件树 ───────────────────────────────────────── -->
-    <DockPanel Grid.Column="0" Width="{Binding TreeWidth}" Background="{DynamicResource VelaBgDockDocument}">
+    <DockPanel Grid.Column="0" Background="{DynamicResource VelaBgDockDocument}">
       <Border DockPanel.Dock="Top" Height="36" Padding="11,0"
               BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
         <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
@@ -110,12 +117,13 @@
       </ScrollViewer>
     </DockPanel>
 
-    <!-- 栏界线本身就是手柄:1px 的线画在它中间,指针压上去整条亮起来。
+    <!-- 栏与栏之间的分割条:5px 透明抓取区上画一条 1px 细线,与宿主同款。
          文件树宽度是这一页最常要改的东西 —— 深目录的路径一长就撑不下。 -->
-    <ui:ResizeGrip Grid.Column="1" Value="{Binding TreeWidth, Mode=TwoWay}" Minimum="180" Maximum="560"
-                   ToolTip.Tip="拖动改文件树宽度">
-      <Border Width="1" HorizontalAlignment="Center" Background="{DynamicResource VelaBorderPrimary}" />
-    </ui:ResizeGrip>
+    <Border Grid.Column="1" Width="1" HorizontalAlignment="Center"
+            Background="{DynamicResource VelaBorderPrimary}" />
+    <GridSplitter Grid.Column="1" Background="Transparent" ResizeDirection="Columns"
+                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  ToolTip.Tip="拖动改文件树宽度" />
 
     <!-- ── 中栏:编辑器 ───────────────────────────────────────── -->
     <DockPanel Grid.Column="2" IsVisible="{Binding HasOpenFile}">

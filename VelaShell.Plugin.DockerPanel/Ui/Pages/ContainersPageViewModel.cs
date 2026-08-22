@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Controls;
 using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
@@ -43,7 +44,6 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     private LogsViewModel? _mergedLogs;
     private string _logSourceSearch = "";
     private double _drawerWidth = 440;
-    private double _maxDrawerWidth = 1200;
     private bool _detailMaximized;
 
     /// <summary>抽屉再窄就摆不下头里那一行了。</summary>
@@ -295,37 +295,21 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// 放在页面上而不是抽屉自己身上:换一个容器就是换一个抽屉视图模型,
     /// 宽度要是跟着抽屉走,用户每点一行就得重拖一次。
     /// </para>
+    /// <para>
+    /// 视图与它是双向的:打开 / 还原时由视图把这个值写进列定义,
+    /// 用户拖完(<c>DragCompleted</c>)再由视图把拖出来的实际宽度写回来 ——
+    /// 与宿主侧栏里那两条分割条的做法一致。上界由列定义的 MaxWidth 兜着,
+    /// 因为"面板有多宽"只有视图知道。
+    /// </para>
     /// </summary>
     public double DrawerWidth
     {
         get => _drawerWidth;
-        set
-        {
-            if (SetField(ref _drawerWidth, Clamp(value)))
-            {
-                OnPropertyChanged(nameof(DrawerContentWidth));
-            }
-        }
+        set => SetField(ref _drawerWidth, Math.Max(MinDrawerWidth, value));
     }
 
-    /// <summary>
-    /// 抽屉能拖到多宽 —— 由面板自己的宽度定(视图在 SizeChanged 里喂进来)。
-    /// <para>
-    /// 必须夹住:抽屉比面板还宽时,它的头(还原 / 关闭那两颗)就被顶到屏幕外面去了,
-    /// 用户再也没有回到列表的路。
-    /// </para>
-    /// </summary>
-    public double MaxDrawerWidth
-    {
-        get => _maxDrawerWidth;
-        set
-        {
-            if (SetField(ref _maxDrawerWidth, Math.Max(MinDrawerWidth, value)))
-            {
-                DrawerWidth = _drawerWidth;
-            }
-        }
-    }
+    /// <summary>抽屉再窄就摆不下头里那一行了。</summary>
+    public static double MinimumDrawerWidth => MinDrawerWidth;
 
     /// <summary>抽屉最大化(占满整个页签)。</summary>
     public bool DetailMaximized
@@ -335,22 +319,12 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         {
             if (SetField(ref _detailMaximized, value))
             {
-                OnPropertiesChanged(nameof(ListVisible), nameof(CanResizeDrawer),
-                    nameof(DetailColumn), nameof(DetailColumnSpan), nameof(DrawerContentWidth));
+                OnPropertiesChanged(nameof(ListVisible), nameof(CanResizeDrawer));
             }
         }
     }
 
-    /// <summary>抽屉落在外层哪一列:最大化时从第 0 列起跨满,平时坐在最右那一列。</summary>
-    public int DetailColumn => DetailMaximized ? 0 : 2;
-
-    /// <summary>抽屉跨几列。</summary>
-    public int DetailColumnSpan => DetailMaximized ? 3 : 1;
-
-    /// <summary>抽屉的实际宽度;最大化时交给布局(<c>NaN</c> = 由跨列撑满)。</summary>
-    public double DrawerContentWidth => DetailMaximized ? double.NaN : DrawerWidth;
-
-    /// <summary>抽屉的拖拽手柄要不要露出来。</summary>
+    /// <summary>抽屉的分割条要不要露出来。</summary>
     public bool CanResizeDrawer => HasDetail && !DetailMaximized;
 
     /// <summary>列表这一块要不要露出来(日志模式取代它,抽屉最大化盖住它)。</summary>
@@ -360,12 +334,10 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// 把抽屉至少撑到这么宽。
     /// <para>
     /// 文件页那种三栏在 440px 里根本摆不开;但"撑满整个页签"又太狠 ——
-    /// 撑到够用就停,列表还在旁边,用户也还能接着往回拖。
+    /// 撑到够用就停,列表还在旁边,分割条也还在,用户随时能往回拖。
     /// </para>
     /// </summary>
     public void EnsureDrawerAtLeast(double width) => DrawerWidth = Math.Max(DrawerWidth, width);
-
-    private double Clamp(double width) => Math.Clamp(width, MinDrawerWidth, Math.Max(MinDrawerWidth, _maxDrawerWidth));
 
     /// <summary>切筛选。</summary>
     public RelayCommand SetFilterCommand { get; }
@@ -1266,57 +1238,122 @@ public sealed class BatchSummaryState(
     public bool HasCollapsed => result.SucceededCount > 0;
 }
 
+
 /// <summary>
 /// 容器列表的列宽。
 /// <para>
-/// 列头和数据行绑的是同一份实例,拖动列头的手柄改的就是这里 ——
-/// 这也是让列头与单元格真正对齐的唯一办法(Avalonia 没有 <c>SharedSizeGroup</c>)。
+/// 与宿主的文件浏览器同一路数:列宽是一组 <see cref="GridLength" />,
+/// **列头和每一行的 ColumnDefinitions 绑的是同一份实例** ——
+/// Avalonia 没有 SharedSizeGroup,这是让列头与几百行单元格始终对齐的唯一办法。
 /// </para>
 /// <para>
-/// 只有「镜像」是弹性列。名称在设计稿里是 240px,让它跟着窗口一起长,
-/// 到 2000px 宽的屏幕上就会变成一条一千多像素的空白 —— 而真正读不完的是镜像名。
+/// 六列全是定宽可拖的,富余的宽度交给「运行时长」与行尾动作之间的填充列。
+/// 不留弹性列:弹性列的边界是**算**出来的、拖不动,
+/// 而它往往正是最想拖的那一条(名称跟着窗口长到一千多像素,就是这么来的)。
 /// </para>
 /// </summary>
 public sealed class ContainerColumns : ObservableObject
 {
-    private double _name = 240;
-    private double _ports = 118;
-    private double _cpu = 108;
-    private double _mem = 84;
-    private double _uptime = 78;
+    /// <summary>列与列之间那条拖拽轨道的宽度。</summary>
+    public const double SplitterWidth = 6;
+
+    /// <summary>可拖的列,次序与界面一致。</summary>
+    public static readonly string[] Keys = ["name", "image", "ports", "cpu", "mem", "uptime"];
+
+    private GridLength _name = new(240);
+    private GridLength _image = new(260);
+    private GridLength _ports = new(118);
+    private GridLength _cpu = new(108);
+    private GridLength _mem = new(84);
+    private GridLength _uptime = new(78);
 
     /// <summary>名称列。</summary>
-    public double Name
+    public GridLength Name
     {
         get => _name;
-        set => SetField(ref _name, Math.Clamp(value, 140, 640));
+        set => SetField(ref _name, Clamp(value, "name"));
+    }
+
+    /// <summary>镜像列。带 registry 前缀的镜像名本来就长,默认给得比设计稿宽一档。</summary>
+    public GridLength Image
+    {
+        get => _image;
+        set => SetField(ref _image, Clamp(value, "image"));
     }
 
     /// <summary>端口列。</summary>
-    public double Ports
+    public GridLength Ports
     {
         get => _ports;
-        set => SetField(ref _ports, Math.Clamp(value, 70, 400));
+        set => SetField(ref _ports, Clamp(value, "ports"));
     }
 
     /// <summary>CPU 列。</summary>
-    public double Cpu
+    public GridLength Cpu
     {
         get => _cpu;
-        set => SetField(ref _cpu, Math.Clamp(value, 78, 300));
+        set => SetField(ref _cpu, Clamp(value, "cpu"));
     }
 
     /// <summary>内存列。</summary>
-    public double Mem
+    public GridLength Mem
     {
         get => _mem;
-        set => SetField(ref _mem, Math.Clamp(value, 62, 240));
+        set => SetField(ref _mem, Clamp(value, "mem"));
     }
 
     /// <summary>运行时长列。</summary>
-    public double Uptime
+    public GridLength Uptime
     {
         get => _uptime;
-        set => SetField(ref _uptime, Math.Clamp(value, 62, 260));
+        set => SetField(ref _uptime, Clamp(value, "uptime"));
+    }
+
+    /// <summary>某一列的下限。再窄就只剩省略号了。</summary>
+    public static double MinWidthFor(string key) => key switch
+    {
+        "name" => 140,
+        "image" => 120,
+        "ports" => 70,
+        "cpu" => 78,
+        "mem" => 62,
+        _ => 62
+    };
+
+    /// <summary>某一列双击自适应时的上限。</summary>
+    public static double MaxAutoFitFor(string key) => key is "name" or "image" ? 760 : 300;
+
+    /// <summary>按名字读一列的宽度(拖拽代码用 Tag 认列)。</summary>
+    public double GetColumnWidth(string key) => key switch
+    {
+        "name" => Name.Value,
+        "image" => Image.Value,
+        "ports" => Ports.Value,
+        "cpu" => Cpu.Value,
+        "mem" => Mem.Value,
+        _ => Uptime.Value
+    };
+
+    /// <summary>按名字写一列的宽度。</summary>
+    public void SetColumnWidth(string key, double width)
+    {
+        GridLength value = new(width);
+        switch (key)
+        {
+            case "name": Name = value; break;
+            case "image": Image = value; break;
+            case "ports": Ports = value; break;
+            case "cpu": Cpu = value; break;
+            case "mem": Mem = value; break;
+            case "uptime": Uptime = value; break;
+        }
+    }
+
+    /// <summary>用户拖出来的列宽只可能是像素值 —— 星形和 Auto 在这里没有意义。</summary>
+    private static GridLength Clamp(GridLength value, string key)
+    {
+        double min = MinWidthFor(key);
+        double px = value.IsAbsolute ? value.Value : min;
+        return new(Math.Max(min, px));
     }
 }

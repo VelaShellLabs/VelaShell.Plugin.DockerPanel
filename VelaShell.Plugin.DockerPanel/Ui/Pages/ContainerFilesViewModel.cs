@@ -149,20 +149,6 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     private bool _diffMode;
     private bool _reloadAfterSave;
     private ContainerFileEntry? _openEntry;
-    private double _treeWidth = 300;
-
-    /// <summary>
-    /// 文件树那一栏的宽度(用户拖出来的)。
-    /// <para>
-    /// 这一页既会占满整屏,也会挤在详情抽屉里,而深目录的路径一长 300px 就不够看 ——
-    /// 让它可拖比给任何一个定值都合适。
-    /// </para>
-    /// </summary>
-    public double TreeWidth
-    {
-        get => _treeWidth;
-        set => SetField(ref _treeWidth, Math.Clamp(value, 180, 560));
-    }
 
     /// <summary>只看相对镜像有变更的那些条目。</summary>
     public bool ChangedOnly

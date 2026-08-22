@@ -1,6 +1,5 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:ui="clr-namespace:VelaShell.Plugin.DockerPanel.Ui">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!--
     面板通用版式。几何对齐宿主:40px 顶栏 / 32px 数据行 / 26px 列头 / 24px 状态条。
@@ -171,6 +170,14 @@
     <Setter Property="CornerRadius" Value="6" />
   </Style>
 
+  <!--
+    输入框容器。与宿主的 Border.input-affix 同一路数:
+    **边框、背景、焦点态全由外层这个 Border 承担,内部 TextBox 完全去壳。**
+
+    反过来做(让 TextBox 自己画焦点框)是错的:外层是这个控件在用户眼里的形状,
+    高亮却出现在它里面那一圈,看起来就像框里又套了一个框 ——
+    而 Fluent 那圈焦点边是系统蓝,跟这套 Dracula 令牌也对不上。
+  -->
   <Style Selector="Border.input">
     <Setter Property="Background" Value="{DynamicResource VelaBgInput}" />
     <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
@@ -178,6 +185,22 @@
     <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Height" Value="28" />
     <Setter Property="Padding" Value="8,0" />
+  </Style>
+  <Style Selector="Border.input:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderSecondary}" />
+  </Style>
+  <!-- 焦点在容器**里的任何一个**控件上都算:输入框里还坐着正则开关、清除键。 -->
+  <Style Selector="Border.input:focus-within">
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaAccent}" />
+  </Style>
+
+  <!-- 容器内的 TextBox 一律去壳,不管它有没有挂 .bare。 -->
+  <Style Selector="Border.input TextBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
   </Style>
 
   <Style Selector="Border.divider">
@@ -223,6 +246,43 @@
 
   <Style Selector="TextBox.bare.mono">
     <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
+  </Style>
+
+  <!--
+    去壳要一直去到模板里那块 PART_BorderElement:
+    TextBox 自己的 BorderThickness=0 只压得住常态 —— Fluent 的主题在
+    :pointerover / :focus 上**直接改模板部件**,于是一点进去就冒出一圈系统蓝的框,
+    正好套在外层容器里面。三个状态都得按掉,焦点态才只剩外层那一圈。
+  -->
+  <Style Selector="Border.input TextBox /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Border.input TextBox:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Border.input TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- 命令面板那一个不在容器里(整块弹层就是它的边界),同样要去壳。 -->
+  <Style Selector="TextBox.bare /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="TextBox.bare:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="TextBox.bare:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
   </Style>
 
   <!-- ── 按钮变体 ─────────────────────────────────────────────────
@@ -289,13 +349,35 @@
   </Style>
 
   <!--
-    拖拽手柄。平时完全看不见 —— 列头和抽屉边缘不该多出一条竖线;
-    指针压上去才亮成一条强调色的窄条,告诉用户"这里可以拖"。
+    列界线与它的抓取区。做法与宿主一致:一条 6px 的轨道里,
+    1px 的细线画在中间(平时就看得见 —— 这是"这一列可以拖"的唯一提示),
+    一块透明的 Border 盖在整条轨道上负责接指针。
+
+    宿主的文件浏览器只给了 SizeWestEast 光标、连线都没画;这里多画一条:
+    看不见的手柄等于没有手柄,没人会把指针移到一片空白上试试看。
   -->
-  <Style Selector="ui|ResizeGrip:pointerover">
-    <Setter Property="Background" Value="{DynamicResource VelaAccentDim}" />
+  <!--
+    抓取区的 Background **只在这里设一次,而且永远是 Transparent**。
+    Border 靠 Background 参与命中测试,一旦某个状态样式把它改成别的值,
+    那个值又恰好解析不出画刷(缺令牌、缺主题),整条轨道就当场变得点不着 ——
+    悬停高亮因此画在里面那条线上,而不是抓取区自己身上。
+  -->
+  <Style Selector="Border.colgrip">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Cursor" Value="SizeWestEast" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="ToolTip.Tip" Value="拖动改列宽,双击自适应" />
   </Style>
-  <Style Selector="ui|ResizeGrip:pressed">
+  <Style Selector="Border.colline">
+    <Setter Property="Width" Value="1" />
+    <Setter Property="Margin" Value="0,6" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource VelaBorderPrimary}" />
+  </Style>
+  <!-- 指针压上去:界线通到底并变成强调色 —— 抓的是这一条,不是旁边那一条。 -->
+  <Style Selector="Border.colgrip:pointerover > Border.colline">
+    <Setter Property="Margin" Value="0" />
     <Setter Property="Background" Value="{DynamicResource VelaAccent}" />
   </Style>
 
