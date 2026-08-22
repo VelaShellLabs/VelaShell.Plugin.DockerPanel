@@ -28,7 +28,7 @@
                       Command="{Binding NewProjectCommand}">
                 <ui:Glyph Key="Icon.plus" Size="13" Brush="{DynamicResource VelaAccent}" />
               </Button>
-              <Button Theme="{StaticResource DockerIconButton}" ToolTip.Tip="刷新"
+              <Button Theme="{StaticResource DockerIconButton}" ToolTip.Tip="刷新(F5)"
                       Command="{Binding RefreshCommand}">
                 <ui:Glyph Key="Icon.refresh-cw" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
               </Button>
@@ -395,8 +395,26 @@
     <StackPanel Grid.Column="1" IsVisible="{Binding !HasSelection}" VerticalAlignment="Center"
                 HorizontalAlignment="Center" Spacing="10" MaxWidth="380">
       <TextBlock Text="选一个 compose 项目" Classes="h2" HorizontalAlignment="Center" />
-      <TextBlock Text="左边列出的是**起过至少一次**的项目;还没起过的用「按路径打开」给一个远端路径。"
+      <TextBlock Text="左边列出的是「起过至少一次」的项目;还没起过的,给一个远端路径就能打开。"
                  Classes="hint" TextAlignment="Center" />
+      <!-- 正文里点名了两个动作,却一颗按钮都没有 —— 让用户自己回到左上角去找。 -->
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+        <Button Theme="{StaticResource DockerToolButton}" Classes="primary" Height="28"
+                Command="{Binding NewProjectCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <ui:Glyph Key="Icon.plus" Size="12" Brush="{DynamicResource VelaAccentForeground}" />
+            <TextBlock Text="新建项目…" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                       Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Theme="{StaticResource DockerToolButton}" Height="28" Command="{Binding OpenByPathCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <ui:Glyph Key="Icon.folder-open" Size="12" Brush="{DynamicResource VelaTextSecondary}" />
+            <TextBlock Text="按路径打开…" FontSize="{DynamicResource VelaFontSize11}"
+                       Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
     </StackPanel>
 
     <!-- 执行记录 -->

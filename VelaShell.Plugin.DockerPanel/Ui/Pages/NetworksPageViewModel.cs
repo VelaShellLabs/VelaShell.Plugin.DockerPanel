@@ -69,6 +69,9 @@ public sealed class NetworksPageViewModel : PageViewModel
     /// <summary>列表空了。</summary>
     public bool IsEmpty => LoadedOnce && _all.Count == 0;
 
+    /// <summary>筛完之后没有匹配项 —— 与"这台机器上没有网络"是两回事,得分开说。</summary>
+    public bool NoMatch => LoadedOnce && _all.Count > 0 && View.Count == 0;
+
     /// <summary>当前选中的网络。</summary>
     public NetworkRow? Selected
     {
@@ -364,7 +367,7 @@ public sealed class NetworksPageViewModel : PageViewModel
                 r.Subnet.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
                 r.Driver.Contains(needle, StringComparison.OrdinalIgnoreCase));
         View.Merge([.. filtered], (_, _) => { });
-        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertiesChanged(nameof(IsEmpty), nameof(NoMatch));
     }
 
     private async Task SelectAsync(NetworkRow? row)

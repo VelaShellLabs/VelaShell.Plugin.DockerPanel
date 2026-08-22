@@ -537,6 +537,19 @@ public abstract class PanelForm : ObservableObject
     /// <summary>有没有命令预览。</summary>
     public bool HasPreview => CommandPreview.Length > 0;
 
+    /// <summary>
+    /// 表单顶部的一条提醒。
+    /// <para>
+    /// 与 <see cref="FormError" /> 不是一回事:错误说的是"这样填不行",
+    /// 提醒说的是"这样填可以,但会有一个你未必想要的后果"——
+    /// 改一个 compose 管着的容器的名字就属于后者。
+    /// </para>
+    /// </summary>
+    public virtual string Notice => "";
+
+    /// <summary>有没有提醒。</summary>
+    public bool HasNotice => Notice.Length > 0;
+
     /// <summary>整表级别的错误。</summary>
     public string? FormError
     {

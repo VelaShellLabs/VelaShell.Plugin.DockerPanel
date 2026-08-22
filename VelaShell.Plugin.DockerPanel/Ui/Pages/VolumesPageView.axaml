@@ -18,7 +18,20 @@
           <TextBlock Grid.Column="1" Text="{Binding TotalCount}" Classes="meta" Margin="8,0,0,0" />
           <TextBlock Grid.Column="2" Text="{Binding TotalSizeText}" Classes="meta" Margin="10,0,0,0" />
 
-          <Border Grid.Column="3" Classes="input" Width="200" Height="26" Margin="12,0,0,0">
+          <!-- 「只看未使用」的筛选逻辑早就写好了(UnusedOnly),却一直没有开关 ——
+               而清理卷之前想先看看会清掉哪些,正是这一页最常见的一件事。 -->
+          <ToggleButton Grid.Column="3" Theme="{StaticResource DockerChipToggle}" Margin="12,0,0,0"
+                        ToolTip.Tip="只留没有容器挂着的卷 —— 也就是「清理未使用」会动的那些"
+                        IsChecked="{Binding UnusedOnly}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <ui:Glyph Key="Docker.list-filter" Size="12" Brush="{Binding $parent[ToggleButton].Foreground}" />
+              <TextBlock Text="{Binding UnusedCount, StringFormat='只看未使用 {0}'}"
+                         FontSize="{DynamicResource VelaFontSize11}" VerticalAlignment="Center"
+                         Foreground="{Binding $parent[ToggleButton].Foreground}" />
+            </StackPanel>
+          </ToggleButton>
+
+          <Border Grid.Column="4" Classes="input" Width="200" Height="26" Margin="12,0,0,0" HorizontalAlignment="Left">
             <Grid ColumnDefinitions="Auto,*">
               <ui:Glyph Grid.Column="0" Key="Icon.search" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
               <TextBox Grid.Column="1" Classes="bare" Margin="7,0,0,0" Text="{Binding Search}"
@@ -44,7 +57,7 @@
             </StackPanel>
           </Button>
           <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
-                  ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
+                  ToolTip.Tip="刷新(F5)" Command="{Binding RefreshCommand}">
             <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
           </Button>
         </Grid>
@@ -157,7 +170,20 @@
           <TextBlock Text="这台机器上还没有卷" Classes="h2" HorizontalAlignment="Center" />
           <TextBlock Text="容器把数据写在可写层里,容器一删就没了 —— 要留住数据就得有卷。" Classes="hint"
                      TextAlignment="Center" MaxWidth="360" />
+          <!-- 空状态得给出下一步:镜像页的空状态有「拉取镜像…」,这里原来只有两行字。 -->
+          <Button Theme="{StaticResource DockerToolButton}" Classes="primary" Height="28"
+                  HorizontalAlignment="Center" Command="{Binding CreateCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <ui:Glyph Key="Icon.plus" Size="12" Brush="{DynamicResource VelaAccentForeground}" />
+              <TextBlock Text="新建卷…" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+                         Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
         </StackPanel>
+
+        <TextBlock IsVisible="{Binding NoMatch}" Classes="hint"
+                   VerticalAlignment="Center" HorizontalAlignment="Center"
+                   Text="没有匹配的卷 —— 换个词,或者把「只看未使用」关掉。" />
       </Grid>
     </Grid>
 
@@ -216,7 +242,7 @@
             <Button Theme="{StaticResource DockerToolButton}"
                     Background="{DynamicResource VelaAccentDim}" BorderBrush="Transparent"
                     IsEnabled="{Binding CanBrowse}"
-                    ToolTip.Tip="{Binding BrowseHint}"
+                    ToolTip.Tip="{Binding BrowseHint, Converter={x:Static ui:Converters.TipText}}"
                     Command="{Binding BrowseCommand}" CommandParameter="{Binding Selected}">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <ui:Glyph Key="Icon.folder-open" Size="13" Brush="{DynamicResource VelaAccent}" />
@@ -288,7 +314,7 @@
               <DataTemplate x:DataType="pages:DetailField">
                 <Grid ColumnDefinitions="106,*" Margin="0,2">
                   <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label"
-                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key}" />
+                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key, Converter={x:Static ui:Converters.TipText}}" />
                   <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" TextWrapping="Wrap" />
                 </Grid>
               </DataTemplate>

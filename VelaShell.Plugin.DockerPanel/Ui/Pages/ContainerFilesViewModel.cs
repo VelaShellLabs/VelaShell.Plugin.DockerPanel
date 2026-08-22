@@ -56,6 +56,18 @@ public sealed class FileEntryItem(ContainerFileEntry entry, string changeMarker)
     /// <summary>符号链接的目标。</summary>
     public string LinkText => Entry.LinkTarget is { Length: > 0 } target ? $"→ {target}" : "";
 
+    /// <summary>是不是软链接(决定要不要画出目标)。</summary>
+    public bool IsSymlink => Entry.IsSymlink;
+
+    /// <summary>
+    /// 悬停时那行详情:权限、大小、修改时间。
+    /// <para>
+    /// 这三样 <c>ls</c> 早就解析好了,却一直没有任何地方显示 ——
+    /// 树里一行只有 24px,塞不下三列;挂在提示上是它们唯一放得下的位置。
+    /// </para>
+    /// </summary>
+    public string Details => string.Join("  ", new[] { Mode, SizeText, Modified }.Where(s => s.Length > 0));
+
     /// <summary>相对镜像的变更标记(A/C/D);没变过为空。</summary>
     public string ChangeMarker { get; } = changeMarker;
 
@@ -307,7 +319,15 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     public int ChangeCount => _changes.Count;
 
     /// <summary>变更计数文本。</summary>
-    public string ChangeText => _changes.Count == 0 ? "与镜像一致" : $"相对镜像已变更 {_changes.Count} 项";
+    // diff 读失败时不能说"与镜像一致"—— 那是在**断言一件没验证过的事**,
+    // 而这一页的读者正要据此决定改哪个文件。读不到就说读不到。
+    public string ChangeText => _diffFailed
+        ? "读不到相对镜像的变更(A/C/D 标记这一次不可用)"
+        : _changes.Count == 0
+            ? "与镜像一致"
+            : $"相对镜像已变更 {_changes.Count} 项";
+
+    private bool _diffFailed;
 
     /// <summary>正在编辑的文件路径;没打开时为 <see langword="null" />。</summary>
     public string? OpenFilePath
@@ -895,11 +915,15 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
             {
                 _changes[change.Path] = change.Marker;
             }
+            _diffFailed = false;
             OnPropertiesChanged(nameof(ChangeCount), nameof(ChangeText));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // 拿不到 diff 不该挡住文件浏览 —— 标记只是锦上添花。
+            // 但那一行小字得改口:不能继续说"与镜像一致"。
+            _diffFailed = true;
+            OnPropertyChanged(nameof(ChangeText));
             shell.Context.Log.Debug($"docker diff failed: {ex.Message}");
         }
     }

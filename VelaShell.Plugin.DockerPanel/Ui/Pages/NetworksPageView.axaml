@@ -41,7 +41,7 @@
             </StackPanel>
           </Button>
           <Button Grid.Column="6" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
-                  ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
+                  ToolTip.Tip="刷新(F5)" Command="{Binding RefreshCommand}">
             <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
           </Button>
         </Grid>
@@ -91,7 +91,8 @@
         </Grid>
       </Border>
 
-      <ScrollViewer Grid.Row="2" Background="{DynamicResource VelaBgSurface}">
+      <Grid Grid.Row="2" Background="{DynamicResource VelaBgSurface}">
+      <ScrollViewer>
         <ItemsControl ItemsSource="{Binding View}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="ui:NetworkRow">
@@ -155,6 +156,20 @@
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </ScrollViewer>
+
+      <!-- 这一页原来一个空状态都没有:过滤没命中时是一片空白,
+           和"这台机器上真的一个网络都没有"长得一模一样。 -->
+      <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                  Spacing="10" MaxWidth="380">
+        <TextBlock Text="这台机器上还没有网络" Classes="h2" HorizontalAlignment="Center" />
+        <TextBlock Classes="hint" TextAlignment="Center"
+                   Text="连 bridge / host / none 这三个内置网络都没有 —— 多半是 daemon 刚起来还没建好,刷新一下再看。" />
+      </StackPanel>
+
+      <TextBlock IsVisible="{Binding NoMatch}" Classes="hint"
+                 VerticalAlignment="Center" HorizontalAlignment="Center"
+                 Text="没有匹配的网络 —— 换个词试试(名字、驱动、子网都能搜)。" />
+      </Grid>
     </Grid>
 
     <!-- 详情抽屉。与容器 / 镜像 / 卷同一副骨架:标题条 / 动作条 / 内容。 -->

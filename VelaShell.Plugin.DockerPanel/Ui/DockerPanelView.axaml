@@ -477,9 +477,43 @@
                          PlaceholderText="/var/run/docker.sock" />
               </Border>
               <TextBlock Classes="hint" TextWrapping="Wrap"
-                         Text="rootless Docker 在 $XDG_RUNTIME_DIR/docker.sock;Colima、OrbStack 各有各的位置。按主机记住,重连生效。" />
-              <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
-                         Text="这里填的是**路径**,不是 DOCKER_HOST 那种 URL —— 面板只经 SSH 隧道连 unix socket,不走 TCP。远端的 DOCKER_CONTEXT 面板不读:上下文是 CLI 的概念,daemon 不认。" />
+                         Text="填的是「路径」,不是 DOCKER_HOST 那种 URL —— 面板只经 SSH 隧道连 unix socket,不走 TCP。按主机记住,重连生效。" />
+
+              <!-- 「那我这台机器的路径到底是多少」是这一格最常见的问题,
+                   所以答案就放在格子底下,而不是让用户去别处查。 -->
+              <Border Classes="card" Padding="10,9">
+                <StackPanel Spacing="6">
+                  <TextBlock Text="不知道路径?常见的四个位置" Classes="label"
+                             Foreground="{DynamicResource VelaTextPrimary}" />
+                  <ItemsControl ItemsSource="{Binding SocketHints}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="ui:SocketHint">
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                          <TextBlock Grid.Column="0" Text="{Binding Path}" Classes="cell"
+                                     FontSize="{DynamicResource VelaFontSize10}"
+                                     Foreground="{DynamicResource VelaInfo}"
+                                     TextTrimming="CharacterEllipsis"
+                                     ToolTip.Tip="{Binding Path, Converter={x:Static ui:Converters.TipText}}" />
+                          <TextBlock Grid.Column="1" Text="{Binding Source}" Classes="meta" Margin="8,0,0,0" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBlock Classes="hint" TextWrapping="Wrap"
+                             Text="拿不准就让远端自己回答:下面这颗会把一条探测命令送进宿主终端,把存在的 socket、docker context 的说法和 DOCKER_HOST 一次列出来。" />
+                  <Button Theme="{StaticResource DockerToolButton}" HorizontalAlignment="Left"
+                          Command="{Binding DiscoverSocketCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <ui:Glyph Key="Icon.terminal" Size="12" Brush="{DynamicResource VelaAccent}" />
+                      <TextBlock Text="在终端里查一下" FontSize="{DynamicResource VelaFontSize11}"
+                                 Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Classes="hint" TextWrapping="Wrap"
+                         Text="远端的 DOCKER_CONTEXT 面板不读:上下文是 CLI 的概念,daemon 不认它 —— 但上面那条命令会把 context 指到哪儿一并打出来,照着填就行。" />
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Theme="{StaticResource DockerToolButton}" Content="保存并重连"
                         Command="{Binding ApplySocketPathCommand}" />

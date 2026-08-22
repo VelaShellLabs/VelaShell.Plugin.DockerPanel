@@ -44,8 +44,10 @@ public sealed partial class RenameContainerForm : PanelForm
         ? $"这个容器由 compose 项目 {_project} 管理。改名后 compose 会认为服务不存在,下次 up -d 会再建一个。要长期生效,请改 compose.yaml 里的 container_name。"
         : "";
 
-    /// <summary>要不要显示 compose 警告。</summary>
-    public bool HasComposeWarning => ComposeWarning.Length > 0;
+    /// <inheritdoc />
+    // 这句话原来只算不显示:表单壳上压根没有放它的地方,
+    // 于是给一个 compose 管着的容器改名,界面上一句提醒都没有。
+    public override string Notice => ComposeWarning;
 
     /// <inheritdoc />
     public override bool Validate()

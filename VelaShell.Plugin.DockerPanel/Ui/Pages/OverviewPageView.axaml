@@ -11,7 +11,7 @@
         <TextBlock Grid.Column="0" Text="总览" Classes="h1" />
         <TextBlock Grid.Column="1" Text="事件驱动 —— 自动刷新默认关闭" Classes="meta" Margin="10,0,0,0" />
         <Button Grid.Column="3" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
-                  ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
+                  ToolTip.Tip="刷新(F5)" Command="{Binding RefreshCommand}">
           <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
         </Button>
       </Grid>

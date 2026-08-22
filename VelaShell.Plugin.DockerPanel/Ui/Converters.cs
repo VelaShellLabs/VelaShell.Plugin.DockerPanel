@@ -123,6 +123,17 @@ public static class Converters
         new FuncValueConverter<bool, ScrollBarVisibility>(wrap =>
             wrap ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
 
+    /// <summary>
+    /// 提示文字:空的就**不给提示**。
+    /// <para>
+    /// <c>ToolTip.Tip</c> 只看是不是 <see langword="null" />:空字符串照样会弹一个空框出来。
+    /// 而绑上去的那些文字有一半天生可能是空的(没有端口的容器、没有禁用理由的选项、
+    /// 还没打开文件的编辑器),于是鼠标一悬停就冒出一个空白小方块。
+    /// </para>
+    /// </summary>
+    public static readonly IValueConverter TipText =
+        new FuncValueConverter<string?, object?>(text => string.IsNullOrWhiteSpace(text) ? null : text);
+
     /// <summary>最大化 / 还原是同一颗键,图标要跟着当前状态走 —— 否则铺开之后没人看得出怎么回去。</summary>
     public static readonly IValueConverter MaximizeIcon =
         new FuncValueConverter<bool, string>(max => max ? "Docker.minimize-2" : "Docker.maximize-2");

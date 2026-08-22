@@ -168,6 +168,15 @@ public sealed class ConfirmGate : ObservableObject
     /// <summary>主机名后面那行小字。</summary>
     public string HostDetail => Request?.HostDetail ?? "";
 
+    /// <summary>
+    /// 目标不是本机时,主机那行小字要用警示色。
+    /// <para>
+    /// 请求里早就带着这一位(<see cref="ConfirmRequest.HostWarning" />),界面却一直没读 ——
+    /// 于是"在生产机上删 3 个卷"和"在本机删 3 个卷"长得一模一样。
+    /// </para>
+    /// </summary>
+    public bool HostWarning => Request?.HostWarning == true;
+
     /// <summary>请求下面那行等价的命令行。</summary>
     public string CommandNote => Request?.CommandNote ?? "";
 

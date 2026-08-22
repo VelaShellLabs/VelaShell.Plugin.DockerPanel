@@ -67,6 +67,11 @@ public sealed class EndpointItem(DockerEndpoint endpoint, bool available, string
 /// <param name="Invoke">回调。</param>
 public sealed record RecoveryAction(string Label, string Icon, bool Primary, Action Invoke);
 
+/// <summary>设置里列出的一个常见 socket 位置。</summary>
+/// <param name="Path">路径。</param>
+/// <param name="Source">哪一种安装方式会摆在这儿。</param>
+public sealed record SocketHint(string Path, string Source);
+
 /// <summary>
 /// 面板外壳的视图模型:端点、导航、连接生命周期与事件驱动刷新。
 /// <para>
@@ -92,7 +97,9 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     private string _errorDetail = "";
     private string _errorHint = "";
     private string _errorIcon = "Icon.circle-alert";
-    private PanelPage _currentPage = PanelPage.Containers;
+    // 落地页是总览:刚连上时,用户第一件想知道的是"这台机器现在怎么样",
+    // 而不是"这里有哪些容器"—— 后者是他确认前者之后才要往下走的一步。
+    private PanelPage _currentPage = PanelPage.Overview;
     private PageViewModel? _activePage;
     private string _engineVersion = "";
     private string _apiVersion = "";
@@ -117,7 +124,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         ComposePage = new ComposePageViewModel(this);
         SystemPage = new SystemPageViewModel(this);
         AllPages = [Overview, Containers, Images, Volumes, Networks, ComposePage, SystemPage];
-        _activePage = Containers;
+        _activePage = Overview;
 
         SelectPageCommand = new RelayCommand(p =>
         {
@@ -151,19 +158,20 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             }
         });
         ApplySocketPathCommand = new RelayCommand(_ => ApplySocketPathAsync());
+        // 一条命令把四个常见位置和 docker 自己的说法一次问清,省得用户挨个试。
+        // 用 -S 而不是 -e:那个位置上摆着一个同名的普通文件,比不存在更难查。
+        DiscoverSocketCommand = new RelayCommand(_ => SendToHostTerminalAsync(
+            "for s in /var/run/docker.sock \"$XDG_RUNTIME_DIR/docker.sock\" " +
+            "\"$HOME/.docker/run/docker.sock\" \"$HOME/.colima/default/docker.sock\"; " +
+            "do [ -S \"$s\" ] && echo \"有 $s\"; done; " +
+            "docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null; " +
+            "echo \"DOCKER_HOST=$DOCKER_HOST\""));
         ResetSocketPathCommand = new RelayCommand(_ =>
         {
             SocketPathInput = SocketPathDefault;
             return ApplySocketPathAsync();
         });
         ClearFinishedTasksCommand = new RelayCommand(_ => Tasks.ClearFinished());
-        DismissToastCommand = new RelayCommand(p =>
-        {
-            if (p is Toast toast)
-            {
-                Feedback.Dismiss(toast);
-            }
-        });
 
         RelayCommand.UnhandledCommandError += ex => Feedback.ReportError("操作", ex);
         Settings.Changed += () =>
@@ -557,11 +565,29 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// <summary>恢复默认 socket 路径并重连。</summary>
     public RelayCommand ResetSocketPathCommand { get; }
 
+    /// <summary>
+    /// 常见的 socket 位置。摆在设置里而不是写进文档:
+    /// 用户是在"连不上"的当口来找它的,那一刻他不会去翻文档。
+    /// </summary>
+    public IReadOnlyList<SocketHint> SocketHints { get; } =
+    [
+        new("/var/run/docker.sock", "标准安装"),
+        new("$XDG_RUNTIME_DIR/docker.sock", "rootless"),
+        new("~/.docker/run/docker.sock", "Docker Desktop"),
+        new("~/.colima/default/docker.sock", "Colima")
+    ];
+
+    /// <summary>
+    /// 把"这台机器的 socket 到底在哪"这条命令送到宿主终端里去问。
+    /// <para>
+    /// 面板不替用户猜:rootless、Colima、OrbStack、Docker Desktop 各摆各的位置,
+    /// 而**远端自己**一句话就能答上来。本机端点没有终端可送,那就把命令原样告诉他。
+    /// </para>
+    /// </summary>
+    public RelayCommand DiscoverSocketCommand { get; }
+
     /// <summary>清掉已完成的任务。</summary>
     public RelayCommand ClearFinishedTasksCommand { get; }
-
-    /// <summary>关掉一条 toast。</summary>
-    public RelayCommand DismissToastCommand { get; }
 
     // ── 生命周期 ──────────────────────────────────────────────────
 
@@ -675,7 +701,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             _ = Containers.PrimeAsync(_lifetime.Token);
             if (!ComposeAvailable && CurrentPage == PanelPage.Compose)
             {
-                await GoToAsync(PanelPage.Containers).ConfigureAwait(true);
+                await GoToAsync(PanelPage.Overview).ConfigureAwait(true);
             }
             else
             {
