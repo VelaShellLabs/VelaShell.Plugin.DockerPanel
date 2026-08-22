@@ -25,9 +25,28 @@
   <ItemGroup>
     <!-- 插件工程只需要这一个包:契约程序集、与宿主版本一致的 Avalonia(含 AXAML 编译器)、
          plugin.json 处理、清单校验与 `dotnet build -t:PackVpx` 都随它到位。
-         本插件**没有任何第三方依赖** —— 远端一侧是 Docker 自带的 HTTP API,
-         本地一侧只用 BCL 的 System.Text.Json。 -->
+         Docker 那一侧**没有任何第三方依赖** —— 远端是 Docker 自带的 HTTP API,
+         本地只用 BCL 的 System.Text.Json。随插件分发的运行时文件也仍然只有它自己。 -->
     <PackageReference Include="VelaShell.PluginSdk.Build" Version="1.4.0" />
+    <!--
+         唯一的第三方件,而且**只在编译期**。
+
+         compose.yaml / .env / config 展开都要语法高亮,而 TextBox 的整块文本共用一个
+         Foreground,按 token 着色它给不了 —— compose.yaml 恰恰是"缩进错一格就全错"的格式,
+         高亮在那里不是装饰,是校对工具。
+
+         程序集名 AvaloniaEdit 命中宿主 PluginAssemblyLoadContext
+         的 SharedPrefixes("Avalonia"),运行时一律回落到宿主那一份(版本须与宿主一致),
+         所以 ExcludeAssets="runtime" —— 复制过去反而会变成两份类型。
+         本插件 hostMode 是 inProcess(plugin.json 里写清了理由),这条回落成立。 -->
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 语法高亮定义。用 EmbeddedResource 而非 AvaloniaResource:HighlightingLoader 要的是
+         普通 Stream,由 Assembly.GetManifestResourceStream 提供。宿主自己也带了同名定义,
+         但那是它的内部资源,插件够不着 —— 各带一份,注册名加前缀避免抢占全局管理器里的名字。 -->
+    <EmbeddedResource Include="Syntax/*.xshd" />
   </ItemGroup>
 
   <ItemGroup>

@@ -336,8 +336,19 @@ public class PanelLogicTests
     [TestMethod]
     public void OpenComposeForm_DerivesTheProjectNameFromTheDirectory()
     {
-        var form = new OpenComposeForm();
+        var form = new OpenComposeForm(isLocal: false);
         SetText(form, "compose 文件路径", "/srv/stacks/web-stack/compose.yaml");
+
+        Assert.IsTrue(form.Validate());
+        Assert.AreEqual("web-stack", form.ProjectName);
+    }
+
+    [TestMethod]
+    public void OpenComposeForm_TakesWindowsPathsOnLocalEndpoints()
+    {
+        // 本机端点上 compose ls 报回来的就是这种路径 —— 拦掉它等于本机端点用不了这个入口。
+        var form = new OpenComposeForm(isLocal: true);
+        SetText(form, "compose 文件路径", @"D:\stacks\web-stack\compose.yaml");
 
         Assert.IsTrue(form.Validate());
         Assert.AreEqual("web-stack", form.ProjectName);
@@ -346,7 +357,7 @@ public class PanelLogicTests
     [TestMethod]
     public void OpenComposeForm_RejectsRelativePaths()
     {
-        var form = new OpenComposeForm();
+        var form = new OpenComposeForm(isLocal: false);
         SetText(form, "compose 文件路径", "stacks/web/compose.yaml");
 
         // 相对路径会以登录目录为基准 —— 一个安静地打开错项目的 bug。

@@ -59,6 +59,4 @@ public sealed record DockerEndpoint(
     /// </summary>
     public string Key => $"{Kind}|{SessionId}|{SocketPath}";
 
-    /// <summary>Compose 需要在远端跑 <c>docker compose</c> 命令,本机端点没有这条路。</summary>
-    public bool SupportsCompose => Kind == DockerEndpointKind.Remote;
 }

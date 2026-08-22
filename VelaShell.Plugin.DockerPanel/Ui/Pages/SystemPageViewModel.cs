@@ -38,7 +38,6 @@ public readonly record struct DiskSegment(string Label, long Bytes, double Weigh
 public sealed class PruneCard(string icon, string title, string description, string tag, RowTone tone, RelayCommand command)
     : ObservableObject
 {
-    private string _sizeText = "统计中…";
 
     /// <summary>图标。</summary>
     public string Icon { get; } = icon;
@@ -58,9 +57,9 @@ public sealed class PruneCard(string icon, string title, string description, str
     /// <summary>可回收大小。</summary>
     public string SizeText
     {
-        get => _sizeText;
-        set => SetField(ref _sizeText, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = "统计中…";
 
     /// <summary>执行。</summary>
     public RelayCommand Command { get; } = command;

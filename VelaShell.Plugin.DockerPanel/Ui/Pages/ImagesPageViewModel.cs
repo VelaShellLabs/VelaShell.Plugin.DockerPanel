@@ -24,10 +24,6 @@ public enum ImageFilter
 public sealed class ImagesPageViewModel : PageViewModel
 {
     private readonly List<ImageRow> _all = [];
-    private ImageFilter _filter = ImageFilter.All;
-    private string _search = "";
-    private int _selectedCount;
-    private ImageDetailViewModel? _detail;
 
     /// <summary>建镜像页。</summary>
     public ImagesPageViewModel(DockerPanelViewModel shell) : base(shell)
@@ -68,16 +64,16 @@ public sealed class ImagesPageViewModel : PageViewModel
     /// <summary>当前筛选。</summary>
     public ImageFilter Filter
     {
-        get => _filter;
+        get;
         set
         {
-            if (SetField(ref _filter, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsAll), nameof(IsUsed), nameof(IsUnused), nameof(IsDangling));
                 ApplyView();
             }
         }
-    }
+    } = ImageFilter.All;
 
     /// <summary>筛选:全部。</summary>
     public bool IsAll => Filter == ImageFilter.All;
@@ -94,15 +90,15 @@ public sealed class ImagesPageViewModel : PageViewModel
     /// <summary>搜索词。</summary>
     public string Search
     {
-        get => _search;
+        get;
         set
         {
-            if (SetField(ref _search, value))
+            if (SetField(ref field, value))
             {
                 ApplyView();
             }
         }
-    }
+    } = "";
 
     /// <summary>总数。</summary>
     public int TotalCount => _all.Count;
@@ -119,10 +115,10 @@ public sealed class ImagesPageViewModel : PageViewModel
     /// <summary>已勾选数量。</summary>
     public int SelectedCount
     {
-        get => _selectedCount;
+        get;
         private set
         {
-            if (SetField(ref _selectedCount, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(HasSelection), nameof(SelectionText));
             }
@@ -167,10 +163,10 @@ public sealed class ImagesPageViewModel : PageViewModel
     /// <summary>右侧详情抽屉;没打开时为 <see langword="null" />。</summary>
     public ImageDetailViewModel? Detail
     {
-        get => _detail;
+        get;
         private set
         {
-            if (SetField(ref _detail, value))
+            if (SetField(ref field, value))
             {
                 Drawer.IsOpen = value is not null;
                 OnPropertyChanged(nameof(HasDetail));
@@ -209,7 +205,7 @@ public sealed class ImagesPageViewModel : PageViewModel
     public bool CanPickFiles => FilePicker.IsAvailable;
 
     /// <summary>复制镜像 id。</summary>
-    public RelayCommand RowCopyIdCommand => _rowCopyId ??= new(async p =>
+    public RelayCommand RowCopyIdCommand => field ??= new(async p =>
     {
         if (p is ImageRow row)
         {
@@ -217,8 +213,6 @@ public sealed class ImagesPageViewModel : PageViewModel
             Shell.Feedback.Status(FeedbackKind.Success, "已复制镜像 ID");
         }
     });
-
-    private RelayCommand? _rowCopyId;
 
     /// <summary>打开详情。</summary>
     public RelayCommand OpenDetailCommand { get; }
@@ -364,8 +358,8 @@ public sealed class ImagesPageViewModel : PageViewModel
 
     private void ApplyView()
     {
-        string needle = _search.Trim();
-        IEnumerable<ImageRow> filtered = _all.Where(row => _filter switch
+        string needle = Search.Trim();
+        IEnumerable<ImageRow> filtered = _all.Where(row => Filter switch
         {
             ImageFilter.Used => row.Summary.Containers > 0,
             ImageFilter.Unused => row.Summary.Containers <= 0 && !row.IsDangling,
@@ -685,12 +679,6 @@ public sealed class DirectProgress<T>(Action<T> handler) : IProgress<T>
 /// </summary>
 public sealed class ImageColumns : ListColumns
 {
-    private GridLength _repo = new(240);
-    private GridLength _tag = new(116);
-    private GridLength _id = new(104);
-    private GridLength _size = new(84);
-    private GridLength _created = new(118);
-    private GridLength _used = new(96);
 
     /// <inheritdoc />
     public override IReadOnlyList<string> Keys { get; } = ["repo", "tag", "id", "size", "created", "used"];
@@ -698,44 +686,44 @@ public sealed class ImageColumns : ListColumns
     /// <summary>镜像列(仓库名)。</summary>
     public GridLength Repo
     {
-        get => _repo;
-        set => SetField(ref _repo, Clamp(value, "repo"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "repo"));
+    } = new(240);
 
     /// <summary>标签列。</summary>
     public GridLength Tag
     {
-        get => _tag;
-        set => SetField(ref _tag, Clamp(value, "tag"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "tag"));
+    } = new(116);
 
     /// <summary>镜像 ID 列。</summary>
     public GridLength Id
     {
-        get => _id;
-        set => SetField(ref _id, Clamp(value, "id"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "id"));
+    } = new(104);
 
     /// <summary>大小列。</summary>
     public GridLength Size
     {
-        get => _size;
-        set => SetField(ref _size, Clamp(value, "size"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "size"));
+    } = new(84);
 
     /// <summary>创建时间列。</summary>
     public GridLength Created
     {
-        get => _created;
-        set => SetField(ref _created, Clamp(value, "created"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "created"));
+    } = new(118);
 
     /// <summary>使用中列。</summary>
     public GridLength Used
     {
-        get => _used;
-        set => SetField(ref _used, Clamp(value, "used"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "used"));
+    } = new(96);
 
     /// <inheritdoc />
     public override double Get(string key) => key switch

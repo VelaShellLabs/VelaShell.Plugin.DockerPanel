@@ -31,10 +31,6 @@ public enum RowTone
 /// </summary>
 public abstract class RowBase(string id) : ObservableObject
 {
-    private bool _selected;
-    private bool _current;
-    private bool _busy;
-    private double _busyProgress;
 
     /// <summary>稳定身份。</summary>
     public string Id { get; } = id;
@@ -43,17 +39,13 @@ public abstract class RowBase(string id) : ObservableObject
     public string ShortId => Humanize.ShortId(Id);
 
     /// <summary>是否被勾选(批量操作的目标)。</summary>
-    public bool Selected
-    {
-        get => _selected;
-        set
+    public bool Selected { get; set
         {
-            if (SetField(ref _selected, value))
+            if (SetField(ref field, value))
             {
                 SelectionChanged?.Invoke();
             }
-        }
-    }
+        } }
 
     /// <summary>
     /// 这一行就是右侧抽屉里正开着的那一个。
@@ -63,28 +55,16 @@ public abstract class RowBase(string id) : ObservableObject
     /// 就分不出哪一行会被下一步的「删除」打到。
     /// </para>
     /// </summary>
-    public bool Current
-    {
-        get => _current;
-        set => SetField(ref _current, value);
-    }
+    public bool Current { get; set => SetField(ref field, value); }
 
     /// <summary>
     /// 这一行正在被操作。界面据此在行顶画一条 2px 进度条、把动作按钮换成"取消",
     /// 其余按钮禁用**而不是消失** —— 位置不跳。
     /// </summary>
-    public bool Busy
-    {
-        get => _busy;
-        set => SetField(ref _busy, value);
-    }
+    public bool Busy { get; set => SetField(ref field, value); }
 
     /// <summary>行内进度 0–1;为 0 表示不确定型。</summary>
-    public double BusyProgress
-    {
-        get => _busyProgress;
-        set => SetField(ref _busyProgress, value);
-    }
+    public double BusyProgress { get; set => SetField(ref field, value); }
 
     /// <summary>勾选状态变了。</summary>
     public event Action? SelectionChanged;
@@ -93,11 +73,6 @@ public abstract class RowBase(string id) : ObservableObject
 /// <summary>容器列表的一行。</summary>
 public sealed class ContainerRow(ContainerSummary summary) : RowBase(summary.Id)
 {
-    private ContainerSummary _summary = summary;
-    private string _cpuText = "—";
-    private string _memText = "—";
-    private double _cpuPercent;
-    private long _memoryBytes;
 
     /// <summary>最近若干次 CPU 采样(行内 sparkline 用)。</summary>
     public ObservableCollection<double> CpuSamples { get; } = [];
@@ -113,41 +88,41 @@ public sealed class ContainerRow(ContainerSummary summary) : RowBase(summary.Id)
     public Pages.ContainersPageViewModel? Owner { get; set; }
 
     /// <summary>底层数据。</summary>
-    public ContainerSummary Summary => _summary;
+    public ContainerSummary Summary { get; private set; } = summary;
 
     /// <summary>容器名。</summary>
-    public string Name => _summary.Name;
+    public string Name => Summary.Name;
 
     /// <summary>镜像引用。</summary>
-    public string Image => _summary.Image ?? "";
+    public string Image => Summary.Image ?? "";
 
     /// <summary>端口摘要。</summary>
-    public string Ports => Humanize.Ports(_summary.Ports);
+    public string Ports => Humanize.Ports(Summary.Ports);
 
     /// <summary>compose 项目名;不属于任何项目时为空。</summary>
-    public string Project => _summary.ComposeProject ?? "";
+    public string Project => Summary.ComposeProject ?? "";
 
     /// <summary>有没有 compose 项目。</summary>
     public bool HasProject => Project.Length > 0;
 
     /// <summary>daemon 的状态串。</summary>
-    public string Status => _summary.Status ?? "";
+    public string Status => Summary.Status ?? "";
 
     /// <summary>是否在跑。</summary>
-    public bool IsRunning => _summary.State == "running";
+    public bool IsRunning => Summary.State == "running";
 
     /// <summary>是否暂停。</summary>
-    public bool IsPaused => _summary.State == "paused";
+    public bool IsPaused => Summary.State == "paused";
 
     /// <summary>是否不健康。</summary>
     public bool IsUnhealthy => Status.Contains("(unhealthy)", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>是否异常退出。</summary>
-    public bool IsFailed => _summary.State == "exited" && !Status.Contains("(0)", StringComparison.Ordinal);
+    public bool IsFailed => Summary.State == "exited" && !Status.Contains("(0)", StringComparison.Ordinal);
 
     /// <summary>行的状态色。</summary>
     public RowTone Tone =>
-        _summary.State is "restarting" or "created" ? RowTone.Busy
+        Summary.State is "restarting" or "created" ? RowTone.Busy
         : IsUnhealthy || IsFailed ? RowTone.Danger
         : IsPaused ? RowTone.Warn
         : IsRunning ? RowTone.Ok
@@ -179,46 +154,30 @@ public sealed class ContainerRow(ContainerSummary summary) : RowBase(summary.Id)
     }
 
     /// <summary>CPU 占用文本。</summary>
-    public string CpuText
-    {
-        get => _cpuText;
-        private set => SetField(ref _cpuText, value);
-    }
+    public string CpuText { get; private set => SetField(ref field, value); } = "—";
 
     /// <summary>内存占用文本。</summary>
-    public string MemText
-    {
-        get => _memText;
-        private set => SetField(ref _memText, value);
-    }
+    public string MemText { get; private set => SetField(ref field, value); } = "—";
 
     /// <summary>CPU 百分比(决定 sparkline 是否转黄)。</summary>
-    public double CpuPercent
-    {
-        get => _cpuPercent;
-        private set
+    public double CpuPercent { get; private set
         {
-            if (SetField(ref _cpuPercent, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(CpuHot));
             }
-        }
-    }
+        } }
 
     /// <summary>CPU 高到该提醒的程度。</summary>
-    public bool CpuHot => _cpuPercent >= 30;
+    public bool CpuHot => CpuPercent >= 30;
 
     /// <summary>最近一帧的内存占用字节(总览页按它汇总,没采到时为 0)。</summary>
-    public long MemoryBytes
-    {
-        get => _memoryBytes;
-        private set => SetField(ref _memoryBytes, value);
-    }
+    public long MemoryBytes { get; private set => SetField(ref field, value); }
 
     /// <summary>用新快照更新这一行。</summary>
     public void Update(ContainerRow incoming)
     {
-        _summary = incoming.Summary;
+        Summary = incoming.Summary;
         if (!IsRunning)
         {
             CpuText = "—";
@@ -255,13 +214,12 @@ public sealed class ContainerRow(ContainerSummary summary) : RowBase(summary.Id)
 /// <summary>镜像列表的一行。</summary>
 public sealed class ImageRow(ImageSummary summary) : RowBase(summary.Id)
 {
-    private ImageSummary _summary = summary;
 
     /// <summary>拥有这一行的页面(右键菜单用,理由同 <see cref="ContainerRow.Owner" />)。</summary>
     public Pages.ImagesPageViewModel? Owner { get; set; }
 
     /// <summary>底层数据。</summary>
-    public ImageSummary Summary => _summary;
+    public ImageSummary Summary { get; private set; } = summary;
 
     /// <summary>仓库名(第一个标签的前半段)。</summary>
     public string Repository => SplitTag().Repository;
@@ -270,40 +228,40 @@ public sealed class ImageRow(ImageSummary summary) : RowBase(summary.Id)
     public string Tag => SplitTag().Tag;
 
     /// <summary>是否悬空。</summary>
-    public bool IsDangling => _summary.IsDangling;
+    public bool IsDangling => Summary.IsDangling;
 
     /// <summary>大小。</summary>
-    public string SizeText => Humanize.Bytes(_summary.Size);
+    public string SizeText => Humanize.Bytes(Summary.Size);
 
     /// <summary>创建时间。</summary>
-    public string CreatedText => Humanize.AgoFromUnix(_summary.Created);
+    public string CreatedText => Humanize.AgoFromUnix(Summary.Created);
 
     /// <summary>被多少容器使用。</summary>
-    public string UsageText => _summary.Containers switch
+    public string UsageText => Summary.Containers switch
     {
         < 0 => IsDangling ? "悬空" : "—",
         0 => IsDangling ? "悬空" : "未使用",
         1 => "1 个容器",
-        _ => $"{_summary.Containers} 个容器"
+        _ => $"{Summary.Containers} 个容器"
     };
 
     /// <summary>使用情况的语气。</summary>
-    public RowTone Tone => IsDangling ? RowTone.Warn : _summary.Containers > 0 ? RowTone.Ok : RowTone.Idle;
+    public RowTone Tone => IsDangling ? RowTone.Warn : Summary.Containers > 0 ? RowTone.Ok : RowTone.Idle;
 
     /// <summary>全部标签(详情用)。</summary>
-    public string AllTags => _summary.RepoTags is { Length: > 0 } tags ? string.Join(" · ", tags) : "<none>";
+    public string AllTags => Summary.RepoTags is { Length: > 0 } tags ? string.Join(" · ", tags) : "<none>";
 
     /// <summary>用新快照更新。</summary>
     public void Update(ImageRow incoming)
     {
-        _summary = incoming.Summary;
+        Summary = incoming.Summary;
         OnPropertiesChanged(nameof(Summary), nameof(Repository), nameof(Tag), nameof(IsDangling),
             nameof(SizeText), nameof(CreatedText), nameof(UsageText), nameof(Tone), nameof(AllTags));
     }
 
     private (string Repository, string Tag) SplitTag()
     {
-        string first = _summary.RepoTags is { Length: > 0 } tags ? tags[0] : "<none>:<none>";
+        string first = Summary.RepoTags is { Length: > 0 } tags ? tags[0] : "<none>:<none>";
         int colon = first.LastIndexOf(':');
         // 冒号可能属于端口(registry:5000/foo),所以只有它出现在最后一个斜杠之后才是标签分隔。
         int slash = first.LastIndexOf('/');
@@ -314,52 +272,50 @@ public sealed class ImageRow(ImageSummary summary) : RowBase(summary.Id)
 /// <summary>卷列表的一行。</summary>
 public sealed class VolumeRow(VolumeSummary summary, int refCount) : RowBase(summary.Name)
 {
-    private VolumeSummary _summary = summary;
-    private int _refCount = refCount;
 
     /// <summary>拥有这一行的页面(列宽绑在页面上,理由同 <see cref="ContainerRow.Owner" />)。</summary>
     public Pages.VolumesPageViewModel? Owner { get; set; }
 
     /// <summary>底层数据。</summary>
-    public VolumeSummary Summary => _summary;
+    public VolumeSummary Summary { get; private set; } = summary;
 
     /// <summary>卷名。</summary>
-    public string Name => _summary.Name;
+    public string Name => Summary.Name;
 
     /// <summary>驱动。</summary>
-    public string Driver => _summary.Driver ?? "local";
+    public string Driver => Summary.Driver ?? "local";
 
     /// <summary>挂载点。</summary>
-    public string Mountpoint => _summary.Mountpoint ?? "";
+    public string Mountpoint => Summary.Mountpoint ?? "";
 
     /// <summary>创建时间。</summary>
-    public string CreatedText => Humanize.LocalTime(_summary.CreatedAt);
+    public string CreatedText => Humanize.LocalTime(Summary.CreatedAt);
 
     /// <summary>被多少容器引用。</summary>
-    public int RefCount => _refCount;
+    public int RefCount { get; private set; } = refCount;
 
     /// <summary>使用情况文本。</summary>
-    public string UsageText => _refCount switch
+    public string UsageText => RefCount switch
     {
         <= 0 => "未使用",
         1 => "1 个容器",
-        _ => $"{_refCount} 个容器"
+        _ => $"{RefCount} 个容器"
     };
 
     /// <summary>大小;<c>/system/df</c> 没算过时给破折号。</summary>
-    public string SizeText => _summary.UsageData is { Size: >= 0 } usage ? Humanize.Bytes(usage.Size) : "—";
+    public string SizeText => Summary.UsageData is { Size: >= 0 } usage ? Humanize.Bytes(usage.Size) : "—";
 
     /// <summary>语气。</summary>
-    public RowTone Tone => _refCount > 0 ? RowTone.Ok : RowTone.Warn;
+    public RowTone Tone => RefCount > 0 ? RowTone.Ok : RowTone.Warn;
 
     /// <summary>compose 项目名。</summary>
-    public string Project => _summary.Labels?.GetValueOrDefault("com.docker.compose.project") ?? "";
+    public string Project => Summary.Labels?.GetValueOrDefault("com.docker.compose.project") ?? "";
 
     /// <summary>用新快照更新。</summary>
     public void Update(VolumeRow incoming)
     {
-        _summary = incoming.Summary;
-        _refCount = incoming.RefCount;
+        Summary = incoming.Summary;
+        RefCount = incoming.RefCount;
         OnPropertiesChanged(nameof(Summary), nameof(Name), nameof(Driver), nameof(Mountpoint),
             nameof(CreatedText), nameof(RefCount), nameof(UsageText), nameof(SizeText), nameof(Tone), nameof(Project));
     }
@@ -368,31 +324,30 @@ public sealed class VolumeRow(VolumeSummary summary, int refCount) : RowBase(sum
 /// <summary>网络列表的一行。</summary>
 public sealed class NetworkRow(NetworkSummary summary) : RowBase(summary.Id)
 {
-    private NetworkSummary _summary = summary;
 
     /// <summary>拥有这一行的页面(列宽绑在页面上,理由同 <see cref="ContainerRow.Owner" />)。</summary>
     public Pages.NetworksPageViewModel? Owner { get; set; }
 
     /// <summary>底层数据。</summary>
-    public NetworkSummary Summary => _summary;
+    public NetworkSummary Summary { get; private set; } = summary;
 
     /// <summary>网络名。</summary>
-    public string Name => _summary.Name;
+    public string Name => Summary.Name;
 
     /// <summary>驱动。</summary>
-    public string Driver => _summary.Driver ?? "";
+    public string Driver => Summary.Driver ?? "";
 
     /// <summary>作用域。</summary>
-    public string Scope => _summary.Scope ?? "";
+    public string Scope => Summary.Scope ?? "";
 
     /// <summary>第一段子网。</summary>
-    public string Subnet => _summary.FirstSubnet ?? "—";
+    public string Subnet => Summary.FirstSubnet ?? "—";
 
     /// <summary>是否内置(bridge/host/none —— 删不掉)。</summary>
-    public bool IsPredefined => _summary.IsPredefined;
+    public bool IsPredefined => Summary.IsPredefined;
 
     /// <summary>接入的容器数。</summary>
-    public int AttachedCount => _summary.Containers?.Count ?? 0;
+    public int AttachedCount => Summary.Containers?.Count ?? 0;
 
     /// <summary>接入情况文本。</summary>
     public string AttachedText => AttachedCount switch
@@ -408,7 +363,7 @@ public sealed class NetworkRow(NetworkSummary summary) : RowBase(summary.Id)
     /// <summary>用新快照更新。</summary>
     public void Update(NetworkRow incoming)
     {
-        _summary = incoming.Summary;
+        Summary = incoming.Summary;
         OnPropertiesChanged(nameof(Summary), nameof(Name), nameof(Driver), nameof(Scope), nameof(Subnet),
             nameof(IsPredefined), nameof(AttachedCount), nameof(AttachedText), nameof(Tone));
     }

@@ -36,8 +36,6 @@ public enum PanelPage
 /// </summary>
 public abstract class PageViewModel(DockerPanelViewModel shell) : ObservableObject
 {
-    private bool _busy;
-    private bool _loadedOnce;
 
     /// <summary>外壳(拿客户端、闸门、任务中心、反馈)。</summary>
     protected DockerPanelViewModel Shell { get; } = shell;
@@ -69,15 +67,15 @@ public abstract class PageViewModel(DockerPanelViewModel shell) : ObservableObje
     /// <summary>正在加载。</summary>
     public bool Busy
     {
-        get => _busy;
-        protected set => SetField(ref _busy, value);
+        get;
+        protected set => SetField(ref field, value);
     }
 
     /// <summary>至少成功加载过一次 —— 决定骨架屏什么时候让位给真数据。</summary>
     public bool LoadedOnce
     {
-        get => _loadedOnce;
-        protected set => SetField(ref _loadedOnce, value);
+        get;
+        protected set => SetField(ref field, value);
     }
 
     /// <summary>页面被选中时调用。</summary>

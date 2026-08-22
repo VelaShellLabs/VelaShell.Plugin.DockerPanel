@@ -14,10 +14,7 @@ public readonly record struct AttachedContainer(string Id, string Name, string A
 public sealed class NetworksPageViewModel : PageViewModel
 {
     private readonly List<NetworkRow> _all = [];
-    private string _search = "";
-    private NetworkRow? _selected;
     private bool _swarmActive;
-    private bool _customOnly;
 
     /// <summary>建网络页。</summary>
     public NetworksPageViewModel(DockerPanelViewModel shell) : base(shell)
@@ -45,15 +42,15 @@ public sealed class NetworksPageViewModel : PageViewModel
     /// <summary>搜索词。</summary>
     public string Search
     {
-        get => _search;
+        get;
         set
         {
-            if (SetField(ref _search, value))
+            if (SetField(ref field, value))
             {
                 ApplyView();
             }
         }
-    }
+    } = "";
 
     /// <summary>总数。</summary>
     public int TotalCount => _all.Count;
@@ -74,10 +71,10 @@ public sealed class NetworksPageViewModel : PageViewModel
     /// </summary>
     public bool CustomOnly
     {
-        get => _customOnly;
+        get;
         set
         {
-            if (SetField(ref _customOnly, value))
+            if (SetField(ref field, value))
             {
                 ApplyView();
             }
@@ -96,10 +93,10 @@ public sealed class NetworksPageViewModel : PageViewModel
     /// <summary>当前选中的网络。</summary>
     public NetworkRow? Selected
     {
-        get => _selected;
+        get;
         private set
         {
-            if (SetField(ref _selected, value))
+            if (SetField(ref field, value))
             {
                 Drawer.IsOpen = value is not null;
                 OnPropertiesChanged(nameof(HasSelection), nameof(CanRemove), nameof(RemoveHint));
@@ -136,35 +133,27 @@ public sealed class NetworksPageViewModel : PageViewModel
     /// <summary>inspect 原文;还没读过时为空。</summary>
     public string RawInspect
     {
-        get => _rawInspect;
+        get;
         private set
         {
-            if (SetField(ref _rawInspect, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasRaw));
             }
         }
-    }
-
-    private string _rawInspect = "";
+    } = "";
 
     /// <summary>原文读到了没有。</summary>
     public bool HasRaw => RawInspect.Length > 0;
 
     /// <summary>显示 inspect 原文(设计稿 08 号板的「原始 JSON」)。</summary>
-    public RelayCommand ShowRawCommand => _showRaw ??= new(_ => LoadRawAsync());
-
-    private RelayCommand? _showRaw;
+    public RelayCommand ShowRawCommand => field ??= new(_ => LoadRawAsync());
 
     /// <summary>把 inspect 原文存成本地 JSON。</summary>
-    public RelayCommand ExportCommand => _export ??= new(_ => ExportAsync());
-
-    private RelayCommand? _export;
+    public RelayCommand ExportCommand => field ??= new(_ => ExportAsync());
 
     /// <summary>把所有容器从这个网络上摘掉。</summary>
-    public RelayCommand DisconnectAllCommand => _disconnectAll ??= new(_ => DisconnectAllAsync());
-
-    private RelayCommand? _disconnectAll;
+    public RelayCommand DisconnectAllCommand => field ??= new(_ => DisconnectAllAsync());
 
     /// <summary>能不能弹本地文件对话框。</summary>
     public bool CanPickFiles => FilePicker.IsAvailable;
@@ -287,9 +276,7 @@ public sealed class NetworksPageViewModel : PageViewModel
     public RelayCommand SelectCommand { get; }
 
     /// <summary>关掉右侧详情。</summary>
-    public RelayCommand ClearSelectionCommand => _clearSelection ??= new(_ => SelectAsync(null));
-
-    private RelayCommand? _clearSelection;
+    public RelayCommand ClearSelectionCommand => field ??= new(_ => SelectAsync(null));
 
     /// <summary>新建网络。</summary>
     public RelayCommand CreateCommand { get; }
@@ -380,9 +367,9 @@ public sealed class NetworksPageViewModel : PageViewModel
 
     private void ApplyView()
     {
-        string needle = _search.Trim();
+        string needle = Search.Trim();
         IEnumerable<NetworkRow> filtered = _all;
-        if (_customOnly)
+        if (CustomOnly)
         {
             filtered = filtered.Where(r => !r.IsPredefined);
         }
@@ -668,11 +655,6 @@ public sealed class NetworksPageViewModel : PageViewModel
 /// </summary>
 public sealed class NetworkColumns : ListColumns
 {
-    private GridLength _name = new(362);
-    private GridLength _driver = new(92);
-    private GridLength _scope = new(84);
-    private GridLength _subnet = new(164);
-    private GridLength _attached = new(112);
 
     /// <inheritdoc />
     public override IReadOnlyList<string> Keys { get; } = ["name", "driver", "scope", "subnet", "attached"];
@@ -680,37 +662,37 @@ public sealed class NetworkColumns : ListColumns
     /// <summary>名称列。</summary>
     public GridLength Name
     {
-        get => _name;
-        set => SetField(ref _name, Clamp(value, "name"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "name"));
+    } = new(362);
 
     /// <summary>驱动列。</summary>
     public GridLength Driver
     {
-        get => _driver;
-        set => SetField(ref _driver, Clamp(value, "driver"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "driver"));
+    } = new(92);
 
     /// <summary>作用域列。</summary>
     public GridLength Scope
     {
-        get => _scope;
-        set => SetField(ref _scope, Clamp(value, "scope"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "scope"));
+    } = new(84);
 
     /// <summary>子网列。</summary>
     public GridLength Subnet
     {
-        get => _subnet;
-        set => SetField(ref _subnet, Clamp(value, "subnet"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "subnet"));
+    } = new(164);
 
     /// <summary>已接入列。</summary>
     public GridLength Attached
     {
-        get => _attached;
-        set => SetField(ref _attached, Clamp(value, "attached"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "attached"));
+    } = new(112);
 
     /// <inheritdoc />
     public override double Get(string key) => key switch

@@ -23,7 +23,6 @@ public sealed record PaletteEntry(
 /// <summary>命令面板里的一行(含分组头的显示状态)。</summary>
 public sealed class PaletteItem(PaletteEntry entry) : ObservableObject
 {
-    private bool _active;
 
     /// <summary>底层条目。</summary>
     public PaletteEntry Entry { get; } = entry;
@@ -52,8 +51,8 @@ public sealed class PaletteItem(PaletteEntry entry) : ObservableObject
     /// <summary>键盘选中的那一条。</summary>
     public bool Active
     {
-        get => _active;
-        set => SetField(ref _active, value);
+        get;
+        set => SetField(ref field, value);
     }
 }
 
@@ -73,8 +72,6 @@ public sealed class CommandPalette : ObservableObject
 {
     private readonly Func<IReadOnlyList<PaletteEntry>> _collect;
     private List<PaletteEntry> _all = [];
-    private bool _isOpen;
-    private string _query = "";
     private int _selectedIndex;
 
     /// <summary>建面板。</summary>
@@ -94,22 +91,22 @@ public sealed class CommandPalette : ObservableObject
     /// <summary>开着没。</summary>
     public bool IsOpen
     {
-        get => _isOpen;
-        private set => SetField(ref _isOpen, value);
+        get;
+        private set => SetField(ref field, value);
     }
 
     /// <summary>搜索词。</summary>
     public string Query
     {
-        get => _query;
+        get;
         set
         {
-            if (SetField(ref _query, value))
+            if (SetField(ref field, value))
             {
                 ApplyFilter();
             }
         }
-    }
+    } = "";
 
     /// <summary>过滤后的条目。</summary>
     public ObservableCollection<PaletteItem> Items { get; } = [];
@@ -197,7 +194,7 @@ public sealed class CommandPalette : ObservableObject
     private void ApplyFilter()
     {
         Items.Clear();
-        string needle = _query.Trim();
+        string needle = Query.Trim();
         List<PaletteEntry> matched = needle.Length == 0
             ? [.. _all]
             : [.. _all.Where(e => Matches(e, needle)).OrderByDescending(e => Score(e, needle))];

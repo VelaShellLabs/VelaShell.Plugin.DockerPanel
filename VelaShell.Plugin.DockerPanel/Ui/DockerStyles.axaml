@@ -329,6 +329,25 @@
     <Setter Property="BorderBrush" Value="{DynamicResource VelaShellRedDim}" />
     <Setter Property="Foreground" Value="{DynamicResource VelaError}" />
   </Style>
+  <!-- 悬停染一层很淡的红,而不是主题那块中性灰:灰底会把"这颗是危险动作"这件事抹掉。 -->
+  <Style Selector="Button.danger:pointerover /template/ Border">
+    <Setter Property="Background" Value="{DynamicResource VelaShellRedDim}" />
+  </Style>
+
+  <!--
+    填充红:留给"删数据"那一档(down -v)。整个面板只有这一处 ——
+    填充色是"最后一步"的信号,到处都是就等于没有。
+  -->
+  <Style Selector="Button.danger-solid">
+    <Setter Property="Background" Value="{DynamicResource VelaError}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <!-- 与主按钮同理:悬停不换底,换了就等于底色在闪。 -->
+  <Style Selector="Button.danger-solid:pointerover /template/ Border">
+    <Setter Property="Background" Value="{DynamicResource VelaError}" />
+  </Style>
 
   <Style Selector="CheckBox.compact">
     <Setter Property="MinWidth" Value="0" />

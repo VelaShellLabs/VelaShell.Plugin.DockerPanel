@@ -77,11 +77,9 @@ public sealed class FileEntryItem(ContainerFileEntry entry, string changeMarker)
     /// <summary>「只看变更」过滤后是否显示。</summary>
     public bool Visible
     {
-        get => _visible;
-        set => SetField(ref _visible, value);
-    }
-
-    private bool _visible = true;
+        get;
+        set => SetField(ref field, value);
+    } = true;
 
     /// <summary>变更标记的语气。</summary>
     public RowTone ChangeTone => ChangeMarker switch
@@ -106,17 +104,15 @@ public sealed class FileEntryItem(ContainerFileEntry entry, string changeMarker)
     /// <summary>展开了没有。</summary>
     public bool Expanded
     {
-        get => _expanded;
+        get;
         set
         {
-            if (SetField(ref _expanded, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(CaretIcon));
             }
         }
     }
-
-    private bool _expanded;
 
     /// <summary>折叠箭头的朝向。</summary>
     public string CaretIcon => Expanded ? "Icon.chevron-down" : "Icon.chevron-right";
@@ -130,11 +126,9 @@ public sealed class FileEntryItem(ContainerFileEntry entry, string changeMarker)
     /// <summary>这一行是不是编辑器里正打开的那个文件。</summary>
     public bool Current
     {
-        get => _current;
-        set => SetField(ref _current, value);
+        get;
+        set => SetField(ref field, value);
     }
-
-    private bool _current;
 }
 
 /// <summary>
@@ -150,25 +144,17 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
 {
     private readonly Dictionary<string, string> _changes = [];
     private readonly List<FileWriteRecord> _history = [];
-    private string _path = "/";
     private bool _loaded;
-    private bool _busy;
-    private string? _openFilePath;
-    private string _editorText = "";
     private string _originalText = "";
-    private string _error = "";
-    private bool _changedOnly;
-    private bool _diffMode;
-    private bool _reloadAfterSave;
     private ContainerFileEntry? _openEntry;
 
     /// <summary>只看相对镜像有变更的那些条目。</summary>
     public bool ChangedOnly
     {
-        get => _changedOnly;
+        get;
         set
         {
-            if (SetField(ref _changedOnly, value))
+            if (SetField(ref field, value))
             {
                 ApplyEntryView();
             }
@@ -184,10 +170,10 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     /// </summary>
     public bool DiffMode
     {
-        get => _diffMode;
+        get;
         set
         {
-            if (SetField(ref _diffMode, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(EditMode));
                 RebuildEditorLines();
@@ -201,8 +187,8 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     /// <summary>保存后顺带在容器里跑一次重载命令。</summary>
     public bool ReloadAfterSave
     {
-        get => _reloadAfterSave;
-        set => SetField(ref _reloadAfterSave, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     /// <summary>差异视图里的行。</summary>
@@ -220,11 +206,9 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     /// <summary>光标位置文本。</summary>
     public string CaretText
     {
-        get => _caretText;
-        private set => SetField(ref _caretText, value);
-    }
-
-    private string _caretText = "行 1, 列 1";
+        get;
+        private set => SetField(ref field, value);
+    } = "行 1, 列 1";
 
     /// <summary>已改了几行。</summary>
     public string ModifiedLinesText
@@ -235,7 +219,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
             {
                 return "未修改";
             }
-            int changed = LineDiff.CountChanged(LineDiff.Compute(_originalText, _editorText));
+            int changed = LineDiff.CountChanged(LineDiff.Compute(_originalText, EditorText));
             return $"已修改 {changed} 行";
         }
     }
@@ -288,29 +272,29 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     /// </summary>
     public string Path
     {
-        get => _path;
-        private set => SetField(ref _path, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "/";
 
     /// <summary>正在读。</summary>
     public bool Busy
     {
-        get => _busy;
-        private set => SetField(ref _busy, value);
+        get;
+        private set => SetField(ref field, value);
     }
 
     /// <summary>出错信息。</summary>
     public string Error
     {
-        get => _error;
+        get;
         private set
         {
-            if (SetField(ref _error, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasError));
             }
         }
-    }
+    } = "";
 
     /// <summary>有没有出错。</summary>
     public bool HasError => Error.Length > 0;
@@ -332,10 +316,10 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     /// <summary>正在编辑的文件路径;没打开时为 <see langword="null" />。</summary>
     public string? OpenFilePath
     {
-        get => _openFilePath;
+        get;
         private set
         {
-            if (SetField(ref _openFilePath, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(HasOpenFile), nameof(OpenFileName), nameof(OpenFileDirectory));
                 MarkCurrentFile(value);
@@ -355,19 +339,19 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     /// <summary>编辑器内容。</summary>
     public string EditorText
     {
-        get => _editorText;
+        get;
         set
         {
-            if (SetField(ref _editorText, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsModified), nameof(ModifiedText), nameof(ModifiedLinesText));
                 RebuildEditorLines();
             }
         }
-    }
+    } = "";
 
     /// <summary>改过了没有。</summary>
-    public bool IsModified => _editorText != _originalText;
+    public bool IsModified => EditorText != _originalText;
 
     /// <summary>改动摘要。</summary>
     public string ModifiedText
@@ -379,7 +363,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
                 return "未修改";
             }
             int before = _originalText.Split('\n').Length;
-            int after = _editorText.Split('\n').Length;
+            int after = EditorText.Split('\n').Length;
             int delta = after - before;
             return delta switch
             {
@@ -391,48 +375,34 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     }
 
     /// <summary>打开一个目录或文件。</summary>
-    public RelayCommand OpenCommand => _open ??= new(p => p is FileEntryItem item
+    public RelayCommand OpenCommand => field ??= new(p => p is FileEntryItem item
         ? item.IsDirectory ? ToggleAsync(item) : OpenFileAsync(item.FullPath)
         : Task.CompletedTask);
 
-    private RelayCommand? _open;
-
     /// <summary>重新列一次(整棵树丢掉重建,并重新取一次相对镜像的变更)。</summary>
-    public RelayCommand RefreshCommand => _refresh ??= new(_ => ReloadTreeAsync());
-
-    private RelayCommand? _refresh;
+    public RelayCommand RefreshCommand => field ??= new(_ => ReloadTreeAsync());
 
     /// <summary>关掉编辑器。</summary>
-    public RelayCommand CloseFileCommand => _closeFile ??= new(_ =>
+    public RelayCommand CloseFileCommand => field ??= new(_ =>
     {
         OpenFilePath = null;
         EditorText = "";
         _originalText = "";
     });
 
-    private RelayCommand? _closeFile;
-
     /// <summary>撤销未保存的修改。</summary>
-    public RelayCommand RevertCommand => _revert ??= new(_ => EditorText = _originalText);
-
-    private RelayCommand? _revert;
+    public RelayCommand RevertCommand => field ??= new(_ => EditorText = _originalText);
 
     /// <summary>保存回容器。</summary>
-    public RelayCommand SaveCommand => _save ??= new(_ => SaveAsync());
-
-    private RelayCommand? _save;
+    public RelayCommand SaveCommand => field ??= new(_ => SaveAsync());
 
     /// <summary>把一个文件或目录取到本地。</summary>
-    public RelayCommand DownloadCommand => _download ??= new(p => p is FileEntryItem item
+    public RelayCommand DownloadCommand => field ??= new(p => p is FileEntryItem item
         ? DownloadAsync(item)
         : Task.CompletedTask);
 
-    private RelayCommand? _download;
-
     /// <summary>把本地一个文件传进当前目录。</summary>
-    public RelayCommand UploadCommand => _upload ??= new(_ => UploadAsync());
-
-    private RelayCommand? _upload;
+    public RelayCommand UploadCommand => field ??= new(_ => UploadAsync());
 
     /// <summary>能不能弹本地文件对话框(宿主没给顶层窗口时不能)。</summary>
     public bool CanPickFiles => FilePicker.IsAvailable;
@@ -493,22 +463,18 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     }
 
     /// <summary>切到编辑态。</summary>
-    public RelayCommand ShowEditCommand => _showEdit ??= new(_ =>
+    public RelayCommand ShowEditCommand => field ??= new(_ =>
     {
         DiffMode = false;
         return Task.CompletedTask;
     });
 
-    private RelayCommand? _showEdit;
-
     /// <summary>切到差异态。</summary>
-    public RelayCommand ShowDiffCommand => _showDiff ??= new(_ =>
+    public RelayCommand ShowDiffCommand => field ??= new(_ =>
     {
         DiffMode = true;
         return Task.CompletedTask;
     });
-
-    private RelayCommand? _showDiff;
 
     /// <summary>编辑器报一次光标位置(视图在选区变化时调)。</summary>
     public void ReportCaret(int line, int column) => CaretText = $"行 {line}, 列 {column}";
@@ -521,7 +487,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         {
             return;
         }
-        foreach (DiffLine line in LineDiff.Compute(_originalText, _editorText))
+        foreach (DiffLine line in LineDiff.Compute(_originalText, EditorText))
         {
             (string marker, RowTone tone) = line.Marker switch
             {
@@ -577,7 +543,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     /// <summary>这次改动的摘要,进写入历史(<c>+2 −1</c> 这种)。</summary>
     private string DescribeEdit()
     {
-        IReadOnlyList<DiffLine> diff = LineDiff.Compute(_originalText, _editorText);
+        IReadOnlyList<DiffLine> diff = LineDiff.Compute(_originalText, EditorText);
         int added = diff.Count(l => l.Marker is DiffMarker.Added or DiffMarker.Changed);
         int removed = diff.Count(l => l.Marker is DiffMarker.Removed or DiffMarker.Changed);
         return _originalText.Length == 0 ? "新建"
@@ -706,7 +672,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         void Append(FileEntryItem node)
         {
             // 目录永远留着 —— 藏掉目录会让"只看变更"变成一个走不进任何子目录的死胡同。
-            if (!_changedOnly || node.IsDirectory || node.HasChange)
+            if (!ChangedOnly || node.IsDirectory || node.HasChange)
             {
                 Tree.Add(node);
             }

@@ -213,7 +213,7 @@
             <RadioButton Theme="{StaticResource DockerRailButton}" GroupName="rail"
                          IsChecked="{Binding IsCompose, Mode=OneWay}"
                          IsEnabled="{Binding ComposeAvailable}"
-                         ToolTip.Tip="本机端点没有 Compose 页 —— compose 是远端 CLI 上的东西"
+                         ToolTip.Tip="Compose"
                          Command="{Binding SelectPageCommand}"
                          CommandParameter="{x:Static ui:PanelPage.Compose}">
               <StackPanel Spacing="3" HorizontalAlignment="Center">

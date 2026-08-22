@@ -21,6 +21,9 @@
       <SolidColorBrush x:Key="DockerCodeNumber" Color="#BD93F9" />
       <SolidColorBrush x:Key="DockerCodeKey" Color="#8BE9FD" />
       <SolidColorBrush x:Key="DockerCodeComment" Color="#6272A4" />
+      <!-- 语法高亮多出来的两个角色:段落头([section])与标点(: - | >)。 -->
+      <SolidColorBrush x:Key="DockerCodeSection" Color="#50FA7B" />
+      <SolidColorBrush x:Key="DockerCodePunctuation" Color="#FF79C6" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Light">
       <SolidColorBrush x:Key="DockerWarnDim" Color="#26B26A00" />
@@ -36,6 +39,8 @@
       <SolidColorBrush x:Key="DockerCodeNumber" Color="#644AC9" />
       <SolidColorBrush x:Key="DockerCodeKey" Color="#036A96" />
       <SolidColorBrush x:Key="DockerCodeComment" Color="#6C664B" />
+      <SolidColorBrush x:Key="DockerCodeSection" Color="#14710A" />
+      <SolidColorBrush x:Key="DockerCodePunctuation" Color="#A3144D" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
@@ -336,6 +341,36 @@
     <Style Selector="^:disabled">
       <Setter Property="Opacity" Value="0.4" />
     </Style>
+  </ControlTheme>
+
+
+  <!--
+    日志列表:**虚拟化**的 ItemsControl。
+
+    面板里别处的列表都是 ItemsControl 直接塞进一个 ScrollViewer —— 几十上百行没关系。
+    日志不是:合并日志留 5000 行、执行记录留 2000 行,而那种写法一行都不会省,
+    每一行都实打实地建控件、测量、排版。用户看到的就是"这个页签一点开要卡一下,
+    而且每次回来都要再卡一次"(其实是可见性一变就整棵重排)。
+
+    要虚拟化,滚动条必须在**这个控件自己的模板里**:外面套一层 ScrollViewer 的话,
+    ItemsControl 是在无限高里测量的,VirtualizingStackPanel 照样会把每一行都实现出来。
+    这也是这份主题存在的全部理由。
+  -->
+  <ControlTheme x:Key="DockerLogList" TargetType="ItemsControl">
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate>
+        <VirtualizingStackPanel />
+      </ItemsPanelTemplate>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ScrollViewer Name="PART_ScrollViewer" Padding="{TemplateBinding Padding}"
+                      HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                      VerticalScrollBarVisibility="Auto">
+          <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}" />
+        </ScrollViewer>
+      </ControlTemplate>
+    </Setter>
   </ControlTheme>
 
 </ResourceDictionary>

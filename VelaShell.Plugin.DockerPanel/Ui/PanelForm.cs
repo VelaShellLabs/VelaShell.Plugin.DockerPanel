@@ -5,7 +5,6 @@ namespace VelaShell.Plugin.DockerPanel.Ui;
 /// <summary>表单里的一个字段。</summary>
 public abstract class FormField(string label) : ObservableObject
 {
-    private string? _error;
 
     /// <summary>标签。</summary>
     public string Label { get; } = label;
@@ -16,10 +15,10 @@ public abstract class FormField(string label) : ObservableObject
     /// <summary>字段下方的校验错误;为空表示没问题。</summary>
     public string? Error
     {
-        get => _error;
+        get;
         set
         {
-            if (SetField(ref _error, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasError));
             }
@@ -27,27 +26,25 @@ public abstract class FormField(string label) : ObservableObject
     }
 
     /// <summary>有没有校验错误。</summary>
-    public bool HasError => !string.IsNullOrEmpty(_error);
+    public bool HasError => !string.IsNullOrEmpty(Error);
 }
 
 /// <summary>一行文本。</summary>
 public sealed class TextField(string label) : FormField(label)
 {
-    private string _value = "";
-
     /// <summary>值。</summary>
     public string Value
     {
-        get => _value;
+        get;
         set
         {
-            if (SetField(ref _value, value))
+            if (SetField(ref field, value))
             {
                 Error = null;
                 Changed?.Invoke();
             }
         }
-    }
+    } = "";
 
     /// <summary>占位文字。</summary>
     public string Placeholder { get; init; } = "";
@@ -65,15 +62,13 @@ public sealed class TextField(string label) : FormField(label)
 /// <summary>一个开关。</summary>
 public sealed class ToggleField(string label) : FormField(label)
 {
-    private bool _value;
-
     /// <summary>值。</summary>
     public bool Value
     {
-        get => _value;
+        get;
         set
         {
-            if (SetField(ref _value, value))
+            if (SetField(ref field, value))
             {
                 Changed?.Invoke();
             }
@@ -106,7 +101,6 @@ public sealed class ToggleField(string label) : FormField(label)
 public sealed class ChoiceOption(string value, string label, string description = "", bool enabled = true,
     string disabledReason = "") : ObservableObject
 {
-    private bool _picked;
 
     /// <summary>值。</summary>
     public string Value { get; } = value;
@@ -126,15 +120,14 @@ public sealed class ChoiceOption(string value, string label, string description 
     /// <summary>选中的是不是这一项。</summary>
     public bool Picked
     {
-        get => _picked;
-        internal set => SetField(ref _picked, value);
+        get;
+        internal set => SetField(ref field, value);
     }
 }
 
 /// <summary>一组互斥选项(分段控件或下拉)。</summary>
 public sealed class ChoiceField : FormField
 {
-    private string _value = "";
 
     /// <summary>建一组互斥选项。</summary>
     public ChoiceField(string label) : base(label)
@@ -157,28 +150,28 @@ public sealed class ChoiceField : FormField
     /// <summary>当前值。</summary>
     public string Value
     {
-        get => _value;
+        get;
         set
         {
-            if (SetField(ref _value, value))
+            if (SetField(ref field, value))
             {
                 SyncPicked();
                 OnPropertyChanged(nameof(SelectedLabel));
                 Changed?.Invoke();
             }
         }
-    }
+    } = "";
 
     private void SyncPicked()
     {
         foreach (ChoiceOption option in Options)
         {
-            option.Picked = option.Value == _value;
+            option.Picked = option.Value == Value;
         }
     }
 
     /// <summary>当前值对应的显示文字。</summary>
-    public string SelectedLabel => Options.FirstOrDefault(o => o.Value == _value)?.Label ?? _value;
+    public string SelectedLabel => Options.FirstOrDefault(o => o.Value == Value)?.Label ?? Value;
 
     /// <summary>用分段控件呈现(选项少时)还是下拉(选项多时)。</summary>
     public bool AsSegments { get; init; }
@@ -193,7 +186,6 @@ public sealed class ChoiceField : FormField
 /// <summary>带说明的单选列表(重启策略那种)。</summary>
 public sealed class RadioListField : FormField
 {
-    private string _value = "";
 
     /// <summary>建一个单选列表。</summary>
     public RadioListField(string label) : base(label)
@@ -214,27 +206,27 @@ public sealed class RadioListField : FormField
     /// <summary>当前值。</summary>
     public string Value
     {
-        get => _value;
+        get;
         set
         {
-            if (SetField(ref _value, value))
+            if (SetField(ref field, value))
             {
                 SyncPicked();
                 OnPropertyChanged(nameof(SelectedValue));
             }
         }
-    }
+    } = "";
 
     private void SyncPicked()
     {
         foreach (ChoiceOption option in Options)
         {
-            option.Picked = option.Value == _value;
+            option.Picked = option.Value == Value;
         }
     }
 
     /// <summary>当前值(绑定用的别名,方便模板里做相等判断)。</summary>
-    public string SelectedValue => _value;
+    public string SelectedValue => Value;
 
     /// <summary>选一个。</summary>
     public RelayCommand SelectCommand { get; }
@@ -243,22 +235,19 @@ public sealed class RadioListField : FormField
 /// <summary>键值行(端口、卷、环境变量、驱动选项共用)。</summary>
 public sealed class PairRow(string key, string value) : ObservableObject
 {
-    private string _key = key;
-    private string _value = value;
-
     /// <summary>左侧。</summary>
     public string Key
     {
-        get => _key;
-        set => SetField(ref _key, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = key;
 
     /// <summary>右侧。</summary>
     public string Value
     {
-        get => _value;
-        set => SetField(ref _value, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = value;
 
     /// <summary>第三格(协议、只读标记);不用时为空。</summary>
     public string Extra { get; set; } = "";
@@ -378,7 +367,7 @@ public sealed class PairListField : FormField
     /// <summary>
     /// 弹一个文件对话框选 <c>.env</c> 并导入。结果经 <see cref="ImportReport" /> 报给界面。
     /// </summary>
-    public RelayCommand ImportCommand => _import ??= new(async _ =>
+    public RelayCommand ImportCommand => field ??= new(async _ =>
     {
         Avalonia.Platform.Storage.IStorageFile? file =
             await FilePicker.PickOpenAsync("选一个 .env 文件").ConfigureAwait(true);
@@ -395,8 +384,6 @@ public sealed class PairListField : FormField
             : $"已导入 {imported} 条 · 跳过 {skipped} 行(不是 KEY=VALUE)";
         OnPropertyChanged(nameof(ImportReport));
     });
-
-    private RelayCommand? _import;
 
     /// <summary>上一次导入的结果;没导过时为空。</summary>
     public string ImportReport { get; private set; } = "";
@@ -416,7 +403,6 @@ public sealed class PairListField : FormField
 public sealed class SelectItem(string id, string label, string meta, bool enabled, string disabledReason = "")
     : ObservableObject
 {
-    private bool _selected;
 
     /// <summary>标识。</summary>
     public string Id { get; } = id;
@@ -436,12 +422,12 @@ public sealed class SelectItem(string id, string label, string meta, bool enable
     /// <summary>选中了没有。</summary>
     public bool Selected
     {
-        get => _selected;
+        get;
         set
         {
             if (Enabled)
             {
-                SetField(ref _selected, value);
+                SetField(ref field, value);
             }
         }
     }
@@ -450,7 +436,6 @@ public sealed class SelectItem(string id, string label, string meta, bool enable
 /// <summary>带搜索的多选列表。</summary>
 public sealed class SelectListField(string label) : FormField(label)
 {
-    private string _search = "";
 
     /// <summary>全部项。</summary>
     public ObservableCollection<SelectItem> Items { get; } = [];
@@ -461,15 +446,15 @@ public sealed class SelectListField(string label) : FormField(label)
     /// <summary>搜索词。</summary>
     public string Search
     {
-        get => _search;
+        get;
         set
         {
-            if (SetField(ref _search, value))
+            if (SetField(ref field, value))
             {
                 ApplyFilter();
             }
         }
-    }
+    } = "";
 
     /// <summary>搜索框占位。</summary>
     public string Placeholder { get; init; } = "过滤…";
@@ -482,7 +467,7 @@ public sealed class SelectListField(string label) : FormField(label)
     {
         View.Clear();
         foreach (SelectItem item in Items.Where(i =>
-                     _search.Length == 0 || i.Label.Contains(_search, StringComparison.OrdinalIgnoreCase)))
+                     Search.Length == 0 || i.Label.Contains(Search, StringComparison.OrdinalIgnoreCase)))
         {
             View.Add(item);
         }
@@ -498,9 +483,6 @@ public sealed class SelectListField(string label) : FormField(label)
 /// </summary>
 public abstract class PanelForm : ObservableObject
 {
-    private string _commandPreview = "";
-    private string _commandNote = "";
-    private string? _formError;
 
     /// <summary>标题。</summary>
     public abstract string Title { get; }
@@ -523,16 +505,16 @@ public abstract class PanelForm : ObservableObject
     /// <summary>“等效命令”里显示的那条请求。</summary>
     public string CommandPreview
     {
-        get => _commandPreview;
-        protected set => SetField(ref _commandPreview, value);
-    }
+        get;
+        protected set => SetField(ref field, value);
+    } = "";
 
     /// <summary>请求下面那行等价的命令行。</summary>
     public string CommandNote
     {
-        get => _commandNote;
-        protected set => SetField(ref _commandNote, value);
-    }
+        get;
+        protected set => SetField(ref field, value);
+    } = "";
 
     /// <summary>有没有命令预览。</summary>
     public bool HasPreview => CommandPreview.Length > 0;
@@ -553,10 +535,10 @@ public abstract class PanelForm : ObservableObject
     /// <summary>整表级别的错误。</summary>
     public string? FormError
     {
-        get => _formError;
+        get;
         set
         {
-            if (SetField(ref _formError, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasFormError));
             }
@@ -564,7 +546,7 @@ public abstract class PanelForm : ObservableObject
     }
 
     /// <summary>有没有整表错误。</summary>
-    public bool HasFormError => !string.IsNullOrEmpty(_formError);
+    public bool HasFormError => !string.IsNullOrEmpty(FormError);
 
     /// <summary>
     /// 校验。返回 <see langword="false" /> 时把原因写在字段的 <see cref="FormField.Error" />

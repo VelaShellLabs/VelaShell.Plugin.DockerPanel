@@ -17,24 +17,20 @@ public sealed class DrawerState : ObservableObject
     /// <summary>再窄就摆不下抽屉头里那一行了。</summary>
     public const double MinWidth = 360;
 
-    private double _width = 440;
-    private bool _maximized;
-    private bool _open;
-
     /// <summary>抽屉宽度(用户拖出来的)。设计稿四个页面都是 440。</summary>
     public double Width
     {
-        get => _width;
-        set => SetField(ref _width, Math.Max(MinWidth, value));
-    }
+        get;
+        set => SetField(ref field, Math.Max(MinWidth, value));
+    } = 440;
 
     /// <summary>最大化:占满整个页签。</summary>
     public bool Maximized
     {
-        get => _maximized;
+        get;
         set
         {
-            if (SetField(ref _maximized, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(CanResize), nameof(ListVisible));
             }
@@ -44,10 +40,10 @@ public sealed class DrawerState : ObservableObject
     /// <summary>抽屉开着没有。由页面在选中项变化时写。</summary>
     public bool IsOpen
     {
-        get => _open;
+        get;
         set
         {
-            if (SetField(ref _open, value))
+            if (SetField(ref field, value))
             {
                 // 抽屉没了,最大化也就该没了 —— 不然下一次开抽屉会莫名其妙地直接铺满整页。
                 if (!value)
@@ -75,11 +71,9 @@ public sealed class DrawerState : ObservableObject
     public void EnsureAtLeast(double width) => Width = Math.Max(Width, width);
 
     /// <summary>切换最大化。抽屉头上那颗键绑它。</summary>
-    public RelayCommand ToggleMaximizeCommand => _toggle ??= new(_ =>
+    public RelayCommand ToggleMaximizeCommand => field ??= new(_ =>
     {
         Maximized = !Maximized;
         return Task.CompletedTask;
     });
-
-    private RelayCommand? _toggle;
 }

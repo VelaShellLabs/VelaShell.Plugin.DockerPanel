@@ -45,28 +45,15 @@ public readonly record struct MountLine(string Icon, string Text, string Mode, b
 public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposable
 {
     private readonly DockerPanelViewModel _shell;
-    private readonly ContainersPageViewModel _page;
     private CancellationTokenSource? _statsCts;
     private ContainerRow _row;
     private ContainerInspect? _inspect;
-    private DetailTab _tab = DetailTab.Overview;
-    private string _rawInspect = "";
-    private string _processCpuTitle = "CPU";
-    private string _processNote = "";
-    private bool _showRaw;
-    private double _cpuPercent;
-    private string _cpuText = "—";
-    private string _memText = "—";
-    private string _memLimitText = "";
-    private string _cpuPeakText = "";
-    private string _memRatioText = "";
-    private double _memRatio;
 
     /// <summary>建抽屉。</summary>
     public ContainerDetailViewModel(DockerPanelViewModel shell, ContainersPageViewModel page, ContainerRow row)
     {
         _shell = shell;
-        _page = page;
+        Owner = page;
         _row = row;
         Logs = new(shell, row.Id, () => _inspect?.Config is not null && IsTty);
         Files = new(shell, row.Id, row.Name);
@@ -120,22 +107,20 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     public string PauseLabel => IsPaused ? "恢复" : "暂停";
 
     /// <summary>容器有没有分配 TTY —— 决定日志与 exec 的解帧方式。</summary>
-    public bool IsTty => _inspect?.Config is not null && _row.Summary.State == "running" && _ttyFromInspect;
-
-    private bool _ttyFromInspect;
+    public bool IsTty { get => _inspect?.Config is not null && _row.Summary.State == "running" && field; private set; }
 
     /// <summary>当前页签。</summary>
     public DetailTab Tab
     {
-        get => _tab;
+        get;
         private set
         {
-            if (SetField(ref _tab, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsOverview), nameof(IsLogs), nameof(IsFiles), nameof(IsTerminal), nameof(IsStats));
             }
         }
-    }
+    } = DetailTab.Overview;
 
     /// <summary>当前是概览页。</summary>
     public bool IsOverview => Tab == DetailTab.Overview;
@@ -176,50 +161,50 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     /// <summary>inspect 的原文。</summary>
     public string RawInspect
     {
-        get => _rawInspect;
-        private set => SetField(ref _rawInspect, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>概览里是不是在看原文。</summary>
     public bool ShowRaw
     {
-        get => _showRaw;
-        set => SetField(ref _showRaw, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     /// <summary>实时 CPU 百分比 0–100。</summary>
     public double CpuPercent
     {
-        get => _cpuPercent;
-        private set => SetField(ref _cpuPercent, value);
+        get;
+        private set => SetField(ref field, value);
     }
 
     /// <summary>CPU 文本。</summary>
     public string CpuText
     {
-        get => _cpuText;
-        private set => SetField(ref _cpuText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "—";
 
     /// <summary>内存文本。</summary>
     public string MemText
     {
-        get => _memText;
-        private set => SetField(ref _memText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "—";
 
     /// <summary>内存上限文本。</summary>
     public string MemLimitText
     {
-        get => _memLimitText;
-        private set => SetField(ref _memLimitText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>内存占比 0–1。</summary>
     public double MemRatio
     {
-        get => _memRatio;
-        private set => SetField(ref _memRatio, value);
+        get;
+        private set => SetField(ref field, value);
     }
 
     /// <summary>
@@ -229,16 +214,16 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     /// </summary>
     public string CpuPeakText
     {
-        get => _cpuPeakText;
-        private set => SetField(ref _cpuPeakText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>内存卡片右上角:占上限的百分比。没有上限时为空。</summary>
     public string MemRatioText
     {
-        get => _memRatioText;
-        private set => SetField(ref _memRatioText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>CPU 采样(抽屉里那条图)。</summary>
     public ObservableCollection<double> CpuHistory { get; } = [];
@@ -252,22 +237,22 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     /// <summary>进程表第三列的表头 —— 远端的 <c>ps</c> 给的是 TIME 还是 %CPU 由它决定。</summary>
     public string ProcessCpuTitle
     {
-        get => _processCpuTitle;
-        private set => SetField(ref _processCpuTitle, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "CPU";
 
     /// <summary>进程表的一句话状态(空 = 有数据)。</summary>
     public string ProcessNote
     {
-        get => _processNote;
+        get;
         private set
         {
-            if (SetField(ref _processNote, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasProcessNote));
             }
         }
-    }
+    } = "";
 
     /// <summary>有没有要说的(没在跑 / 读失败 / 还没读)。</summary>
     public bool HasProcessNote => ProcessNote.Length > 0;
@@ -286,11 +271,9 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     /// </summary>
     public bool Pinned
     {
-        get => _pinned;
-        private set => SetField(ref _pinned, value);
+        get;
+        private set => SetField(ref field, value);
     }
-
-    private bool _pinned;
 
     /// <summary>
     /// 抽屉最大化(占满整个页签)。
@@ -301,8 +284,8 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     /// </summary>
     public bool Maximized
     {
-        get => _page.Drawer.Maximized;
-        private set => _page.Drawer.Maximized = value;
+        get => Owner.Drawer.Maximized;
+        private set => Owner.Drawer.Maximized = value;
     }
 
     /// <summary>
@@ -312,43 +295,35 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     /// 通知是页面发的,而这个视图模型不会替它转发一遍。
     /// </para>
     /// </summary>
-    public ContainersPageViewModel Owner => _page;
+    public ContainersPageViewModel Owner { get; }
 
     /// <summary>切换钉住。</summary>
-    public RelayCommand TogglePinCommand => _togglePin ??= new(_ =>
+    public RelayCommand TogglePinCommand => field ??= new(_ =>
     {
         Pinned = !Pinned;
         return Task.CompletedTask;
     });
 
-    private RelayCommand? _togglePin;
-
     /// <summary>切换最大化。</summary>
-    public RelayCommand ToggleMaximizeCommand => _toggleMax ??= new(_ =>
+    public RelayCommand ToggleMaximizeCommand => field ??= new(_ =>
     {
         Maximized = !Maximized;
         return Task.CompletedTask;
     });
 
-    private RelayCommand? _toggleMax;
-
     /// <summary>复制等价的 <c>docker run</c> 命令(与右键菜单同一条路)。</summary>
-    public RelayCommand CopyRunCommand => _copyRun ??= new(_ =>
+    public RelayCommand CopyRunCommand => field ??= new(_ =>
     {
-        _page.RowCopyRunCommand.Execute(_row);
+        Owner.RowCopyRunCommand.Execute(_row);
         return Task.CompletedTask;
     });
-
-    private RelayCommand? _copyRun;
 
     /// <summary>强杀。</summary>
-    public RelayCommand KillCommand => _kill ??= new(_ =>
+    public RelayCommand KillCommand => field ??= new(_ =>
     {
-        _page.KillCommand.Execute(_row);
+        Owner.KillCommand.Execute(_row);
         return Task.CompletedTask;
     });
-
-    private RelayCommand? _kill;
 
     /// <summary>把当前可写层提交成一个镜像。</summary>
     public RelayCommand CommitCommand { get; }
@@ -434,7 +409,7 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
         }
         _inspect = await client.InspectContainerAsync(ContainerId, cancellationToken).ConfigureAwait(true);
         RawInspect = await client.InspectContainerRawAsync(ContainerId, cancellationToken).ConfigureAwait(true);
-        _ttyFromInspect = RawInspect.Contains("\"Tty\": true", StringComparison.Ordinal);
+        IsTty = RawInspect.Contains("\"Tty\": true", StringComparison.Ordinal);
         BuildOverview();
         if (IsRunning)
         {
@@ -553,7 +528,7 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
         // 撑到够摆开三栏就停,列表还在旁边,手柄也还在,用户随时能往回拖。
         if (tab is DetailTab.Files)
         {
-            _page.Drawer.EnsureAtLeast(820);
+            Owner.Drawer.EnsureAtLeast(820);
         }
         switch (tab)
         {
@@ -683,7 +658,7 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
         {
             await client.RenameContainerAsync(ContainerId, form.NewName.Trim(), _shell.Lifetime).ConfigureAwait(true);
             _shell.Feedback.Status(FeedbackKind.Success, $"已重命名为 {form.NewName.Trim()}");
-            await _page.RefreshAsync(_shell.Lifetime).ConfigureAwait(true);
+            await Owner.RefreshAsync(_shell.Lifetime).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -10,9 +10,6 @@ public sealed class VolumesPageViewModel : PageViewModel
 {
     private readonly List<VolumeRow> _all = [];
     private readonly Dictionary<string, List<string>> _users = [];
-    private string _search = "";
-    private bool _unusedOnly;
-    private VolumeRow? _selected;
 
     /// <summary>建卷页。</summary>
     public VolumesPageViewModel(DockerPanelViewModel shell) : base(shell)
@@ -43,23 +40,23 @@ public sealed class VolumesPageViewModel : PageViewModel
     /// <summary>搜索词。</summary>
     public string Search
     {
-        get => _search;
+        get;
         set
         {
-            if (SetField(ref _search, value))
+            if (SetField(ref field, value))
             {
                 ApplyView();
             }
         }
-    }
+    } = "";
 
     /// <summary>只看未使用的。</summary>
     public bool UnusedOnly
     {
-        get => _unusedOnly;
+        get;
         set
         {
-            if (SetField(ref _unusedOnly, value))
+            if (SetField(ref field, value))
             {
                 ApplyView();
             }
@@ -94,10 +91,10 @@ public sealed class VolumesPageViewModel : PageViewModel
     /// <summary>当前选中的卷(右侧详情)。</summary>
     public VolumeRow? Selected
     {
-        get => _selected;
+        get;
         private set
         {
-            if (SetField(ref _selected, value))
+            if (SetField(ref field, value))
             {
                 BuildSelectedDetails(value);
                 Drawer.IsOpen = value is not null;
@@ -155,13 +152,11 @@ public sealed class VolumesPageViewModel : PageViewModel
     public RelayCommand SelectCommand { get; }
 
     /// <summary>关掉右侧详情。</summary>
-    public RelayCommand ClearSelectionCommand => _clearSelection ??= new(_ =>
+    public RelayCommand ClearSelectionCommand => field ??= new(_ =>
     {
         Selected = null;
         return Task.CompletedTask;
     });
-
-    private RelayCommand? _clearSelection;
 
     /// <summary>新建卷。</summary>
     public RelayCommand CreateCommand { get; }
@@ -272,9 +267,9 @@ public sealed class VolumesPageViewModel : PageViewModel
 
     private void ApplyView()
     {
-        string needle = _search.Trim();
+        string needle = Search.Trim();
         IEnumerable<VolumeRow> filtered = _all;
-        if (_unusedOnly)
+        if (UnusedOnly)
         {
             filtered = filtered.Where(r => r.RefCount == 0);
         }
@@ -543,11 +538,6 @@ public sealed class VolumesPageViewModel : PageViewModel
 /// </summary>
 public sealed class VolumeColumns : ListColumns
 {
-    private GridLength _name = new(336);
-    private GridLength _driver = new(90);
-    private GridLength _users = new(180);
-    private GridLength _size = new(96);
-    private GridLength _created = new(112);
 
     /// <inheritdoc />
     public override IReadOnlyList<string> Keys { get; } = ["name", "driver", "users", "size", "created"];
@@ -555,37 +545,37 @@ public sealed class VolumeColumns : ListColumns
     /// <summary>名称列。</summary>
     public GridLength Name
     {
-        get => _name;
-        set => SetField(ref _name, Clamp(value, "name"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "name"));
+    } = new(336);
 
     /// <summary>驱动列。</summary>
     public GridLength Driver
     {
-        get => _driver;
-        set => SetField(ref _driver, Clamp(value, "driver"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "driver"));
+    } = new(90);
 
     /// <summary>使用者列。</summary>
     public GridLength Users
     {
-        get => _users;
-        set => SetField(ref _users, Clamp(value, "users"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "users"));
+    } = new(180);
 
     /// <summary>大小列。</summary>
     public GridLength Size
     {
-        get => _size;
-        set => SetField(ref _size, Clamp(value, "size"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "size"));
+    } = new(96);
 
     /// <summary>创建时间列。</summary>
     public GridLength Created
     {
-        get => _created;
-        set => SetField(ref _created, Clamp(value, "created"));
-    }
+        get;
+        set => SetField(ref field, Clamp(value, "created"));
+    } = new(112);
 
     /// <inheritdoc />
     public override double Get(string key) => key switch

@@ -201,9 +201,9 @@
         关掉横向滚动而又不折行,超出去的那半行则彻底没有办法看到 ——
         窄抽屉里正是后面这种,长行被硬生生截在右边界上,还以为日志就这么长。
       -->
-      <ScrollViewer Padding="0,6"
-                    HorizontalScrollBarVisibility="{Binding Wrap, Converter={x:Static ui:Converters.WrapScroll}}">
-        <ItemsControl ItemsSource="{Binding Lines}">
+      <ItemsControl Theme="{StaticResource DockerLogList}" ItemsSource="{Binding Lines}"
+                    ui:AutoScroll.Source="{Binding Lines}" Padding="0,6"
+                    ScrollViewer.HorizontalScrollBarVisibility="{Binding Wrap, Converter={x:Static ui:Converters.WrapScroll}}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="pages:LogLineItem">
               <!-- 一行 18px:时间戳 76 / 来源 78 / 级别 38 / 正文。
@@ -251,8 +251,7 @@
               </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
+      </ItemsControl>
     </Border>
   </DockPanel>
 </UserControl>

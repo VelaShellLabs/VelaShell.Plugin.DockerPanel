@@ -44,26 +44,22 @@ public readonly record struct LayerRow(
 public sealed class ImageDetailViewModel : ObservableObject
 {
     private readonly DockerPanelViewModel _shell;
-    private readonly ImagesPageViewModel _page;
     private ImageRow _row;
-    private ImageDetailTab _tab = ImageDetailTab.Overview;
-    private string _rawInspect = "";
-    private string _historyNote = "";
     private bool _historyLoaded;
 
     /// <summary>建镜像详情。</summary>
     public ImageDetailViewModel(DockerPanelViewModel shell, ImagesPageViewModel page, ImageRow row)
     {
         _shell = shell;
-        _page = page;
+        Owner = page;
         _row = row;
         SetTabCommand = new RelayCommand(p => p is ImageDetailTab tab ? SetTabAsync(tab) : Task.CompletedTask);
         CopyIdCommand = new RelayCommand(_ => shell.Context.Clipboard.SetTextAsync(row.Id, shell.Lifetime));
         RunCommand = new RelayCommand(_ => _shell.ShowRunContainerAsync(PrimaryReference));
-        TagCommand = new RelayCommand(_ => _page.TagCommand.Execute(_row));
-        PushCommand = new RelayCommand(_ => _page.PushCommand.Execute(_row));
-        RemoveCommand = new RelayCommand(_ => _page.RemoveCommand.Execute(_row));
-        CloseCommand = new RelayCommand(_ => _page.CloseDetailCommand.Execute(null));
+        TagCommand = new RelayCommand(_ => Owner.TagCommand.Execute(_row));
+        PushCommand = new RelayCommand(_ => Owner.PushCommand.Execute(_row));
+        RemoveCommand = new RelayCommand(_ => Owner.RemoveCommand.Execute(_row));
+        CloseCommand = new RelayCommand(_ => Owner.CloseDetailCommand.Execute(null));
     }
 
     /// <summary>镜像 id。</summary>
@@ -79,7 +75,7 @@ public sealed class ImageDetailViewModel : ObservableObject
     /// 抽屉所在的页面。
     /// <para>抽屉的宽度与铺没铺满是**页面**的布局状态,界面要绑得到它。</para>
     /// </summary>
-    public ImagesPageViewModel Owner => _page;
+    public ImagesPageViewModel Owner { get; }
 
     /// <summary>拿去 <c>run</c> 的引用:有标签用标签,悬空镜像只能用 id。</summary>
     public string PrimaryReference =>
@@ -92,17 +88,13 @@ public sealed class ImageDetailViewModel : ObservableObject
     public string UsageText => _row.UsageText;
 
     /// <summary>当前页签。</summary>
-    public ImageDetailTab Tab
-    {
-        get => _tab;
-        private set
+    public ImageDetailTab Tab { get; private set
         {
-            if (SetField(ref _tab, value))
+            if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsOverview), nameof(IsHistory), nameof(IsRaw));
             }
-        }
-    }
+        } } = ImageDetailTab.Overview;
 
     /// <summary>在概览页。</summary>
     public bool IsOverview => Tab == ImageDetailTab.Overview;
@@ -135,27 +127,19 @@ public sealed class ImageDetailViewModel : ObservableObject
     public ObservableCollection<LayerRow> Layers { get; } = [];
 
     /// <summary>层历史读不到时的说明。</summary>
-    public string HistoryNote
-    {
-        get => _historyNote;
-        private set
+    public string HistoryNote { get; private set
         {
-            if (SetField(ref _historyNote, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasHistoryNote));
             }
-        }
-    }
+        } } = "";
 
     /// <summary>有没有要说的。</summary>
     public bool HasHistoryNote => HistoryNote.Length > 0;
 
     /// <summary>inspect 原文。</summary>
-    public string RawInspect
-    {
-        get => _rawInspect;
-        private set => SetField(ref _rawInspect, value);
-    }
+    public string RawInspect { get; private set => SetField(ref field, value); } = "";
 
     /// <summary>切页签。</summary>
     public RelayCommand SetTabCommand { get; }

@@ -73,8 +73,6 @@ public sealed record ToastAction(string Label, Action Invoke);
 public sealed class Feedback : ObservableObject
 {
     private const int MaxToasts = 3;
-    private string _statusText = "";
-    private FeedbackKind _statusKind = FeedbackKind.Info;
 
     /// <summary>当前的 toast(最多三条,新的在下面)。</summary>
     public ObservableCollection<Toast> Toasts { get; } = [];
@@ -82,25 +80,25 @@ public sealed class Feedback : ObservableObject
     /// <summary>状态栏左侧那句话 —— 永远说最后一件事的结果。</summary>
     public string StatusText
     {
-        get => _statusText;
-        private set => SetField(ref _statusText, value);
-    }
+        get;
+        private set => SetField(ref field, value);
+    } = "";
 
     /// <summary>状态栏那句话的语气。</summary>
     public FeedbackKind StatusKind
     {
-        get => _statusKind;
+        get;
         private set
         {
-            if (SetField(ref _statusKind, value))
+            if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(StatusIcon));
             }
         }
-    }
+    } = FeedbackKind.Info;
 
     /// <summary>状态栏图标。</summary>
-    public string StatusIcon => _statusKind switch
+    public string StatusIcon => StatusKind switch
     {
         FeedbackKind.Success => "Docker.circle-check-big",
         FeedbackKind.Warning => "Icon.triangle-alert",
