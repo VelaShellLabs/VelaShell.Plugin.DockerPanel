@@ -17,7 +17,7 @@
     后者会把抽屉自己的头顶到屏幕外面去,连"还原"那颗键都点不着。
   -->
 
-  <Grid x:Name="Root" ColumnDefinitions="*,0,0" SizeChanged="OnRootSizeChanged">
+  <Grid x:Name="Root" ColumnDefinitions="*,0,0">
 
     <!-- ── 日志模式:来源选择器 + 合并流,取代列表 ──────────────────────
          取代而不是叠加:合并多条流时左边要放来源选择器,而那块地方原本就是列表的 -->
@@ -428,38 +428,32 @@
                     IsChecked="{Binding AllSelected}" />
 
           <TextBlock Grid.Column="2" Text="名称" Classes="col" Margin="2,0,6,0" />
-          <Border Grid.Column="3" Classes="colgrip" Tag="name"
-                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+          <Border Grid.Column="3" Classes="colgrip" Tag="name">
             <Border Classes="colline" />
           </Border>
 
           <TextBlock Grid.Column="4" Text="镜像" Classes="col" Margin="0,0,6,0" />
-          <Border Grid.Column="5" Classes="colgrip" Tag="image"
-                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+          <Border Grid.Column="5" Classes="colgrip" Tag="image">
             <Border Classes="colline" />
           </Border>
 
           <TextBlock Grid.Column="6" Text="端口" Classes="col" Margin="0,0,6,0" />
-          <Border Grid.Column="7" Classes="colgrip" Tag="ports"
-                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+          <Border Grid.Column="7" Classes="colgrip" Tag="ports">
             <Border Classes="colline" />
           </Border>
 
           <TextBlock Grid.Column="8" Text="CPU" Classes="col" Margin="0,0,6,0" />
-          <Border Grid.Column="9" Classes="colgrip" Tag="cpu"
-                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+          <Border Grid.Column="9" Classes="colgrip" Tag="cpu">
             <Border Classes="colline" />
           </Border>
 
           <TextBlock Grid.Column="10" Text="内存" Classes="col" Margin="0,0,6,0" />
-          <Border Grid.Column="11" Classes="colgrip" Tag="mem"
-                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+          <Border Grid.Column="11" Classes="colgrip" Tag="mem">
             <Border Classes="colline" />
           </Border>
 
           <TextBlock Grid.Column="12" Text="运行时长" Classes="col" Margin="0,0,6,0" />
-          <Border Grid.Column="13" Classes="colgrip" Tag="uptime"
-                  PointerPressed="OnColumnSplitterPressed" PointerReleased="OnColumnSplitterReleased">
+          <Border Grid.Column="13" Classes="colgrip" Tag="uptime">
             <Border Classes="colline" />
           </Border>
         </Grid>
@@ -687,11 +681,11 @@
     <!-- 抽屉分割条:5px 透明抓取区上画一条 1px 细线 —— 与宿主侧栏、文件面板同款。
          这一列的宽度、抽屉那一列的宽窄与上下限,统统由代码在开关抽屉时设(见 ApplyDrawerLayout)。 -->
     <Border Grid.Column="1" Width="1" HorizontalAlignment="Center"
-            IsVisible="{Binding CanResizeDrawer}"
+            IsVisible="{Binding Drawer.CanResize}"
             Background="{DynamicResource VelaBorderPrimary}" />
     <GridSplitter Grid.Column="1" x:Name="DrawerSplitter" Background="Transparent"
                   ResizeDirection="Columns" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                  IsVisible="{Binding CanResizeDrawer}" ToolTip.Tip="拖动改抽屉宽度" />
+                  IsVisible="{Binding Drawer.CanResize}" ToolTip.Tip="拖动改抽屉宽度" />
 
     <!-- 详情抽屉。
          宽度是页面的状态而不是抽屉自己的:换一个容器就是换一个抽屉视图模型,

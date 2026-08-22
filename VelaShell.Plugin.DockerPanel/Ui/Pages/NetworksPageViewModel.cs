@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Controls;
 using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
@@ -76,6 +77,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             if (SetField(ref _selected, value))
             {
+                Drawer.IsOpen = value is not null;
                 OnPropertiesChanged(nameof(HasSelection), nameof(CanRemove), nameof(RemoveHint));
             }
         }
@@ -83,6 +85,23 @@ public sealed class NetworksPageViewModel : PageViewModel
 
     /// <summary>有选中。</summary>
     public bool HasSelection => Selected is not null;
+
+    /// <summary>列表的列宽。列头与数据行共用这一份 —— 拖列头的轨道改的就是它。</summary>
+    public NetworkColumns Columns { get; } = new();
+
+    /// <inheritdoc />
+    public override ListColumns ColumnLayout => Columns;
+
+    /// <inheritdoc />
+    public override IEnumerable<string> ColumnTexts(string key) => key switch
+    {
+        "name" => View.Select(r => r.Name),
+        "driver" => View.Select(r => r.Driver),
+        "scope" => View.Select(r => r.Scope),
+        "subnet" => View.Select(r => r.Subnet),
+        "attached" => View.Select(r => r.AttachedText),
+        _ => []
+    };
 
     /// <summary>选中网络的接入容器。</summary>
     public ObservableCollection<AttachedContainer> Attached { get; } = [];
@@ -295,6 +314,8 @@ public sealed class NetworksPageViewModel : PageViewModel
                 }
                 else
                 {
+                    // 行要回指页面:列宽绑在页面上,行模板得找得到它。
+                    row.Owner = this;
                     _all.Add(row);
                 }
             }
@@ -604,4 +625,96 @@ public sealed class NetworksPageViewModel : PageViewModel
             Shell.Feedback.ReportError("摘除容器", ex);
         }
     }
+}
+
+/// <summary>
+/// 网络列表的列宽。默认宽度取自设计稿 08 号板的表头
+/// (名称 362 / 驱动 92 / 作用域 84 / 子网 164 / 已接入 112)。
+/// </summary>
+public sealed class NetworkColumns : ListColumns
+{
+    private GridLength _name = new(362);
+    private GridLength _driver = new(92);
+    private GridLength _scope = new(84);
+    private GridLength _subnet = new(164);
+    private GridLength _attached = new(112);
+
+    /// <inheritdoc />
+    public override IReadOnlyList<string> Keys { get; } = ["name", "driver", "scope", "subnet", "attached"];
+
+    /// <summary>名称列。</summary>
+    public GridLength Name
+    {
+        get => _name;
+        set => SetField(ref _name, Clamp(value, "name"));
+    }
+
+    /// <summary>驱动列。</summary>
+    public GridLength Driver
+    {
+        get => _driver;
+        set => SetField(ref _driver, Clamp(value, "driver"));
+    }
+
+    /// <summary>作用域列。</summary>
+    public GridLength Scope
+    {
+        get => _scope;
+        set => SetField(ref _scope, Clamp(value, "scope"));
+    }
+
+    /// <summary>子网列。</summary>
+    public GridLength Subnet
+    {
+        get => _subnet;
+        set => SetField(ref _subnet, Clamp(value, "subnet"));
+    }
+
+    /// <summary>已接入列。</summary>
+    public GridLength Attached
+    {
+        get => _attached;
+        set => SetField(ref _attached, Clamp(value, "attached"));
+    }
+
+    /// <inheritdoc />
+    public override double Get(string key) => key switch
+    {
+        "name" => Name.Value,
+        "driver" => Driver.Value,
+        "scope" => Scope.Value,
+        "subnet" => Subnet.Value,
+        _ => Attached.Value
+    };
+
+    /// <inheritdoc />
+    public override void Set(string key, double width)
+    {
+        GridLength value = new(width);
+        switch (key)
+        {
+            case "name": Name = value; break;
+            case "driver": Driver = value; break;
+            case "scope": Scope = value; break;
+            case "subnet": Subnet = value; break;
+            case "attached": Attached = value; break;
+        }
+    }
+
+    /// <inheritdoc />
+    public override double Min(string key) => key switch
+    {
+        "name" => 160,
+        "driver" => 70,
+        "scope" => 62,
+        "subnet" => 90,
+        _ => 70
+    };
+
+    /// <inheritdoc />
+    public override double MaxAutoFit(string key) => key is "name" ? 760 : 300;
+
+    /// <inheritdoc />
+    // 名称格里还坐着一枚网络图标,内置网络还多一块「内置」徽标。
+    public override double Padding(string key) => key is "name" ? 84 : 18;
 }

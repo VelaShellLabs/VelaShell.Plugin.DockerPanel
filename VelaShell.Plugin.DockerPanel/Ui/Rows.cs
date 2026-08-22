@@ -317,6 +317,9 @@ public sealed class VolumeRow(VolumeSummary summary, int refCount) : RowBase(sum
     private VolumeSummary _summary = summary;
     private int _refCount = refCount;
 
+    /// <summary>拥有这一行的页面(列宽绑在页面上,理由同 <see cref="ContainerRow.Owner" />)。</summary>
+    public Pages.VolumesPageViewModel? Owner { get; set; }
+
     /// <summary>底层数据。</summary>
     public VolumeSummary Summary => _summary;
 
@@ -366,6 +369,9 @@ public sealed class VolumeRow(VolumeSummary summary, int refCount) : RowBase(sum
 public sealed class NetworkRow(NetworkSummary summary) : RowBase(summary.Id)
 {
     private NetworkSummary _summary = summary;
+
+    /// <summary>拥有这一行的页面(列宽绑在页面上,理由同 <see cref="ContainerRow.Owner" />)。</summary>
+    public Pages.NetworksPageViewModel? Owner { get; set; }
 
     /// <summary>底层数据。</summary>
     public NetworkSummary Summary => _summary;

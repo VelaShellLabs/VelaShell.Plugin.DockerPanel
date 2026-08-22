@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using VelaShell.Plugin.DockerPanel.Docker;
 
@@ -171,6 +172,7 @@ public sealed class ImagesPageViewModel : PageViewModel
         {
             if (SetField(ref _detail, value))
             {
+                Drawer.IsOpen = value is not null;
                 OnPropertyChanged(nameof(HasDetail));
             }
         }
@@ -178,6 +180,23 @@ public sealed class ImagesPageViewModel : PageViewModel
 
     /// <summary>抽屉开着没。</summary>
     public bool HasDetail => Detail is not null;
+
+    /// <summary>列表的列宽。列头与数据行共用这一份 —— 拖列头的轨道改的就是它。</summary>
+    public ImageColumns Columns { get; } = new();
+
+    /// <inheritdoc />
+    public override ListColumns ColumnLayout => Columns;
+
+    /// <inheritdoc />
+    public override IEnumerable<string> ColumnTexts(string key) => key switch
+    {
+        "repo" => View.Select(r => $"{r.Repository}  {r.Tag}"),
+        "id" => View.Select(r => r.ShortId),
+        "size" => View.Select(r => r.SizeText),
+        "created" => View.Select(r => r.CreatedText),
+        "used" => View.Select(r => r.UsageText),
+        _ => []
+    };
 
     /// <summary>导出成 tar(<c>docker save</c>)。</summary>
     public RelayCommand SaveCommand { get; }
@@ -630,4 +649,96 @@ public sealed class DirectProgress<T>(Action<T> handler) : IProgress<T>
 {
     /// <inheritdoc />
     public void Report(T value) => handler(value);
+}
+
+/// <summary>
+/// 镜像列表的列宽。默认宽度取自设计稿 <c>C/ImageRow</c>
+/// (仓库/标签 356 / ID 104 / 大小 84 / 创建 118 / 使用中 96)。
+/// </summary>
+public sealed class ImageColumns : ListColumns
+{
+    private GridLength _repo = new(356);
+    private GridLength _id = new(104);
+    private GridLength _size = new(84);
+    private GridLength _created = new(118);
+    private GridLength _used = new(96);
+
+    /// <inheritdoc />
+    public override IReadOnlyList<string> Keys { get; } = ["repo", "id", "size", "created", "used"];
+
+    /// <summary>仓库 / 标签列。</summary>
+    public GridLength Repo
+    {
+        get => _repo;
+        set => SetField(ref _repo, Clamp(value, "repo"));
+    }
+
+    /// <summary>镜像 ID 列。</summary>
+    public GridLength Id
+    {
+        get => _id;
+        set => SetField(ref _id, Clamp(value, "id"));
+    }
+
+    /// <summary>大小列。</summary>
+    public GridLength Size
+    {
+        get => _size;
+        set => SetField(ref _size, Clamp(value, "size"));
+    }
+
+    /// <summary>创建时间列。</summary>
+    public GridLength Created
+    {
+        get => _created;
+        set => SetField(ref _created, Clamp(value, "created"));
+    }
+
+    /// <summary>使用中列。</summary>
+    public GridLength Used
+    {
+        get => _used;
+        set => SetField(ref _used, Clamp(value, "used"));
+    }
+
+    /// <inheritdoc />
+    public override double Get(string key) => key switch
+    {
+        "repo" => Repo.Value,
+        "id" => Id.Value,
+        "size" => Size.Value,
+        "created" => Created.Value,
+        _ => Used.Value
+    };
+
+    /// <inheritdoc />
+    public override void Set(string key, double width)
+    {
+        GridLength value = new(width);
+        switch (key)
+        {
+            case "repo": Repo = value; break;
+            case "id": Id = value; break;
+            case "size": Size = value; break;
+            case "created": Created = value; break;
+            case "used": Used = value; break;
+        }
+    }
+
+    /// <inheritdoc />
+    public override double Min(string key) => key switch
+    {
+        "repo" => 160,
+        "id" => 80,
+        "size" => 62,
+        "created" => 70,
+        _ => 70
+    };
+
+    /// <inheritdoc />
+    public override double MaxAutoFit(string key) => key is "repo" ? 760 : 300;
+
+    /// <inheritdoc />
+    // 仓库格里还坐着一枚类型图标和一块标签徽标。
+    public override double Padding(string key) => key is "repo" ? 60 : 18;
 }
