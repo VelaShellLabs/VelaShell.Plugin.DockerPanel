@@ -47,7 +47,7 @@ public sealed partial class DockerPanelViewModel
             return;
         }
         form.FormError = null;
-        foreach (FormField each in form.Fields)
+        foreach (var each in form.Fields)
         {
             each.Error = null;
         }
@@ -127,7 +127,7 @@ public sealed partial class DockerPanelViewModel
 
     private void CompleteForm(bool confirmed)
     {
-        TaskCompletionSource<bool>? pending = _formPending;
+        var pending = _formPending;
         _formPending = null;
         Ui.Post(() => ActiveForm = null);
         pending?.TrySetResult(confirmed);
@@ -150,7 +150,7 @@ public sealed partial class DockerPanelViewModel
         string[] networks;
         try
         {
-            NetworkSummary[] all = await client.ListNetworksAsync(Lifetime).ConfigureAwait(true);
+            var all = await client.ListNetworksAsync(Lifetime).ConfigureAwait(true);
             networks = [.. all.Select(n => n.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)];
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -159,10 +159,10 @@ public sealed partial class DockerPanelViewModel
         }
         // 镜像的小字:大小与平台。表单里原来完全看不到自己要跑的是哪个镜像
         // (只有最底下那条等效命令里出现过),而这颗按钮是从好几个地方点进来的。
-        string detail = "";
+        var detail = "";
         try
         {
-            ImageSummary[] images = await client.ListImagesAsync(false, Lifetime).ConfigureAwait(true);
+            var images = await client.ListImagesAsync(false, Lifetime).ConfigureAwait(true);
             if (images.FirstOrDefault(i => i.RepoTags?.Contains(image) == true) is { } match)
             {
                 detail = Humanize.Bytes(match.Size);
@@ -178,12 +178,12 @@ public sealed partial class DockerPanelViewModel
         {
             return;
         }
-        PanelTask task = Tasks.Start("Icon.play", $"运行 {image}", indeterminate: true);
+        var task = Tasks.Start("Icon.play", $"运行 {image}", indeterminate: true);
         try
         {
-            CreateContainerResponse created = await client
+            var created = await client
                 .CreateContainerAsync(form.ContainerName, form.ToRequest(), task.Token).ConfigureAwait(true);
-            foreach (string warning in created.Warnings ?? [])
+            foreach (var warning in created.Warnings ?? [])
             {
                 Feedback.Notify(FeedbackKind.Warning, "daemon 有话说", warning);
             }

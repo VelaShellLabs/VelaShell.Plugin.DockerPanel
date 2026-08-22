@@ -1,12 +1,10 @@
-using System.Reflection;
-using System.Xml;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Styling;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
+using System.Xml;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
@@ -144,7 +142,7 @@ public sealed class CodeEditor : UserControl
         if (change.Property == TextProperty && !_syncing)
         {
             _syncing = true;
-            string incoming = Text ?? "";
+            var incoming = Text ?? "";
             // 只在真不一样时才写:同一份文本写回去会把光标顶到开头,
             // 用户打一个字就跳一次。
             if (_editor.Text != incoming)
@@ -217,7 +215,7 @@ public sealed class CodeEditor : UserControl
     /// </summary>
     private IHighlightingDefinition Recolor(IHighlightingDefinition definition)
     {
-        foreach (HighlightingColor color in definition.NamedHighlightingColors)
+        foreach (var color in definition.NamedHighlightingColors)
         {
             if (Role(color.Name) is { } token && Resource(token) is ISolidColorBrush brush)
             {
@@ -240,7 +238,7 @@ public sealed class CodeEditor : UserControl
     };
 
     private object? Resource(string key) =>
-        this.TryFindResource(key, ActualThemeVariant, out object? value) ? value : null;
+        this.TryFindResource(key, ActualThemeVariant, out var value) ? value : null;
 
     /// <summary>
     /// 取一份语法定义。
@@ -271,8 +269,8 @@ public sealed class CodeEditor : UserControl
                 return;
             }
             _registered = true;
-            Assembly assembly = typeof(CodeEditor).Assembly;
-            foreach ((string resource, string[] extensions) in
+            var assembly = typeof(CodeEditor).Assembly;
+            foreach ((var resource, var extensions) in
                      new[]
                      {
                          ("VelaShell.Plugin.DockerPanel.Syntax.Yaml.xshd", new[] { ".yaml", ".yml" }),
@@ -281,13 +279,13 @@ public sealed class CodeEditor : UserControl
             {
                 try
                 {
-                    using Stream? stream = assembly.GetManifestResourceStream(resource);
+                    using var stream = assembly.GetManifestResourceStream(resource);
                     if (stream is null)
                     {
                         continue;
                     }
-                    using XmlReader reader = XmlReader.Create(stream);
-                    IHighlightingDefinition definition = HighlightingLoader.Load(reader, HighlightingManager.Instance);
+                    using var reader = XmlReader.Create(stream);
+                    var definition = HighlightingLoader.Load(reader, HighlightingManager.Instance);
                     HighlightingManager.Instance.RegisterHighlighting(definition.Name, extensions, definition);
                 }
                 catch (Exception)

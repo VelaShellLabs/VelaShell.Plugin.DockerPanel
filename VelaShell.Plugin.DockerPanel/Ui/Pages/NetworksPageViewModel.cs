@@ -1,5 +1,5 @@
-using System.Collections.ObjectModel;
 using Avalonia.Controls;
+using System.Collections.ObjectModel;
 using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
@@ -192,7 +192,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             await LoadRawAsync().ConfigureAwait(true);
         }
-        Avalonia.Platform.Storage.IStorageFile? target = await FilePicker
+        var target = await FilePicker
             .PickSaveAsync($"导出 {row.Name} 的配置", $"{row.Name}.json", "json").ConfigureAwait(true);
         if (target is null)
         {
@@ -200,7 +200,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         }
         try
         {
-            await using Stream output = await target.OpenWriteAsync().ConfigureAwait(true);
+            await using var output = await target.OpenWriteAsync().ConfigureAwait(true);
             await using var writer = new StreamWriter(output);
             await writer.WriteLineAsync(
                     "// docker network inspect 的原文 —— 含运行态(已接入容器与已分配地址),不是可直接重建的清单。")
@@ -221,7 +221,7 @@ public sealed class NetworksPageViewModel : PageViewModel
             return;
         }
         AttachedContainer[] targets = [.. Attached];
-        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        var confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
         {
             Title = $"把 {targets.Length} 个容器从 {row.Name} 上摘掉?",
             Icon = "Icon.unplug",
@@ -241,7 +241,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             return;
         }
-        foreach (AttachedContainer target in targets)
+        foreach (var target in targets)
         {
             try
             {
@@ -306,7 +306,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         Busy = true;
         try
         {
-            NetworkSummary[] networks = await client.ListNetworksAsync(cancellationToken).ConfigureAwait(true);
+            var networks = await client.ListNetworksAsync(cancellationToken).ConfigureAwait(true);
             List<NetworkRow> incoming =
             [
                 .. networks
@@ -314,11 +314,11 @@ public sealed class NetworksPageViewModel : PageViewModel
                     .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
                     .Select(n => new NetworkRow(n))
             ];
-            Dictionary<string, NetworkRow> previous = _all.ToDictionary(r => r.Id);
+            var previous = _all.ToDictionary(r => r.Id);
             _all.Clear();
-            foreach (NetworkRow row in incoming)
+            foreach (var row in incoming)
             {
-                if (previous.TryGetValue(row.Id, out NetworkRow? existing))
+                if (previous.TryGetValue(row.Id, out var existing))
                 {
                     existing.Update(row);
                     _all.Add(existing);
@@ -334,7 +334,7 @@ public sealed class NetworksPageViewModel : PageViewModel
             ApplyView();
             if (Selected is { } selected)
             {
-                NetworkRow? still = _all.FirstOrDefault(r => r.Id == selected.Id);
+                var still = _all.FirstOrDefault(r => r.Id == selected.Id);
                 Selected = still;
                 if (still is not null)
                 {
@@ -367,7 +367,7 @@ public sealed class NetworksPageViewModel : PageViewModel
 
     private void ApplyView()
     {
-        string needle = Search.Trim();
+        var needle = Search.Trim();
         IEnumerable<NetworkRow> filtered = _all;
         if (CustomOnly)
         {
@@ -405,7 +405,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             return null;
         }
-        if (!int.TryParse(text[(slash + 1)..], out int prefix))
+        if (!int.TryParse(text[(slash + 1)..], out var prefix))
         {
             return null;
         }
@@ -414,7 +414,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             return null;
         }
-        long total = 1L << (32 - prefix);
+        var total = 1L << (32 - prefix);
         return total > 3 ? total - 3 : 0;
     }
 
@@ -426,9 +426,9 @@ public sealed class NetworksPageViewModel : PageViewModel
         }
         try
         {
-            NetworkSummary detail = await client.InspectNetworkAsync(row.Id, cancellationToken).ConfigureAwait(true);
+            var detail = await client.InspectNetworkAsync(row.Id, cancellationToken).ConfigureAwait(true);
             Attached.Clear();
-            foreach ((string id, NetworkContainer container) in detail.Containers ?? [])
+            foreach ((var id, var container) in detail.Containers ?? [])
             {
                 Attached.Add(new(id, container.Name ?? Humanize.ShortId(id), container.IPv4Address ?? "—"));
             }
@@ -439,7 +439,7 @@ public sealed class NetworksPageViewModel : PageViewModel
             // 「已分配 3 / 65533」:子网快用满是一个到了才发现就太晚的问题。
             if (SubnetCapacity(detail.FirstSubnet) is { } capacity)
             {
-                int used = Attached.Count;
+                var used = Attached.Count;
                 Ipam.Add(new("已分配", $"{used} / {capacity:N0}",
                     capacity > 0 && used > capacity * 0.8 ? RowTone.Warn : RowTone.Idle));
             }
@@ -467,7 +467,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         }
         try
         {
-            SystemInfo info = await client.InfoAsync(Shell.Lifetime).ConfigureAwait(true);
+            var info = await client.InfoAsync(Shell.Lifetime).ConfigureAwait(true);
             _swarmActive = info.Swarm?.LocalNodeState == "active";
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -481,7 +481,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         }
         try
         {
-            CreateNetworkResponse created = await client.CreateNetworkAsync(form.Name, form.Driver, form.Subnet,
+            var created = await client.CreateNetworkAsync(form.Name, form.Driver, form.Subnet,
                 form.Gateway, form.Internal, form.Attachable, form.EnableIPv6, Shell.Lifetime).ConfigureAwait(true);
             if (created.Warning is { Length: > 0 } warning)
             {
@@ -505,7 +505,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             return;
         }
-        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        var confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
         {
             Title = $"删除网络 {row.Name}?",
             Icon = "Icon.trash-2",
@@ -551,7 +551,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             return;
         }
-        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        var confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
         {
             Title = "清理未使用的网络?",
             Icon = "Docker.broom",
@@ -573,7 +573,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         }
         try
         {
-            PruneReport report = await client.PruneNetworksAsync(Shell.Lifetime).ConfigureAwait(true);
+            var report = await client.PruneNetworksAsync(Shell.Lifetime).ConfigureAwait(true);
             Shell.Feedback.Notify(FeedbackKind.Success, "清理完成", $"删除 {report.DeletedCount} 个网络");
             await RefreshAsync(Shell.Lifetime).ConfigureAwait(true);
         }
@@ -589,7 +589,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             return;
         }
-        ContainerSummary[] containers = await client.ListContainersAsync(true, Shell.Lifetime).ConfigureAwait(true);
+        var containers = await client.ListContainersAsync(true, Shell.Lifetime).ConfigureAwait(true);
         HashSet<string> already = [.. Attached.Select(a => a.Id)];
         var form = new ConnectNetworkForm(
             $"{row.Name} · {row.Driver} · {row.Subnet}",
@@ -603,7 +603,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             return;
         }
-        BatchResult result = await BatchRunner.RunAsync(
+        var result = await BatchRunner.RunAsync(
             [.. form.SelectedIds.Select(id => (Target: id, containers.First(c => c.Id == id).Name))],
             (id, ct) => client.ConnectNetworkAsync(row.Id, id, form.Aliases.Length > 0 ? form.Aliases : null, ct),
             null, Shell.Lifetime).ConfigureAwait(true);
@@ -617,7 +617,7 @@ public sealed class NetworksPageViewModel : PageViewModel
         {
             return;
         }
-        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        var confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
         {
             Title = $"把 {attached.Name} 从 {row.Name} 上摘掉?",
             Icon = "Icon.unplug",

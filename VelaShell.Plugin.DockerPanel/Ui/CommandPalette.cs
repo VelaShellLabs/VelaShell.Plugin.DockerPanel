@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
@@ -145,7 +144,7 @@ public sealed class CommandPalette : ObservableObject
             return;
         }
         // 环绕:到底了按下一次回到第一条,比停在那里不动更符合预期。
-        int next = (_selectedIndex + delta + Items.Count) % Items.Count;
+        var next = (_selectedIndex + delta + Items.Count) % Items.Count;
         Select(next);
     }
 
@@ -167,7 +166,7 @@ public sealed class CommandPalette : ObservableObject
 
     private void Select(int index)
     {
-        for (int i = 0; i < Items.Count; i++)
+        for (var i = 0; i < Items.Count; i++)
         {
             Items[i].Active = i == index;
         }
@@ -194,13 +193,13 @@ public sealed class CommandPalette : ObservableObject
     private void ApplyFilter()
     {
         Items.Clear();
-        string needle = Query.Trim();
+        var needle = Query.Trim();
         List<PaletteEntry> matched = needle.Length == 0
             ? [.. _all]
             : [.. _all.Where(e => Matches(e, needle)).OrderByDescending(e => Score(e, needle))];
 
         string? group = null;
-        foreach (PaletteEntry entry in matched)
+        foreach (var entry in matched)
         {
             var item = new PaletteItem(entry);
             if (entry.Group != group)

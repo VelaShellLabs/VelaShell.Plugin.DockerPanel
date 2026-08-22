@@ -1,8 +1,5 @@
-using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using VelaShell.PluginSdk.RemoteExec;
-using VelaShell.PluginSdk.RemoteFs;
 
 namespace VelaShell.Plugin.DockerPanel.Docker;
 
@@ -44,14 +41,14 @@ public sealed record ComposeProject(string Name, string Status, string ConfigFil
 
     private int ParseCount(string keyword)
     {
-        int at = Status.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+        var at = Status.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
         if (at < 0)
         {
             return 0;
         }
-        int open = Status.IndexOf('(', at);
-        int close = open > 0 ? Status.IndexOf(')', open) : -1;
-        return close > open && int.TryParse(Status.AsSpan(open + 1, close - open - 1), out int n) ? n : 0;
+        var open = Status.IndexOf('(', at);
+        var close = open > 0 ? Status.IndexOf(')', open) : -1;
+        return close > open && int.TryParse(Status.AsSpan(open + 1, close - open - 1), out var n) ? n : 0;
     }
 }
 
@@ -91,11 +88,11 @@ public sealed record ComposeService
             {
                 return "—";
             }
-            IEnumerable<string> parts = Publishers
+            var parts = Publishers
                 .Where(p => p.PublishedPort > 0)
                 .Select(p => $"{p.PublishedPort}→{p.TargetPort}")
                 .Distinct();
-            string text = string.Join(", ", parts);
+            var text = string.Join(", ", parts);
             return text.Length == 0 ? "—" : text;
         }
     }
@@ -146,7 +143,7 @@ public sealed class ComposeCli(IComposeHost host)
     /// </summary>
     public async Task<ComposeProject[]> ListProjectsAsync(CancellationToken cancellationToken = default)
     {
-        ExecResult result = await host
+        var result = await host
             .RunAsync(["compose", "ls", "--all", "--format", "json"], TimeSpan.FromSeconds(20), cancellationToken)
             .ConfigureAwait(false);
         if (!result.IsSuccess)
@@ -155,7 +152,7 @@ public sealed class ComposeCli(IComposeHost host)
             // 上层的提示,而不是把一条看不懂的错误摔在用户脸上。
             return [];
         }
-        ComposeListEntry[]? entries = DockerJson.TryDeserialize<ComposeListEntry[]>(result.Output.Trim());
+        var entries = DockerJson.TryDeserialize<ComposeListEntry[]>(result.Output.Trim());
         return entries is null
             ? []
             : [.. entries.Select(e => new ComposeProject(e.Name ?? "", e.Status ?? "", e.ConfigFiles ?? ""))];
@@ -164,14 +161,14 @@ public sealed class ComposeCli(IComposeHost host)
     /// <summary>列出项目里的服务。</summary>
     public async Task<ComposeService[]> ListServicesAsync(ComposeProject project, CancellationToken cancellationToken = default)
     {
-        ExecResult result = await host
+        var result = await host
             .RunAsync([.. Prefix(project), "ps", "-a", "--format", "json"], TimeSpan.FromSeconds(20), cancellationToken)
             .ConfigureAwait(false);
         if (!result.IsSuccess)
         {
             return [];
         }
-        string text = result.Output.Trim();
+        var text = result.Output.Trim();
         if (text.Length == 0)
         {
             return [];
@@ -183,7 +180,7 @@ public sealed class ComposeCli(IComposeHost host)
             return DockerJson.TryDeserialize<ComposeService[]>(text) ?? [];
         }
         List<ComposeService> services = [];
-        foreach (string line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             if (DockerJson.TryDeserialize<ComposeService>(line.Trim()) is { } service)
             {
@@ -253,7 +250,7 @@ public sealed class ComposeCli(IComposeHost host)
     {
         try
         {
-            ExecResult result = await host
+            var result = await host
                 .RunAsync(["compose", "version", "--short"], TimeSpan.FromSeconds(15), cancellationToken)
                 .ConfigureAwait(false);
             return result.IsSuccess;
@@ -278,7 +275,7 @@ public sealed class ComposeCli(IComposeHost host)
     private static List<string> Prefix(ComposeProject project)
     {
         List<string> argv = ["compose", "-p", project.Name];
-        foreach (string file in project.ConfigFiles.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var file in project.ConfigFiles.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
             argv.Add("-f");
             argv.Add(file.Trim());

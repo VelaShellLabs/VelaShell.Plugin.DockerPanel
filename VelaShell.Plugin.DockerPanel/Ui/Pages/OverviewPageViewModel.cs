@@ -32,7 +32,7 @@ public sealed class EventItem(DockerEvent source)
 
     private static string Describe(DockerEvent source)
     {
-        string? exitCode = source.Actor?.Attributes?.GetValueOrDefault("exitCode");
+        var exitCode = source.Actor?.Attributes?.GetValueOrDefault("exitCode");
         // 卷与网络的 create 与容器的 create 是同一个词,先按对象类型分流。
         if (source is { Type: "volume", Action: "create" })
         {
@@ -237,15 +237,15 @@ public sealed class OverviewPageViewModel : PageViewModel
     /// <summary>按当前窗口重画趋势图。</summary>
     private void RebuildTrend()
     {
-        double peak = _cpuTrend.Count > 0 ? _cpuTrend.Max() : 0;
-        double scale = Math.Max(peak, TrendFloorPercent);
+        var peak = _cpuTrend.Count > 0 ? _cpuTrend.Max() : 0;
+        var scale = Math.Max(peak, TrendFloorPercent);
         TrendScaleText = $"每 5 秒一个采样点 · 纵轴 0–{Humanize.Percent(scale)}";
         CpuTrend.Clear();
-        for (int i = _cpuTrend.Count; i < TrendSlots; i++)
+        for (var i = _cpuTrend.Count; i < TrendSlots; i++)
         {
             CpuTrend.Add(new(0, false));
         }
-        foreach (double sample in _cpuTrend)
+        foreach (var sample in _cpuTrend)
         {
             CpuTrend.Add(new(Math.Max(2, Math.Clamp(sample / scale, 0, 1) * TrendHeight), true));
         }
@@ -327,7 +327,7 @@ public sealed class OverviewPageViewModel : PageViewModel
         {
             return;
         }
-        Avalonia.Platform.Storage.IStorageFile? target = await FilePicker
+        var target = await FilePicker
             .PickSaveAsync("导出诊断信息", $"docker-diagnostics-{Shell.SelectedEndpoint?.DisplayName ?? "host"}.txt", "txt")
             .ConfigureAwait(true);
         if (target is null)
@@ -336,9 +336,9 @@ public sealed class OverviewPageViewModel : PageViewModel
         }
         try
         {
-            SystemInfo info = await client.InfoAsync(Shell.Lifetime).ConfigureAwait(true);
-            SystemVersion version = await client.VersionAsync(Shell.Lifetime).ConfigureAwait(true);
-            ContainerSummary[] containers = await client.ListContainersAsync(true, Shell.Lifetime).ConfigureAwait(true);
+            var info = await client.InfoAsync(Shell.Lifetime).ConfigureAwait(true);
+            var version = await client.VersionAsync(Shell.Lifetime).ConfigureAwait(true);
+            var containers = await client.ListContainersAsync(true, Shell.Lifetime).ConfigureAwait(true);
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("# VelaShell Docker 面板 · 诊断信息");
             sb.AppendLine("# 不含凭据、环境变量与日志正文 —— 可以直接发给别人。");
@@ -351,11 +351,11 @@ public sealed class OverviewPageViewModel : PageViewModel
             sb.AppendLine($"容器 / 镜像 {info.Containers} / {info.Images}");
             sb.AppendLine();
             sb.AppendLine("## 容器");
-            foreach (ContainerSummary container in containers)
+            foreach (var container in containers)
             {
                 sb.AppendLine($"{container.Name,-28} {container.State,-10} {container.Image,-42} {container.Status}");
             }
-            await using Stream output = await target.OpenWriteAsync().ConfigureAwait(true);
+            await using var output = await target.OpenWriteAsync().ConfigureAwait(true);
             await using var writer = new StreamWriter(output);
             await writer.WriteAsync(sb.ToString()).ConfigureAwait(true);
             Shell.Feedback.Notify(FeedbackKind.Success, "诊断信息已导出",
@@ -377,11 +377,11 @@ public sealed class OverviewPageViewModel : PageViewModel
         Busy = true;
         try
         {
-            ContainerSummary[] containers = await client.ListContainersAsync(true, cancellationToken).ConfigureAwait(true);
-            SystemInfo info = await client.InfoAsync(cancellationToken).ConfigureAwait(true);
-            int running = containers.Count(c => c.State == "running");
-            int unhealthy = containers.Count(c => (c.Status ?? "").Contains("(unhealthy)", StringComparison.OrdinalIgnoreCase));
-            int failed = containers.Count(c => c.State == "exited" && !(c.Status ?? "").Contains("(0)", StringComparison.Ordinal));
+            var containers = await client.ListContainersAsync(true, cancellationToken).ConfigureAwait(true);
+            var info = await client.InfoAsync(cancellationToken).ConfigureAwait(true);
+            var running = containers.Count(c => c.State == "running");
+            var unhealthy = containers.Count(c => (c.Status ?? "").Contains("(unhealthy)", StringComparison.OrdinalIgnoreCase));
+            var failed = containers.Count(c => c.State == "exited" && !(c.Status ?? "").Contains("(0)", StringComparison.Ordinal));
             RunningText = $"{running} / {containers.Length}";
             RunningDetail = $"{unhealthy} 个不健康 · {failed} 个异常退出";
             _hostMemory = info.MemTotal;
@@ -447,7 +447,7 @@ public sealed class OverviewPageViewModel : PageViewModel
     public void AcceptStatsSnapshot(IReadOnlyList<ContainerRow> rows)
     {
         List<ContainerRow> running = [.. rows.Where(r => r.IsRunning && r.CpuPercent > 0)];
-        double total = running.Sum(r => r.CpuPercent);
+        var total = running.Sum(r => r.CpuPercent);
         CpuText = Humanize.Percent(total);
         _cpuPeak = Math.Max(_cpuPeak, total);
         CpuDetail = running.Count > 0
@@ -456,7 +456,7 @@ public sealed class OverviewPageViewModel : PageViewModel
         TrackHotContainers(running);
         // 内存卡走的是同一批采样:容器占用之和 / 宿主总量,
         // 单独再问一次 daemon 只会得到同样的数字。
-        long usedMemory = rows.Where(r => r.IsRunning).Sum(r => r.MemoryBytes);
+        var usedMemory = rows.Where(r => r.IsRunning).Sum(r => r.MemoryBytes);
         MemText = usedMemory > 0 ? Humanize.Bytes(usedMemory) : "0 B";
         MemDetail = _hostMemory > 0
             ? $"容器占用 · 宿主共 {Humanize.Bytes(_hostMemory)}{(_hostCpus > 0 ? $" · {_hostCpus} 核" : "")}"
@@ -467,9 +467,9 @@ public sealed class OverviewPageViewModel : PageViewModel
             _cpuTrend.RemoveAt(0);
         }
         RebuildTrend();
-        double max = running.Count > 0 ? running.Max(r => r.CpuPercent) : 0;
+        var max = running.Count > 0 ? running.Max(r => r.CpuPercent) : 0;
         TopCpu.Clear();
-        foreach (ContainerRow row in running.OrderByDescending(r => r.CpuPercent).Take(5))
+        foreach (var row in running.OrderByDescending(r => r.CpuPercent).Take(5))
         {
             TopCpu.Add(new(row.Name, row.CpuPercent, max, Humanize.Percent(row.CpuPercent), row.CpuHot));
         }
@@ -516,7 +516,7 @@ public sealed class OverviewPageViewModel : PageViewModel
         ReclaimDetail = "正在统计";
         try
         {
-            DiskUsage usage = await client.DiskUsageAsync(cancellationToken).ConfigureAwait(true);
+            var usage = await client.DiskUsageAsync(cancellationToken).ConfigureAwait(true);
             AcceptReclaim(DiskMath.Reclaimable(usage));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -537,7 +537,7 @@ public sealed class OverviewPageViewModel : PageViewModel
     private void TrackHotContainers(IReadOnlyList<ContainerRow> running)
     {
         HashSet<string> stillHot = [];
-        foreach (ContainerRow row in running.Where(r => r.CpuPercent >= HotCpuThreshold))
+        foreach (var row in running.Where(r => r.CpuPercent >= HotCpuThreshold))
         {
             stillHot.Add(row.Id);
             if (!_hotSince.ContainsKey(row.Id))
@@ -548,7 +548,7 @@ public sealed class OverviewPageViewModel : PageViewModel
             _hotPercent[row.Id] = row.CpuPercent;
         }
         // 掉下去就清零 —— 「已持续 12 分钟」得是真的连续,不能把两段拼起来。
-        foreach (string id in _hotSince.Keys.Where(id => !stillHot.Contains(id)).ToList())
+        foreach (var id in _hotSince.Keys.Where(id => !stillHot.Contains(id)).ToList())
         {
             _hotSince.Remove(id);
             _hotNames.Remove(id);
@@ -560,18 +560,18 @@ public sealed class OverviewPageViewModel : PageViewModel
     /// <summary>把"持续高 CPU"那几条插进关注列表,并把过期的那些拿掉。</summary>
     private void RebuildHotAttention()
     {
-        foreach (AttentionItem stale in Attention.Where(a => a.Icon == "Icon.cpu").ToList())
+        foreach (var stale in Attention.Where(a => a.Icon == "Icon.cpu").ToList())
         {
             Attention.Remove(stale);
         }
-        foreach ((string id, DateTimeOffset since) in _hotSince)
+        foreach ((var id, var since) in _hotSince)
         {
-            TimeSpan held = DateTimeOffset.UtcNow - since;
+            var held = DateTimeOffset.UtcNow - since;
             if (held < HotCpuHold)
             {
                 continue;
             }
-            string name = _hotNames.GetValueOrDefault(id, Humanize.ShortId(id));
+            var name = _hotNames.GetValueOrDefault(id, Humanize.ShortId(id));
             Attention.Insert(0, new("Icon.cpu", RowTone.Warn,
                 $"{name} CPU 持续高于 {HotCpuThreshold:F0}%",
                 $"已持续 {Humanize.Duration(held)} · 当前 {Humanize.Percent(_hotPercent.GetValueOrDefault(id))}",
@@ -584,9 +584,9 @@ public sealed class OverviewPageViewModel : PageViewModel
     private void BuildAttention(IReadOnlyList<ContainerSummary> containers)
     {
         Attention.Clear();
-        foreach (ContainerSummary container in containers)
+        foreach (var container in containers)
         {
-            string status = container.Status ?? "";
+            var status = container.Status ?? "";
             if (status.Contains("(unhealthy)", StringComparison.OrdinalIgnoreCase))
             {
                 Attention.Add(new("Icon.triangle-alert", RowTone.Danger,

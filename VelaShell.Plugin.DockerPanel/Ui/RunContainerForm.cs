@@ -64,7 +64,7 @@ public sealed partial class RunContainerForm : PanelForm
             ImportLabel = "从 .env 导入"
         };
         _network = new("网络") { Value = "bridge" };
-        foreach (string network in networks)
+        foreach (var network in networks)
         {
             _network.Options.Add(new(network, network));
         }
@@ -73,7 +73,7 @@ public sealed partial class RunContainerForm : PanelForm
             _network.Options.Add(new("bridge", "bridge"));
         }
         _restart = new("重启策略") { Value = "unless-stopped" };
-        foreach (string policy in new[] { "no", "on-failure", "always", "unless-stopped" })
+        foreach (var policy in new[] { "no", "on-failure", "always", "unless-stopped" })
         {
             _restart.Options.Add(new(policy, policy));
         }
@@ -153,16 +153,16 @@ public sealed partial class RunContainerForm : PanelForm
     {
         Dictionary<string, PortBindingRequest[]> bindings = [];
         Dictionary<string, object> exposed = [];
-        foreach (PairRow row in Ports.Filled)
+        foreach (var row in Ports.Filled)
         {
-            string containerPort = row.Value.Trim();
-            string key = containerPort.Contains('/', StringComparison.Ordinal) ? containerPort : $"{containerPort}/tcp";
+            var containerPort = row.Value.Trim();
+            var key = containerPort.Contains('/', StringComparison.Ordinal) ? containerPort : $"{containerPort}/tcp";
             bindings[key] = [new() { HostPort = row.Key.Trim() }];
             exposed[key] = new object();
         }
         string[] binds = [.. Volumes.Filled.Select(r => $"{r.Key.Trim()}:{r.Value.Trim()}")];
         string[] env = [.. Env.Filled.Select(r => $"{r.Key.Trim()}={r.Value.Trim()}")];
-        string command = _command.Value.Trim();
+        var command = _command.Value.Trim();
         return new()
         {
             Image = Image,
@@ -191,21 +191,21 @@ public sealed partial class RunContainerForm : PanelForm
             _name.Error = "只能包含字母、数字与 _ . -,且必须以字母或数字开头。";
             return false;
         }
-        foreach (PairRow row in Ports.Filled)
+        foreach (var row in Ports.Filled)
         {
-            if (!int.TryParse(row.Key.Trim(), out int host) || host is < 1 or > 65535)
+            if (!int.TryParse(row.Key.Trim(), out var host) || host is < 1 or > 65535)
             {
                 Ports.Error = $"宿主端口 {row.Key} 不是一个合法端口。";
                 return false;
             }
-            string container = row.Value.Trim().Split('/')[0];
-            if (!int.TryParse(container, out int inner) || inner is < 1 or > 65535)
+            var container = row.Value.Trim().Split('/')[0];
+            if (!int.TryParse(container, out var inner) || inner is < 1 or > 65535)
             {
                 Ports.Error = $"容器端口 {row.Value} 不是一个合法端口。";
                 return false;
             }
         }
-        foreach (PairRow row in Volumes.Filled)
+        foreach (var row in Volumes.Filled)
         {
             if (!row.Value.Trim().StartsWith('/'))
             {
@@ -246,15 +246,15 @@ public sealed partial class RunContainerForm : PanelForm
         {
             sb.Append(" --name ").Append(ContainerName);
         }
-        foreach (PairRow row in Ports.Filled)
+        foreach (var row in Ports.Filled)
         {
             sb.Append(" -p ").Append(row.Key.Trim()).Append(':').Append(row.Value.Trim());
         }
-        foreach (PairRow row in Volumes.Filled)
+        foreach (var row in Volumes.Filled)
         {
             sb.Append(" -v ").Append(row.Key.Trim()).Append(':').Append(row.Value.Trim());
         }
-        foreach (PairRow row in Env.Filled)
+        foreach (var row in Env.Filled)
         {
             sb.Append(" -e ").Append(row.Key.Trim()).Append('=').Append(row.Value.Trim());
         }
@@ -290,8 +290,8 @@ public sealed partial class RunContainerForm : PanelForm
     {
         List<string> parts = [];
         var current = new StringBuilder();
-        char quote = '\0';
-        foreach (char c in command)
+        var quote = '\0';
+        foreach (var c in command)
         {
             if (quote != '\0')
             {

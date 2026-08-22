@@ -23,8 +23,8 @@ public static class RunCommandBuilder
     public static string Build(ContainerInspect inspect, IReadOnlyCollection<string>? imageEnv)
     {
         var sb = new StringBuilder("docker run");
-        ContainerConfig? config = inspect.Config;
-        ContainerHostConfig? host = inspect.HostConfig;
+        var config = inspect.Config;
+        var host = inspect.HostConfig;
 
         // -d 是面板起容器的默认形态,也是绝大多数长期容器的形态。
         sb.Append(" -d");
@@ -37,35 +37,35 @@ public static class RunCommandBuilder
             sb.Append(" --name ").Append(Sh.Quote(name.TrimStart('/')));
         }
 
-        foreach ((string port, PortBinding[]? bindings) in Ordered(host?.PortBindings))
+        foreach ((var port, var bindings) in Ordered(host?.PortBindings))
         {
             // tcp 是 -p 的默认协议,写出来只是噪音;udp / sctp 必须留着。
-            string spec = port.EndsWith("/tcp", StringComparison.Ordinal) ? port[..^4] : port;
-            foreach (PortBinding binding in bindings ?? [])
+            var spec = port.EndsWith("/tcp", StringComparison.Ordinal) ? port[..^4] : port;
+            foreach (var binding in bindings ?? [])
             {
-                string hostPart = string.IsNullOrEmpty(binding.HostIp)
+                var hostPart = string.IsNullOrEmpty(binding.HostIp)
                     ? binding.HostPort ?? ""
                     : $"{binding.HostIp}:{binding.HostPort}";
                 sb.Append(" -p ").Append(Sh.Quote(hostPart.Length > 0 ? $"{hostPart}:{spec}" : spec));
             }
         }
 
-        foreach (string bind in host?.Binds ?? [])
+        foreach (var bind in host?.Binds ?? [])
         {
             sb.Append(" -v ").Append(Sh.Quote(bind));
         }
         // Binds 只覆盖 -v 起的那些;命名卷经 Mounts 出现,别漏掉。
-        foreach (DockerMount mount in inspect.Mounts ?? [])
+        foreach (var mount in inspect.Mounts ?? [])
         {
             if (mount.Type != "volume" || mount.Name is not { Length: > 0 } volume)
             {
                 continue;
             }
-            string spec = $"{volume}:{mount.Destination}{(mount.RW ? "" : ":ro")}";
+            var spec = $"{volume}:{mount.Destination}{(mount.RW ? "" : ":ro")}";
             sb.Append(" -v ").Append(Sh.Quote(spec));
         }
 
-        foreach (string entry in UserEnv(config?.Env, imageEnv))
+        foreach (var entry in UserEnv(config?.Env, imageEnv))
         {
             sb.Append(" -e ").Append(Sh.Quote(entry));
         }
@@ -102,7 +102,7 @@ public static class RunCommandBuilder
 
         // Cmd 只有在覆盖了镜像默认值时才该出现,但面板拿不到镜像的默认 Cmd 来比对,
         // 所以照原样附上 —— 多写一次等价的命令,好过漏掉一个真正被覆盖过的。
-        foreach (string arg in config?.Cmd ?? [])
+        foreach (var arg in config?.Cmd ?? [])
         {
             sb.Append(' ').Append(Sh.Quote(arg));
         }
@@ -128,7 +128,7 @@ public static class RunCommandBuilder
             yield break;
         }
         HashSet<string> fromImage = imageEnv is null ? [] : [.. imageEnv];
-        foreach (string entry in containerEnv)
+        foreach (var entry in containerEnv)
         {
             if (!fromImage.Contains(entry))
             {

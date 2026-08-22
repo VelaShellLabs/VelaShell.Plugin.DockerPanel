@@ -27,7 +27,7 @@ internal static class DockerRawHttp
     public static async Task<(int StatusCode, string ReasonPhrase, Stream Body)> PostAsync(
         Stream stream, string path, string? jsonBody, bool upgrade, CancellationToken cancellationToken)
     {
-        byte[] body = jsonBody is null ? [] : Encoding.UTF8.GetBytes(jsonBody);
+        var body = jsonBody is null ? [] : Encoding.UTF8.GetBytes(jsonBody);
         var request = new StringBuilder()
             .Append("POST ").Append(path).Append(" HTTP/1.1\r\n")
             .Append("Host: docker\r\n")
@@ -58,11 +58,11 @@ internal static class DockerRawHttp
     private static async Task<(int, string, Stream)> ReadResponseHeadAsync(Stream stream, CancellationToken cancellationToken)
     {
         var head = new List<byte>(512);
-        byte[] one = new byte[1];
-        int matched = 0;
+        var one = new byte[1];
+        var matched = 0;
         while (matched < HeaderTerminator.Length)
         {
-            int read = await stream.ReadAsync(one.AsMemory(0, 1), cancellationToken).ConfigureAwait(false);
+            var read = await stream.ReadAsync(one.AsMemory(0, 1), cancellationToken).ConfigureAwait(false);
             if (read <= 0)
             {
                 throw new DockerApiException(System.Net.HttpStatusCode.BadGateway,
@@ -71,11 +71,11 @@ internal static class DockerRawHttp
             head.Add(one[0]);
             matched = one[0] == HeaderTerminator[matched] ? matched + 1 : one[0] == HeaderTerminator[0] ? 1 : 0;
         }
-        string text = Encoding.ASCII.GetString([.. head]);
-        string statusLine = text[..text.IndexOf('\r')];
-        string[] parts = statusLine.Split(' ', 3);
-        int status = parts.Length > 1 && int.TryParse(parts[1], out int code) ? code : 0;
-        string reason = parts.Length > 2 ? parts[2] : "";
+        var text = Encoding.ASCII.GetString([.. head]);
+        var statusLine = text[..text.IndexOf('\r')];
+        var parts = statusLine.Split(' ', 3);
+        var status = parts.Length > 1 && int.TryParse(parts[1], out var code) ? code : 0;
+        var reason = parts.Length > 2 ? parts[2] : "";
         return (status, reason, stream);
     }
 }

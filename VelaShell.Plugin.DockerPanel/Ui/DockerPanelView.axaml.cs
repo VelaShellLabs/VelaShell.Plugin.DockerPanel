@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
@@ -136,7 +135,7 @@ public sealed partial class DockerPanelView : UserControl
             base.OnKeyDown(e);
             return;
         }
-        bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         if (ctrl && e.Key == Key.K)
         {
             viewModel.OpenPaletteCommand.Execute(null);

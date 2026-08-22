@@ -23,7 +23,7 @@ public class PaletteAndRunCommandTests
     [TestMethod]
     public void OpenCollectsFreshEntriesEveryTime()
     {
-        int collected = 0;
+        var collected = 0;
         var palette = new CommandPalette(() =>
         {
             collected++;
@@ -42,7 +42,7 @@ public class PaletteAndRunCommandTests
     [TestMethod]
     public void FirstItemOfEachGroupCarriesTheGroupHeader()
     {
-        CommandPalette palette = Palette(
+        var palette = Palette(
             Entry("动作", "重启 nginx-proxy"),
             Entry("动作", "重启 api-gateway"),
             Entry("容器", "redis-cache"));
@@ -58,7 +58,7 @@ public class PaletteAndRunCommandTests
     [TestMethod]
     public void TitleMatchesOutrankDetailMatches()
     {
-        CommandPalette palette = Palette(
+        var palette = Palette(
             Entry("镜像 / 卷", "pg-data", "卷 · 名字里没有那个词"),
             Entry("动作", "restart nginx", "运行中"),
             Entry("容器", "some-container", "restart policy: always"));
@@ -74,7 +74,7 @@ public class PaletteAndRunCommandTests
     [TestMethod]
     public void ArrowKeysWrapAround()
     {
-        CommandPalette palette = Palette(Entry("g", "a"), Entry("g", "b"), Entry("g", "c"));
+        var palette = Palette(Entry("g", "a"), Entry("g", "b"), Entry("g", "c"));
         palette.Open("h");
 
         Assert.IsTrue(palette.Items[0].Active);
@@ -88,7 +88,7 @@ public class PaletteAndRunCommandTests
     [TestMethod]
     public void TabCompletesWithoutTheEllipsis()
     {
-        CommandPalette palette = Palette(Entry("面板命令", "清理未使用的镜像…"));
+        var palette = Palette(Entry("面板命令", "清理未使用的镜像…"));
         palette.Open("h");
 
         palette.Complete();
@@ -100,7 +100,7 @@ public class PaletteAndRunCommandTests
     [TestMethod]
     public void EscapeClosesWithoutRunningAnything()
     {
-        bool ran = false;
+        var ran = false;
         var palette = new CommandPalette(() =>
         [
             new("g", "t", "", "Icon.info", RowTone.Idle, false, () =>
@@ -120,7 +120,7 @@ public class PaletteAndRunCommandTests
     [TestMethod]
     public void EmptyResultIsReportedSoTheViewCanSaySomething()
     {
-        CommandPalette palette = Palette(Entry("容器", "nginx"));
+        var palette = Palette(Entry("容器", "nginx"));
         palette.Open("h");
 
         palette.Query = "没有这个东西";
@@ -180,7 +180,7 @@ public class PaletteAndRunCommandTests
             Mounts = [new() { Type = "volume", Name = "nginx-cache", Destination = "/var/cache/nginx", RW = true }]
         };
 
-        string command = RunCommandBuilder.Build(inspect, null);
+        var command = RunCommandBuilder.Build(inspect, null);
 
         Assert.Contains("--name 'nginx-proxy'", command);
         // 端口取自 PortBindings 而不是运行态的 Ports:容器停了 Ports 就是空的,
@@ -223,7 +223,7 @@ public class PaletteAndRunCommandTests
             HostConfig = new() { RestartPolicy = new() { Name = "no" }, NetworkMode = "default" }
         };
 
-        string command = RunCommandBuilder.Build(inspect, null);
+        var command = RunCommandBuilder.Build(inspect, null);
 
         // --restart no 与 --network default 就是不写时的行为,写出来只是噪音。
         Assert.IsFalse(command.Contains("--restart", StringComparison.Ordinal));
@@ -236,6 +236,6 @@ public class PaletteAndRunCommandTests
     {
         // Engine 不保存原始命令行,只保存生效后的配置 —— 产物必须说明这一点,
         // 而不是假装它可以照抄执行。
-        Assert.Contains(RunCommandBuilder.Caveat, "近似");
+        Assert.Contains("近似", RunCommandBuilder.Caveat);
     }
 }

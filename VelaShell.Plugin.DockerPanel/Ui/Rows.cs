@@ -39,13 +39,16 @@ public abstract class RowBase(string id) : ObservableObject
     public string ShortId => Humanize.ShortId(Id);
 
     /// <summary>是否被勾选(批量操作的目标)。</summary>
-    public bool Selected { get; set
+    public bool Selected
+    {
+        get; set
         {
             if (SetField(ref field, value))
             {
                 SelectionChanged?.Invoke();
             }
-        } }
+        }
+    }
 
     /// <summary>
     /// 这一行就是右侧抽屉里正开着的那一个。
@@ -136,7 +139,7 @@ public sealed class ContainerRow(ContainerSummary summary) : RowBase(summary.Id)
     {
         get
         {
-            string status = Status;
+            var status = Status;
             if (status.Length == 0)
             {
                 return "—";
@@ -147,8 +150,8 @@ public sealed class ContainerRow(ContainerSummary summary) : RowBase(summary.Id)
                 return "退出 " + status[7..];
             }
             // 运行中的容器:括号里是健康状态,它已经由左侧色条与圆点表达了,这一列只要时长。
-            int paren = status.IndexOf(" (", StringComparison.Ordinal);
-            string text = paren > 0 ? status[..paren] : status;
+            var paren = status.IndexOf(" (", StringComparison.Ordinal);
+            var text = paren > 0 ? status[..paren] : status;
             return text.StartsWith("Up ", StringComparison.Ordinal) ? text[3..] : text;
         }
     }
@@ -160,13 +163,16 @@ public sealed class ContainerRow(ContainerSummary summary) : RowBase(summary.Id)
     public string MemText { get; private set => SetField(ref field, value); } = "—";
 
     /// <summary>CPU 百分比(决定 sparkline 是否转黄)。</summary>
-    public double CpuPercent { get; private set
+    public double CpuPercent
+    {
+        get; private set
         {
             if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(CpuHot));
             }
-        } }
+        }
+    }
 
     /// <summary>CPU 高到该提醒的程度。</summary>
     public bool CpuHot => CpuPercent >= 30;
@@ -261,10 +267,10 @@ public sealed class ImageRow(ImageSummary summary) : RowBase(summary.Id)
 
     private (string Repository, string Tag) SplitTag()
     {
-        string first = Summary.RepoTags is { Length: > 0 } tags ? tags[0] : "<none>:<none>";
-        int colon = first.LastIndexOf(':');
+        var first = Summary.RepoTags is { Length: > 0 } tags ? tags[0] : "<none>:<none>";
+        var colon = first.LastIndexOf(':');
         // 冒号可能属于端口(registry:5000/foo),所以只有它出现在最后一个斜杠之后才是标签分隔。
-        int slash = first.LastIndexOf('/');
+        var slash = first.LastIndexOf('/');
         return colon > slash && colon > 0 ? (first[..colon], first[(colon + 1)..]) : (first, "latest");
     }
 }

@@ -88,13 +88,16 @@ public sealed class ImageDetailViewModel : ObservableObject
     public string UsageText => _row.UsageText;
 
     /// <summary>当前页签。</summary>
-    public ImageDetailTab Tab { get; private set
+    public ImageDetailTab Tab
+    {
+        get; private set
         {
             if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsOverview), nameof(IsHistory), nameof(IsRaw));
             }
-        } } = ImageDetailTab.Overview;
+        }
+    } = ImageDetailTab.Overview;
 
     /// <summary>在概览页。</summary>
     public bool IsOverview => Tab == ImageDetailTab.Overview;
@@ -127,13 +130,16 @@ public sealed class ImageDetailViewModel : ObservableObject
     public ObservableCollection<LayerRow> Layers { get; } = [];
 
     /// <summary>层历史读不到时的说明。</summary>
-    public string HistoryNote { get; private set
+    public string HistoryNote
+    {
+        get; private set
         {
             if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(HasHistoryNote));
             }
-        } } = "";
+        }
+    } = "";
 
     /// <summary>有没有要说的。</summary>
     public bool HasHistoryNote => HistoryNote.Length > 0;
@@ -169,7 +175,7 @@ public sealed class ImageDetailViewModel : ObservableObject
         {
             return;
         }
-        ImageInspect inspect = await client.InspectImageAsync(ImageId, cancellationToken).ConfigureAwait(true);
+        var inspect = await client.InspectImageAsync(ImageId, cancellationToken).ConfigureAwait(true);
         BuildOverview(inspect);
     }
 
@@ -196,7 +202,7 @@ public sealed class ImageDetailViewModel : ObservableObject
             Basics.Add(new("与其它镜像共享", Humanize.Bytes(_row.Summary.SharedSize)));
         }
         Basics.Add(new("创建", Humanize.AgoFromIso(inspect.Created)));
-        string platform = string.Join("/", new[] { inspect.Os, inspect.Architecture, inspect.Variant }
+        var platform = string.Join("/", new[] { inspect.Os, inspect.Architecture, inspect.Variant }
             .Where(s => !string.IsNullOrWhiteSpace(s)));
         if (platform.Length > 0)
         {
@@ -213,16 +219,16 @@ public sealed class ImageDetailViewModel : ObservableObject
         }
         Basics.Add(new("使用情况", UsageText, _row.Summary.Containers > 0 ? RowTone.Ok : RowTone.Idle));
 
-        foreach (string tag in inspect.RepoTags ?? _row.Summary.RepoTags ?? [])
+        foreach (var tag in inspect.RepoTags ?? _row.Summary.RepoTags ?? [])
         {
             Tags.Add(tag);
         }
-        foreach (string digest in inspect.RepoDigests ?? _row.Summary.RepoDigests ?? [])
+        foreach (var digest in inspect.RepoDigests ?? _row.Summary.RepoDigests ?? [])
         {
             Digests.Add(digest);
         }
 
-        ContainerConfig? config = inspect.Config;
+        var config = inspect.Config;
         if (config?.Entrypoint is { Length: > 0 } entrypoint)
         {
             Runtime.Add(new("Entrypoint", string.Join(" ", entrypoint)));
@@ -244,14 +250,14 @@ public sealed class ImageDetailViewModel : ObservableObject
             Runtime.Add(new("暴露端口", string.Join(", ", exposed.Keys.OrderBy(k => k, StringComparer.Ordinal))));
         }
 
-        foreach (string entry in config?.Env ?? [])
+        foreach (var entry in config?.Env ?? [])
         {
-            int split = entry.IndexOf('=', StringComparison.Ordinal);
+            var split = entry.IndexOf('=', StringComparison.Ordinal);
             Environment.Add(split > 0
                 ? new(entry[..split], entry[(split + 1)..])
                 : new(entry, ""));
         }
-        foreach ((string key, string value) in config?.Labels ?? [])
+        foreach ((var key, var value) in config?.Labels ?? [])
         {
             Labels.Add(new(key, value));
         }
@@ -280,14 +286,14 @@ public sealed class ImageDetailViewModel : ObservableObject
         }
         try
         {
-            ImageHistoryEntry[] history = await client.ImageHistoryAsync(ImageId, cancellationToken)
+            var history = await client.ImageHistoryAsync(ImageId, cancellationToken)
                                                      .ConfigureAwait(true);
             Layers.Clear();
-            long largest = history.Length > 0 ? history.Max(h => h.Size) : 0;
+            var largest = history.Length > 0 ? history.Max(h => h.Size) : 0;
             // daemon 返回的是从新到旧;Dockerfile 是从旧到新读的,按后者排更容易对上。
-            foreach (ImageHistoryEntry entry in history.Reverse())
+            foreach (var entry in history.Reverse())
             {
-                double weight = largest > 0 ? Math.Clamp((double)entry.Size / largest, 0, 1) : 0;
+                var weight = largest > 0 ? Math.Clamp((double)entry.Size / largest, 0, 1) : 0;
                 Layers.Add(new(
                     CleanInstruction(entry.CreatedBy),
                     entry.Size > 0 ? Humanize.Bytes(entry.Size) : "—",
@@ -332,7 +338,7 @@ public sealed class ImageDetailViewModel : ObservableObject
     /// </summary>
     public static string CleanInstruction(string? createdBy)
     {
-        string text = (createdBy ?? "").Trim();
+        var text = (createdBy ?? "").Trim();
         if (text.Length == 0)
         {
             return "(无记录)";

@@ -1,7 +1,7 @@
+using Avalonia.Threading;
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.RegularExpressions;
-using Avalonia.Threading;
 using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
@@ -183,7 +183,7 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
             {
                 return "没有选中任何来源";
             }
-            string elapsed = _startedAt == default ? "" : $" · 已运行 {Humanize.Duration(DateTimeOffset.UtcNow - _startedAt)}";
+            var elapsed = _startedAt == default ? "" : $" · 已运行 {Humanize.Duration(DateTimeOffset.UtcNow - _startedAt)}";
             return $"docker logs{(Follow ? " -f" : "")} · {_sources.Count} 条流{elapsed}";
         }
     }
@@ -343,7 +343,7 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     public RelayCommand CopyCommand => field ??= new(_ =>
     {
         var sb = new StringBuilder();
-        foreach (LogLineItem line in Lines)
+        foreach (var line in Lines)
         {
             if (line.Timestamp.Length > 0)
             {
@@ -369,10 +369,10 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     /// </summary>
     private async Task DownloadAsync()
     {
-        string suggested = _sources.Count == 1 && _sources[0].Name.Length > 0
+        var suggested = _sources.Count == 1 && _sources[0].Name.Length > 0
             ? $"{_sources[0].Name}.log"
             : $"docker-logs-{_sources.Count}.log";
-        Avalonia.Platform.Storage.IStorageFile? target = await FilePicker
+        var target = await FilePicker
             .PickSaveAsync("保存日志", suggested, "log").ConfigureAwait(true);
         if (target is null)
         {
@@ -380,9 +380,9 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
         }
         try
         {
-            await using Stream output = await target.OpenWriteAsync().ConfigureAwait(true);
+            await using var output = await target.OpenWriteAsync().ConfigureAwait(true);
             await using var writer = new StreamWriter(output, Encoding.UTF8);
-            foreach (LogLineItem line in Lines)
+            foreach (var line in Lines)
             {
                 if (line.Timestamp.Length > 0)
                 {
@@ -439,23 +439,23 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
             return;
         }
         _cts = CancellationTokenSource.CreateLinkedTokenSource(shell.Lifetime);
-        CancellationToken token = _cts.Token;
+        var token = _cts.Token;
         _startedAt = DateTimeOffset.UtcNow;
         StartFlushTimer();
         StatusText = Follow ? "跟随中 · 新行即时到达" : "已加载历史";
         OnPropertyChanged(nameof(StreamSummary));
-        bool timestamps = Timestamps;
-        string tail = Tail;
-        int live = _sources.Count;
+        var timestamps = Timestamps;
+        var tail = Tail;
+        var live = _sources.Count;
 
         // 每个来源一条独立的流,全部写进同一个待刷队列 ——
         // 合并的顺序就是**到达顺序**,不按时间戳重排:重排要缓冲、要等,
         // 而"跟随"这个功能的全部意义就是不等。
-        for (int i = 0; i < _sources.Count; i++)
+        for (var i = 0; i < _sources.Count; i++)
         {
-            LogSource source = _sources[i];
-            int index = i;
-            bool tty = _sources.Count == 1 ? ttyAccessor() : source.Tty;
+            var source = _sources[i];
+            var index = i;
+            var tty = _sources.Count == 1 ? ttyAccessor() : source.Tty;
             _ = Task.Run(async () =>
             {
                 try
@@ -524,7 +524,7 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
             batch = [.. _pending];
             _pending.Clear();
         }
-        foreach (LogLineItem item in batch)
+        foreach (var item in batch)
         {
             if (ErrorsOnly && !item.IsError)
             {
@@ -565,7 +565,7 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
 
     private void ApplyFilter()
     {
-        foreach (LogLineItem line in Lines)
+        foreach (var line in Lines)
         {
             line.Matched = _filter?.IsMatch(line.Text) ?? false;
         }

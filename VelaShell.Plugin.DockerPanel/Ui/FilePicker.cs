@@ -32,7 +32,7 @@ public static class FilePicker
         {
             return null;
         }
-        IReadOnlyList<IStorageFile> picked = await storage.OpenFilePickerAsync(new()
+        var picked = await storage.OpenFilePickerAsync(new()
         {
             Title = title,
             AllowMultiple = false

@@ -99,7 +99,7 @@ public class ModelTests
     [TestMethod]
     public void NetworkSummary_KnowsThePredefinedNetworksCannotBeDeleted()
     {
-        foreach (string name in new[] { "bridge", "host", "none" })
+        foreach (var name in new[] { "bridge", "host", "none" })
         {
             Assert.IsTrue(new NetworkSummary { Name = name }.IsPredefined, name);
         }
@@ -121,7 +121,7 @@ public class ModelTests
     [TestMethod]
     public void Ports_DeduplicatesTheIPv4AndIPv6BindingsOfOnePort()
     {
-        string text = Humanize.Ports([
+        var text = Humanize.Ports([
             new() { IP = "0.0.0.0", PrivatePort = 80, PublicPort = 8080, Type = "tcp" },
             new() { IP = "::", PrivatePort = 80, PublicPort = 8080, Type = "tcp" }
         ]);
@@ -133,7 +133,7 @@ public class ModelTests
     [TestMethod]
     public void Ports_ShowsUnpublishedPortsSeparately()
     {
-        string text = Humanize.Ports([new() { PrivatePort = 8000, PublicPort = 0, Type = "tcp" }]);
+        var text = Humanize.Ports([new() { PrivatePort = 8000, PublicPort = 0, Type = "tcp" }]);
         Assert.AreEqual("8000/tcp", text);
     }
 
@@ -184,7 +184,7 @@ public class ModelTests
     [TestMethod]
     public void DockerEndpoint_LocalPicksThePlatformDefaultSocket()
     {
-        DockerEndpoint local = DockerEndpoint.Local("本机 Docker");
+        var local = DockerEndpoint.Local("本机 Docker");
 
         Assert.AreEqual(DockerEndpointKind.Local, local.Kind);
         Assert.AreEqual(OperatingSystem.IsWindows() ? DockerEndpoint.DefaultWindowsPipe : DockerEndpoint.DefaultUnixSocket,
@@ -194,7 +194,7 @@ public class ModelTests
     [TestMethod]
     public void DockerEndpoint_RemoteDefaultsToTheStandardSocket()
     {
-        DockerEndpoint remote = DockerEndpoint.Remote("session-1", "prod-sg-01", "deploy@10.24.8.11");
+        var remote = DockerEndpoint.Remote("session-1", "prod-sg-01", "deploy@10.24.8.11");
 
         Assert.AreEqual(DockerEndpoint.DefaultUnixSocket, remote.SocketPath);
     }

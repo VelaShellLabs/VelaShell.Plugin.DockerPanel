@@ -1,6 +1,6 @@
+using Avalonia.Threading;
 using System.Collections.ObjectModel;
 using System.Net;
-using Avalonia.Threading;
 using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
@@ -111,7 +111,7 @@ public sealed class Feedback : ObservableObject
     public Toast Notify(FeedbackKind kind, string title, string detail, params ToastAction[] actions)
     {
         var toast = new Toast(kind, title, detail);
-        foreach (ToastAction action in actions)
+        foreach (var action in actions)
         {
             toast.Actions.Add(action);
         }
@@ -147,7 +147,7 @@ public sealed class Feedback : ObservableObject
     {
         if (result.AllSucceeded)
         {
-            string text = $"已{verb} {result.SucceededCount} 个";
+            var text = $"已{verb} {result.SucceededCount} 个";
             if (inView)
             {
                 Status(FeedbackKind.Success, text);
@@ -158,8 +158,8 @@ public sealed class Feedback : ObservableObject
             }
             return;
         }
-        string summary = $"已{verb} {result.SucceededCount} 个,{result.FailedCount} 个失败";
-        string detail = string.Join('\n', result.Failures.Take(3).Select(f => $"{f.Target}:{f.Failure}"));
+        var summary = $"已{verb} {result.SucceededCount} 个,{result.FailedCount} 个失败";
+        var detail = string.Join('\n', result.Failures.Take(3).Select(f => $"{f.Target}:{f.Failure}"));
         if (result.FailedCount > 3)
         {
             detail += $"\n…还有 {result.FailedCount - 3} 个";
@@ -192,7 +192,7 @@ public sealed class Feedback : ObservableObject
             Status(FeedbackKind.Info, $"{what} 已取消");
             return;
         }
-        string detail = ex switch
+        var detail = ex switch
         {
             DockerApiException api => Explain(api) is { Length: > 0 } why ? $"{why}\n{api.Message}" : api.Message,
             DockerUnreachableException unreachable => unreachable.Message,

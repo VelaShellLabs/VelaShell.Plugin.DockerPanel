@@ -18,7 +18,7 @@ public sealed class WeightedStackPanel : Panel
     protected override Size MeasureOverride(Size availableSize)
     {
         double height = 0;
-        foreach (Control child in Children)
+        foreach (var child in Children)
         {
             child.Measure(availableSize);
             height = Math.Max(height, child.DesiredSize.Height);
@@ -30,7 +30,7 @@ public sealed class WeightedStackPanel : Panel
     protected override Size ArrangeOverride(Size finalSize)
     {
         double total = 0;
-        foreach (Control child in Children)
+        foreach (var child in Children)
         {
             total += Weight(child);
         }
@@ -39,11 +39,11 @@ public sealed class WeightedStackPanel : Panel
             return finalSize;
         }
         double x = 0;
-        for (int i = 0; i < Children.Count; i++)
+        for (var i = 0; i < Children.Count; i++)
         {
-            Control child = Children[i];
+            var child = Children[i];
             // 最后一段吃掉舍入误差,免得右边留一条一像素的缝。
-            double width = i == Children.Count - 1
+            var width = i == Children.Count - 1
                 ? Math.Max(0, finalSize.Width - x)
                 : finalSize.Width * (Weight(child) / total);
             child.Arrange(new(x, 0, width, finalSize.Height));
@@ -54,6 +54,6 @@ public sealed class WeightedStackPanel : Panel
 
     private static double Weight(Control child) =>
         child.Tag is double weight && weight > 0 ? weight
-        : child.Tag is string text && double.TryParse(text, out double parsed) && parsed > 0 ? parsed
+        : child.Tag is string text && double.TryParse(text, out var parsed) && parsed > 0 ? parsed
         : 0;
 }

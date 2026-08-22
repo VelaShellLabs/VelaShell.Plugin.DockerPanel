@@ -122,7 +122,7 @@ public sealed class LocalComposeHostSmokeTests
         }
         Assert.AreEqual(0, result.ExitCode, result.Error);
         // compose v2 的版本号形如 2.29.7 / 5.4.0 —— 只断言"有内容且以数字打头"。
-        string version = result.Output.Trim();
+        var version = result.Output.Trim();
         Assert.IsTrue(version.Length > 0 && char.IsAsciiDigit(version[0]), $"版本号不像话:{version}");
     }
 
@@ -143,7 +143,7 @@ public sealed class LocalComposeHostSmokeTests
         }
         Assert.AreEqual(0, exit, string.Join('\n', lines.Select(l => l.Line)));
         // --format json 至少给一个 JSON 数组,哪怕是空的。
-        string joined = string.Concat(lines.Where(l => l.Stream == ExecStream.StandardOutput).Select(l => l.Line));
+        var joined = string.Concat(lines.Where(l => l.Stream == ExecStream.StandardOutput).Select(l => l.Line));
         Assert.StartsWith("[", joined.TrimStart());
     }
 

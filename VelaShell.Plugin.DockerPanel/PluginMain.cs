@@ -1,6 +1,5 @@
 using VelaShell.Plugin.DockerPanel.Ui;
 using VelaShell.PluginSdk;
-using VelaShell.PluginSdk.Commands;
 using VelaShell.PluginSdk.Ui;
 
 namespace VelaShell.Plugin.DockerPanel;
