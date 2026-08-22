@@ -84,11 +84,8 @@ public static class Humanize
     /// <summary>把 ISO8601 文本解析成本地时间文本;解析不了就原样返回。</summary>
     public static string LocalTime(string? iso)
     {
-        if (string.IsNullOrWhiteSpace(iso))
-        {
-            return "—";
-        }
-        return DateTimeOffset.TryParse(iso, null, DateTimeStyles.RoundtripKind, out DateTimeOffset parsed)
+        return string.IsNullOrWhiteSpace(iso) ? "—"
+            : DateTimeOffset.TryParse(iso, null, DateTimeStyles.RoundtripKind, out DateTimeOffset parsed)
             ? parsed.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
             : iso;
     }

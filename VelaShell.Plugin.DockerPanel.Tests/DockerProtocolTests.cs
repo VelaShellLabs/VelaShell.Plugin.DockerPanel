@@ -35,7 +35,7 @@ public class DockerProtocolTests
         await new DockerFrameDecoder(tty: false, timestamps: false)
             .ReadAsync(new MemoryStream(data), lines.Add, CancellationToken.None);
 
-        Assert.AreEqual(2, lines.Count);
+        Assert.HasCount(2, lines);
         Assert.AreEqual(DockerStreamKind.StdOut, lines[0].Kind);
         Assert.AreEqual("hello", lines[0].Text);
         // 标准错误单独一条流:合并进 stdout 会让"命令失败了"和"命令没有输出"长得一模一样。
@@ -53,7 +53,7 @@ public class DockerProtocolTests
         await new DockerFrameDecoder(tty: false, timestamps: false)
             .ReadAsync(new MemoryStream(data), lines.Add, CancellationToken.None);
 
-        CollectionAssert.AreEqual(new[] { "a", "b", "c" }, lines.Select(l => l.Text).ToArray());
+        Assert.AreSequenceEqual(["a", "b", "c"], [.. lines.Select(l => l.Text)]);
     }
 
     [TestMethod]
@@ -65,7 +65,7 @@ public class DockerProtocolTests
             .ReadAsync(new MemoryStream(data), lines.Add, CancellationToken.None);
 
         // 半行开头的日志比少几行更难读 —— 跨帧的半行必须攒起来。
-        Assert.AreEqual(1, lines.Count);
+        Assert.HasCount(1, lines);
         Assert.AreEqual("partial", lines[0].Text);
     }
 
@@ -77,7 +77,7 @@ public class DockerProtocolTests
         await new DockerFrameDecoder(tty: false, timestamps: false)
             .ReadAsync(new MemoryStream(data), lines.Add, CancellationToken.None);
 
-        Assert.AreEqual(1, lines.Count);
+        Assert.HasCount(1, lines);
         Assert.AreEqual("no newline at eof", lines[0].Text);
     }
 
@@ -87,16 +87,16 @@ public class DockerProtocolTests
         // "容" 是三个字节;把它劈在两帧之间,天真的实现会吐出两个 U+FFFD。
         byte[] full = Encoding.UTF8.GetBytes("容器\n");
         byte[] first = Frame(DockerStreamKind.StdOut, "");
-        byte[] head = BuildFrame(DockerStreamKind.StdOut, full[..2]);
-        byte[] tail = BuildFrame(DockerStreamKind.StdOut, full[2..]);
+        byte[] head = BuildFrame(DockerStreamKind.StdOut, full.AsSpan()[..2]);
+        byte[] tail = BuildFrame(DockerStreamKind.StdOut, full.AsSpan()[2..]);
         List<DockerLogLine> lines = [];
         await new DockerFrameDecoder(tty: false, timestamps: false)
             .ReadAsync(new MemoryStream([.. head, .. tail]), lines.Add, CancellationToken.None);
 
-        Assert.AreEqual(1, lines.Count);
+        Assert.HasCount(1, lines);
         Assert.AreEqual("容器", lines[0].Text);
         Assert.IsFalse(lines[0].Text.Contains('�'), "UTF-8 序列被跨帧劈开时不应产生替换字符。");
-        Assert.AreEqual(8, first.Length);
+        Assert.HasCount(8, first);
     }
 
     private static byte[] BuildFrame(DockerStreamKind kind, ReadOnlySpan<byte> payload)
@@ -117,15 +117,14 @@ public class DockerProtocolTests
         await new DockerFrameDecoder(tty: true, timestamps: false)
             .ReadAsync(new MemoryStream(data), lines.Add, CancellationToken.None);
 
-        Assert.AreEqual(1, lines.Count);
+        Assert.HasCount(1, lines);
         Assert.AreEqual("raw tty line", lines[0].Text);
     }
 
     [TestMethod]
     public void TrySplitTimestamp_PullsTheRfc3339PrefixOutOfTheLine()
     {
-        Assert.IsTrue(DockerFrameDecoder.TrySplitTimestamp(
-            "2026-08-21T09:41:22.118000000Z hello world", out DateTimeOffset stamp, out string rest));
+        Assert.IsTrue(DockerFrameDecoder.TrySplitTimestamp("2026-08-21T09:41:22.118000000Z hello world", out DateTimeOffset stamp, out string rest));
         Assert.AreEqual("hello world", rest);
         Assert.AreEqual(2026, stamp.Year);
     }
@@ -150,7 +149,7 @@ public class DockerProtocolTests
 
         Assert.IsNotNull(entry);
         Assert.AreEqual("default.conf", entry.Value.Name);
-        CollectionAssert.AreEqual(content, entry.Value.Content);
+        Assert.AreSequenceEqual(content, entry.Value.Content);
     }
 
     [TestMethod]
@@ -158,7 +157,7 @@ public class DockerProtocolTests
     {
         byte[] archive = TarUtil.CreateSingleFile("a.txt", "x"u8);
         // 512 头 + 512 补齐的内容 + 两个全零块。长度不对的话 daemon 会说归档被截断。
-        Assert.AreEqual(512 * 4, archive.Length);
+        Assert.HasCount(512 * 4, archive);
         Assert.IsTrue(archive[^1024..].All(b => b == 0));
     }
 
@@ -177,7 +176,7 @@ public class DockerProtocolTests
         {
             if (archive[i] is >= (byte)'0' and <= (byte)'7')
             {
-                stored = stored * 8 + (uint)(archive[i] - '0');
+                stored = (stored * 8) + (uint)(archive[i] - '0');
             }
         }
         Assert.AreEqual(expected, stored);
@@ -207,7 +206,7 @@ public class DockerProtocolTests
         long written = await TarUtil.ExtractFirstFileAsync(new MemoryStream(archive), output, CancellationToken.None);
 
         Assert.AreEqual(payload.Length, written);
-        CollectionAssert.AreEqual(payload, output.ToArray());
+        Assert.AreSequenceEqual(payload, output.ToArray());
     }
 
     [TestMethod]
@@ -244,9 +243,9 @@ public class DockerProtocolTests
     {
         string? filters = DockerClient.Filters(("label", "a=1"), ("label", "b=2"));
         Assert.IsNotNull(filters);
-        StringAssert.Contains(filters, "\"label\"");
-        StringAssert.Contains(filters, "a=1");
-        StringAssert.Contains(filters, "b=2");
+        Assert.Contains("\"label\"", filters);
+        Assert.Contains("a=1", filters);
+        Assert.Contains("b=2", filters);
     }
 
     // ── ls 解析 ───────────────────────────────────────────────

@@ -115,7 +115,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
                 _ = GoToAsync(page);
             }
         });
-        RefreshCommand = new RelayCommand(_ => RefreshActiveAsync(force: true), _ => IsReady);
+        RefreshCommand = new RelayCommand(_ => RefreshActiveAsync(), _ => IsReady);
         ReconnectCommand = new RelayCommand(_ => ConnectAsync(SelectedEndpoint));
         SelectEndpointCommand = new RelayCommand(p =>
         {
@@ -418,7 +418,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// 会让用户对着一个已经不存在的容器按回车。
     /// </para>
     /// </summary>
-    private IReadOnlyList<PaletteEntry> CollectPaletteEntries()
+    private List<PaletteEntry> CollectPaletteEntries()
     {
         List<PaletteEntry> entries = [];
         if (!IsReady)
@@ -638,7 +638,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             // 容器列表 + 统计采样在后台先跑起来:总览页那几张卡靠它喂,
             // 而用户可能整段时间都不会点开容器页。
             _ = Containers.PrimeAsync(_lifetime.Token);
-            await RefreshActiveAsync(force: true).ConfigureAwait(true);
+            await RefreshActiveAsync().ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -821,7 +821,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     }
 
     /// <summary>刷新当前页。</summary>
-    public async Task RefreshActiveAsync(bool force = false)
+    public async Task RefreshActiveAsync()
     {
         if (!IsReady || ActivePage is not { } page)
         {

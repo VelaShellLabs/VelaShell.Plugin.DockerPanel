@@ -98,7 +98,7 @@ public class DotEnvImportTests
 
         field.ImportDotEnv("A=first\nA=second");
 
-        Assert.AreEqual(1, field.Rows.Count);
+        Assert.HasCount(1, field.Rows);
         Assert.AreEqual("second", field.Rows[0].Value);
     }
 
@@ -111,7 +111,7 @@ public class DotEnvImportTests
         field.ImportDotEnv("A=1");
 
         // 导完之后留着一个空占位行只会让"等效命令"多一个空的 -e。
-        Assert.AreEqual(1, field.Rows.Count);
+        Assert.HasCount(1, field.Rows);
         Assert.AreEqual("A", field.Rows[0].Key);
     }
 }

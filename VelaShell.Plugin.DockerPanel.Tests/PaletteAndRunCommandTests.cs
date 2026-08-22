@@ -127,7 +127,7 @@ public class PaletteAndRunCommandTests
 
         // 一片空白不如一句"没有匹配的命令"。
         Assert.IsTrue(palette.IsEmpty);
-        Assert.AreEqual(0, palette.Items.Count);
+        Assert.HasCount(0, palette.Items);
     }
 
     // ── docker run 反推 ───────────────────────────────────────────
@@ -141,7 +141,7 @@ public class PaletteAndRunCommandTests
         string[] user = [.. RunCommandBuilder.UserEnv(container, image)];
 
         // 不减的话命令会拖着镜像里那十几条 PATH / LANG —— 它们不是用户写的。
-        CollectionAssert.AreEqual(new[] { "APP_MODE=prod" }, user);
+        Assert.AreSequenceEqual(["APP_MODE=prod"], user);
     }
 
     [TestMethod]
@@ -150,7 +150,7 @@ public class PaletteAndRunCommandTests
         string[] container = ["A=1", "B=2"];
 
         // 镜像被删了但容器还在跑很常见 —— 那就不减,多几条环境变量而已。
-        CollectionAssert.AreEqual(container, RunCommandBuilder.UserEnv(container, null).ToArray());
+        Assert.AreSequenceEqual(container, [.. RunCommandBuilder.UserEnv(container, null)]);
     }
 
     [TestMethod]
@@ -182,20 +182,20 @@ public class PaletteAndRunCommandTests
 
         string command = RunCommandBuilder.Build(inspect, null);
 
-        StringAssert.Contains(command, "--name 'nginx-proxy'");
+        Assert.Contains("--name 'nginx-proxy'", command);
         // 端口取自 PortBindings 而不是运行态的 Ports:容器停了 Ports 就是空的,
         // 而"这个停掉的容器当初怎么起的"恰恰是最需要这条命令的时候。
         // /tcp 是 -p 的默认协议,不写出来。
-        StringAssert.Contains(command, "-p '8080:80'");
-        StringAssert.Contains(command, "-p '127.0.0.1:8443:443'");
-        StringAssert.Contains(command, "-v '/srv/nginx/conf.d:/etc/nginx/conf.d:ro'");
+        Assert.Contains("-p '8080:80'", command);
+        Assert.Contains("-p '127.0.0.1:8443:443'", command);
+        Assert.Contains("-v '/srv/nginx/conf.d:/etc/nginx/conf.d:ro'", command);
         // 命名卷走 Mounts,Binds 里没有 —— 漏掉它重建出来的容器会丢数据。
-        StringAssert.Contains(command, "-v 'nginx-cache:/var/cache/nginx'");
-        StringAssert.Contains(command, "-e 'APP_MODE=prod'");
-        StringAssert.Contains(command, "--restart unless-stopped");
-        StringAssert.Contains(command, "--network 'web-stack_default'");
-        StringAssert.Contains(command, "-w '/etc/nginx'");
-        StringAssert.EndsWith(command, "'nginx:1.27-alpine'");
+        Assert.Contains("-v 'nginx-cache:/var/cache/nginx'", command);
+        Assert.Contains("-e 'APP_MODE=prod'", command);
+        Assert.Contains("--restart unless-stopped", command);
+        Assert.Contains("--network 'web-stack_default'", command);
+        Assert.Contains("-w '/etc/nginx'", command);
+        Assert.EndsWith("'nginx:1.27-alpine'", command);
     }
 
     [TestMethod]
@@ -211,7 +211,7 @@ public class PaletteAndRunCommandTests
         };
 
         // udp 不写就变成了 tcp,那是一个跑不起来的 DNS。
-        StringAssert.Contains(RunCommandBuilder.Build(inspect, null), "-p '53:53/udp'");
+        Assert.Contains("-p '53:53/udp'", RunCommandBuilder.Build(inspect, null));
     }
 
     [TestMethod]
@@ -236,6 +236,6 @@ public class PaletteAndRunCommandTests
     {
         // Engine 不保存原始命令行,只保存生效后的配置 —— 产物必须说明这一点,
         // 而不是假装它可以照抄执行。
-        StringAssert.Contains(RunCommandBuilder.Caveat, "近似");
+        Assert.Contains(RunCommandBuilder.Caveat, "近似");
     }
 }

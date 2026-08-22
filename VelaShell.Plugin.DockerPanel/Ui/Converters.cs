@@ -185,18 +185,14 @@ public static class Converters
     /// </summary>
     internal static object? Lookup(string key)
     {
-        if (Application.Current is not { } app)
-        {
-            return null;
-        }
-        return app.TryFindResource(key, app.ActualThemeVariant, out object? value) ? value : null;
+        return Application.Current is not { } app ? null : app.TryFindResource(key, app.ActualThemeVariant, out object? value) ? value : null;
     }
 
     private sealed class ToneBrushConverter : IValueConverter
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            bool dim = parameter as string == "dim";
+            bool dim = (parameter as string) == "dim";
             string key = value switch
             {
                 RowTone.Ok => dim ? "VelaShellGreenDim" : "VelaStatusConnected",
@@ -285,7 +281,7 @@ public static class Converters
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            bool dim = parameter as string == "dim";
+            bool dim = (parameter as string) == "dim";
             string key = value switch
             {
                 FeedbackKind.Success => dim ? "VelaShellGreenDim" : "VelaStatusConnected",
@@ -316,11 +312,7 @@ public sealed class IconLookupConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is not string key || key.Length == 0)
-        {
-            return null;
-        }
-        return Converters.Lookup(key);
+        return value is not string key || key.Length == 0 ? null : Converters.Lookup(key);
     }
 
     /// <inheritdoc />
@@ -384,11 +376,7 @@ public sealed class FollowBackgroundConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is not true)
-        {
-            return Brushes.Transparent;
-        }
-        return Converters.Lookup("VelaShellGreenDim") as IBrush ?? Brushes.Transparent;
+        return value is not true ? Brushes.Transparent : (object)(Converters.Lookup("VelaShellGreenDim") as IBrush ?? Brushes.Transparent);
     }
 
     /// <inheritdoc />
@@ -423,11 +411,7 @@ public sealed class MatchBackgroundConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is not true)
-        {
-            return Brushes.Transparent;
-        }
-        return Converters.Lookup("VelaShellYellowDim") as IBrush ?? Brushes.Transparent;
+        return value is not true ? Brushes.Transparent : (object)(Converters.Lookup("VelaShellYellowDim") as IBrush ?? Brushes.Transparent);
     }
 
     /// <inheritdoc />
@@ -537,11 +521,7 @@ public sealed class ResourceBrushConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is not string key)
-        {
-            return Brushes.Transparent;
-        }
-        return Converters.Lookup(key) as IBrush ?? Brushes.Transparent;
+        return value is not string key ? Brushes.Transparent : (object)(Converters.Lookup(key) as IBrush ?? Brushes.Transparent);
     }
 
     /// <inheritdoc />

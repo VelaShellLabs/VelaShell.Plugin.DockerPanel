@@ -25,7 +25,7 @@ public sealed class ComposeHostTests
         var exec = new RecordingExec();
         var cli = new ComposeCli(new RemoteComposeHost(exec, RemoteFs, "session-1"));
 
-        await cli.ConfigAsync(Project("shop", "/srv/app"), TestContext.CancellationTokenSource.Token);
+        await cli.ConfigAsync(Project("shop", "/srv/app"), TestContext.CancellationToken);
 
         // 开头的 docker 是远端这条通道自己补的 —— 本机那条由进程名承担,argv 里没有它。
         Assert.AreEqual("docker compose -p shop -f /srv/app/compose.yaml --project-directory /srv/app config",
@@ -38,11 +38,11 @@ public sealed class ComposeHostTests
         var exec = new RecordingExec();
         var cli = new ComposeCli(new RemoteComposeHost(exec, RemoteFs, "session-1"));
 
-        await cli.ConfigAsync(Project("my shop", "/srv/my app"), TestContext.CancellationTokenSource.Token);
+        await cli.ConfigAsync(Project("my shop", "/srv/my app"), TestContext.CancellationToken);
 
-        StringAssert.Contains(exec.LastCommand, "-p 'my shop'");
-        StringAssert.Contains(exec.LastCommand, "-f '/srv/my app/compose.yaml'");
-        StringAssert.Contains(exec.LastCommand, "--project-directory '/srv/my app'");
+        Assert.Contains("-p 'my shop'", exec.LastCommand);
+        Assert.Contains("-f '/srv/my app/compose.yaml'", exec.LastCommand);
+        Assert.Contains("--project-directory '/srv/my app'", exec.LastCommand);
     }
 
     [TestMethod]
@@ -51,7 +51,7 @@ public sealed class ComposeHostTests
         var exec = new RecordingExec();
         var cli = new ComposeCli(new RemoteComposeHost(exec, RemoteFs, "session-1"));
 
-        Assert.IsTrue(await cli.IsAvailableAsync(TestContext.CancellationTokenSource.Token));
+        Assert.IsTrue(await cli.IsAvailableAsync(TestContext.CancellationToken));
         Assert.AreEqual("docker compose version --short", exec.LastCommand);
     }
 
@@ -101,7 +101,7 @@ public sealed class ComposeHostTests
 [TestClass]
 public sealed class LocalComposeHostSmokeTests
 {
-    private static readonly IComposeHost Host = new LocalComposeHost();
+    private static readonly LocalComposeHost Host = new();
 
     /// <summary>测试上下文(取消令牌用)。</summary>
     public TestContext TestContext { get; set; } = null!;
@@ -113,7 +113,7 @@ public sealed class LocalComposeHostSmokeTests
         try
         {
             result = await Host.RunAsync(["compose", "version", "--short"], TimeSpan.FromSeconds(30),
-                TestContext.CancellationTokenSource.Token);
+                TestContext.CancellationToken);
         }
         catch (Exception ex)
         {
@@ -134,7 +134,7 @@ public sealed class LocalComposeHostSmokeTests
         try
         {
             exit = await Host.StreamAsync(["compose", "ls", "--all", "--format", "json"],
-                new CollectingProgress(lines), TestContext.CancellationTokenSource.Token);
+                new CollectingProgress(lines), TestContext.CancellationToken);
         }
         catch (Exception ex)
         {
@@ -144,7 +144,7 @@ public sealed class LocalComposeHostSmokeTests
         Assert.AreEqual(0, exit, string.Join('\n', lines.Select(l => l.Line)));
         // --format json 至少给一个 JSON 数组,哪怕是空的。
         string joined = string.Concat(lines.Where(l => l.Stream == ExecStream.StandardOutput).Select(l => l.Line));
-        StringAssert.StartsWith(joined.TrimStart(), "[");
+        Assert.StartsWith("[", joined.TrimStart());
     }
 
     private sealed class CollectingProgress(List<ExecOutput> sink) : IProgress<ExecOutput>

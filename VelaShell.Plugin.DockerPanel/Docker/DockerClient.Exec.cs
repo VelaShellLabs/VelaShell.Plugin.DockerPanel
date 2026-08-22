@@ -109,12 +109,7 @@ public sealed partial class DockerClient
             (int status, string reason, Stream hijacked) = await DockerRawHttp
                 .PostAsync(stream, $"/exec/{Uri.EscapeDataString(created.Id)}/start", body, upgrade: true, cancellationToken)
                 .ConfigureAwait(false);
-            if (status is not (200 or 101))
-            {
-                throw new DockerApiException((System.Net.HttpStatusCode)status,
-                    $"启动 exec 失败:HTTP {status} {reason}");
-            }
-            return new(created.Id, hijacked, this, tty);
+            return status is not (200 or 101) ? throw new DockerApiException((System.Net.HttpStatusCode)status, $"启动 exec 失败:HTTP {status} {reason}") : new(created.Id, hijacked, this, tty);
         }
         catch
         {

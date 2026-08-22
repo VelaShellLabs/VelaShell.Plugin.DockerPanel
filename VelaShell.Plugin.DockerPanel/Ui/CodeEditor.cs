@@ -276,7 +276,7 @@ public sealed class CodeEditor : UserControl
                      new[]
                      {
                          ("VelaShell.Plugin.DockerPanel.Syntax.Yaml.xshd", new[] { ".yaml", ".yml" }),
-                         ("VelaShell.Plugin.DockerPanel.Syntax.DotEnv.xshd", new[] { ".env" })
+                         ("VelaShell.Plugin.DockerPanel.Syntax.DotEnv.xshd", [".env"])
                      })
             {
                 try

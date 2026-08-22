@@ -72,10 +72,10 @@ public sealed class DockerPanelPlugin : IVelaPlugin
                 new() { Title = "Docker", DisplayMode = PanelDisplayMode.Document },
                 () => new DockerPanelView(viewModel),
                 context.Shutdown).ConfigureAwait(false);
-            _panel.Closed += () =>
+            _panel.Closed += async () =>
             {
                 _panel = null;
-                _ = viewModel.DisposeAsync();
+                await viewModel.DisposeAsync();
                 if (ReferenceEquals(_viewModel, viewModel))
                 {
                     _viewModel = null;

@@ -894,7 +894,6 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         }
     }
 
-
     private async Task OpenFileAsync(string path)
     {
         if (shell.Client is not { } client)
