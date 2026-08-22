@@ -301,8 +301,8 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     /// </summary>
     public bool Maximized
     {
-        get => _page.DetailMaximized;
-        private set => _page.DetailMaximized = value;
+        get => _page.Drawer.Maximized;
+        private set => _page.Drawer.Maximized = value;
     }
 
     /// <summary>
@@ -553,7 +553,7 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
         // 撑到够摆开三栏就停,列表还在旁边,手柄也还在,用户随时能往回拖。
         if (tab is DetailTab.Files)
         {
-            _page.EnsureDrawerAtLeast(820);
+            _page.Drawer.EnsureAtLeast(820);
         }
         switch (tab)
         {

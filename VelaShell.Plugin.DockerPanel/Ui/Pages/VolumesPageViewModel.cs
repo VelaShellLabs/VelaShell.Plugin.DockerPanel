@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using VelaShell.Plugin.DockerPanel.Docker;
 
@@ -96,6 +97,7 @@ public sealed class VolumesPageViewModel : PageViewModel
             if (SetField(ref _selected, value))
             {
                 BuildSelectedDetails(value);
+                Drawer.IsOpen = value is not null;
                 OnPropertiesChanged(nameof(HasSelection), nameof(SelectedUsers), nameof(CanBrowse), nameof(CanBackup), nameof(BrowseHint));
             }
         }
@@ -103,6 +105,23 @@ public sealed class VolumesPageViewModel : PageViewModel
 
     /// <summary>有选中。</summary>
     public bool HasSelection => Selected is not null;
+
+    /// <summary>列表的列宽。列头与数据行共用这一份 —— 拖列头的轨道改的就是它。</summary>
+    public VolumeColumns Columns { get; } = new();
+
+    /// <inheritdoc />
+    public override ListColumns ColumnLayout => Columns;
+
+    /// <inheritdoc />
+    public override IEnumerable<string> ColumnTexts(string key) => key switch
+    {
+        "name" => View.Select(r => r.Name),
+        "driver" => View.Select(r => r.Driver),
+        "users" => View.Select(r => r.UsageText),
+        "size" => View.Select(r => r.SizeText),
+        "created" => View.Select(r => r.CreatedText),
+        _ => []
+    };
 
     /// <summary>选中卷的标签。</summary>
     public ObservableCollection<DetailField> SelectedLabels { get; } = [];
@@ -212,6 +231,8 @@ public sealed class VolumesPageViewModel : PageViewModel
                 }
                 else
                 {
+                    // 行要回指页面:列宽绑在页面上,行模板得找得到它。
+                    row.Owner = this;
                     _all.Add(row);
                 }
             }
@@ -506,4 +527,96 @@ public sealed class VolumesPageViewModel : PageViewModel
         }
         return null;
     }
+}
+
+/// <summary>
+/// 卷列表的列宽。默认宽度取自设计稿 07 号板的表头
+/// (名称 336 / 驱动 90 / 使用者 180 / 大小 96 / 创建 112)。
+/// </summary>
+public sealed class VolumeColumns : ListColumns
+{
+    private GridLength _name = new(336);
+    private GridLength _driver = new(90);
+    private GridLength _users = new(180);
+    private GridLength _size = new(96);
+    private GridLength _created = new(112);
+
+    /// <inheritdoc />
+    public override IReadOnlyList<string> Keys { get; } = ["name", "driver", "users", "size", "created"];
+
+    /// <summary>名称列。</summary>
+    public GridLength Name
+    {
+        get => _name;
+        set => SetField(ref _name, Clamp(value, "name"));
+    }
+
+    /// <summary>驱动列。</summary>
+    public GridLength Driver
+    {
+        get => _driver;
+        set => SetField(ref _driver, Clamp(value, "driver"));
+    }
+
+    /// <summary>使用者列。</summary>
+    public GridLength Users
+    {
+        get => _users;
+        set => SetField(ref _users, Clamp(value, "users"));
+    }
+
+    /// <summary>大小列。</summary>
+    public GridLength Size
+    {
+        get => _size;
+        set => SetField(ref _size, Clamp(value, "size"));
+    }
+
+    /// <summary>创建时间列。</summary>
+    public GridLength Created
+    {
+        get => _created;
+        set => SetField(ref _created, Clamp(value, "created"));
+    }
+
+    /// <inheritdoc />
+    public override double Get(string key) => key switch
+    {
+        "name" => Name.Value,
+        "driver" => Driver.Value,
+        "users" => Users.Value,
+        "size" => Size.Value,
+        _ => Created.Value
+    };
+
+    /// <inheritdoc />
+    public override void Set(string key, double width)
+    {
+        GridLength value = new(width);
+        switch (key)
+        {
+            case "name": Name = value; break;
+            case "driver": Driver = value; break;
+            case "users": Users = value; break;
+            case "size": Size = value; break;
+            case "created": Created = value; break;
+        }
+    }
+
+    /// <inheritdoc />
+    public override double Min(string key) => key switch
+    {
+        "name" => 160,
+        "driver" => 70,
+        "users" => 90,
+        "size" => 62,
+        _ => 70
+    };
+
+    /// <inheritdoc />
+    public override double MaxAutoFit(string key) => key is "name" ? 760 : 300;
+
+    /// <inheritdoc />
+    // 名称格里还坐着一枚卷图标。
+    public override double Padding(string key) => key is "name" ? 46 : 18;
 }

@@ -15,10 +15,19 @@
                   Brush="{DynamicResource VelaAccent}" />
         <TextBlock Grid.Column="1" Text="{Binding Title}" Classes="h2" Margin="8,0,0,0"
                    TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" />
-        <Button Grid.Column="2" Theme="{StaticResource DockerIconButton}" ToolTip.Tip="关闭"
-                Command="{Binding CloseCommand}">
-          <ui:Glyph Key="Icon.x" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
-        </Button>
+        <!-- 铺开 / 还原与关闭并排,位置与容器抽屉一致 —— 四个页面之间来回切时,
+             "关闭在哪、铺开在哪"永远是同一个位置。 -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+          <Button Theme="{StaticResource DockerIconButton}" ToolTip.Tip="最大化 / 还原"
+                  Command="{Binding Owner.Drawer.ToggleMaximizeCommand}">
+            <ui:Glyph Key="{Binding Owner.Drawer.Maximized, Converter={x:Static ui:Converters.MaximizeIcon}}"
+                      Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+          </Button>
+          <Button Theme="{StaticResource DockerIconButton}" ToolTip.Tip="关闭"
+                  Command="{Binding CloseCommand}">
+            <ui:Glyph Key="Icon.x" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 

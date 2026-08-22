@@ -51,6 +51,21 @@ public abstract class PageViewModel(DockerPanelViewModel shell) : ObservableObje
     /// <summary>标题(工具条左上角)。</summary>
     public abstract string Title { get; }
 
+    /// <summary>
+    /// 右侧详情抽屉的尺寸与形态。没有抽屉的页面(总览 / 系统 / Compose)不用它。
+    /// <para>
+    /// 放在基类上,是为了让视图那两个通用件(<see cref="DrawerLayout" />、
+    /// <see cref="ColumnResizer" />)对四个页面一视同仁 —— 否则同一套拖拽逻辑要抄四遍。
+    /// </para>
+    /// </summary>
+    public DrawerState Drawer { get; } = new();
+
+    /// <summary>这一页列表的列宽;没有可拖列表的页面为 <see langword="null" />。</summary>
+    public virtual ListColumns? ColumnLayout => null;
+
+    /// <summary>某一列当前可见行里的文字(双击自适应时用来量宽度)。</summary>
+    public virtual IEnumerable<string> ColumnTexts(string key) => [];
+
     /// <summary>正在加载。</summary>
     public bool Busy
     {

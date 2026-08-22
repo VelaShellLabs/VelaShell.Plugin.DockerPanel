@@ -43,11 +43,6 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     private ContainerDetailViewModel? _detail;
     private LogsViewModel? _mergedLogs;
     private string _logSourceSearch = "";
-    private double _drawerWidth = 440;
-    private bool _detailMaximized;
-
-    /// <summary>抽屉再窄就摆不下头里那一行了。</summary>
-    private const double MinDrawerWidth = 360;
 
     /// <summary>建容器页。</summary>
     public ContainersPageViewModel(DockerPanelViewModel shell) : base(shell)
@@ -76,6 +71,14 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         KillCommand = new RelayCommand(p => KillAsync(Targets(p)));
         RemoveCommand = new RelayCommand(p => RemoveAsync(Targets(p)));
         RefreshCommand = new RelayCommand(_ => RefreshAsync(Shell.Lifetime));
+        // 列表让不让位,除了日志模式还取决于抽屉铺没铺满 —— 后者的通知在抽屉那边发。
+        Drawer.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(DrawerState.ListVisible))
+            {
+                OnPropertyChanged(nameof(ListVisible));
+            }
+        };
     }
 
     /// <inheritdoc />
@@ -273,7 +276,8 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         {
             if (SetField(ref _detail, value))
             {
-                OnPropertiesChanged(nameof(HasDetail), nameof(CanResizeDrawer));
+                Drawer.IsOpen = value is not null;
+                OnPropertyChanged(nameof(HasDetail));
             }
         }
     }
@@ -282,62 +286,30 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     public bool HasDetail => Detail is not null;
 
     /// <summary>
-    /// 列表的列宽。列头与几百行数据行共用这一份 —— 拖列头的手柄改的就是它。
+    /// 列表的列宽。列头与几百行数据行共用这一份 —— 拖列头的轨道改的就是它。
     /// <para>
     /// 放在**页面**上而不是行上:列宽是这张表的属性,不是某一行的。
     /// </para>
     /// </summary>
     public ContainerColumns Columns { get; } = new();
 
-    /// <summary>
-    /// 详情抽屉的宽度(用户拖出来的)。
-    /// <para>
-    /// 放在页面上而不是抽屉自己身上:换一个容器就是换一个抽屉视图模型,
-    /// 宽度要是跟着抽屉走,用户每点一行就得重拖一次。
-    /// </para>
-    /// <para>
-    /// 视图与它是双向的:打开 / 还原时由视图把这个值写进列定义,
-    /// 用户拖完(<c>DragCompleted</c>)再由视图把拖出来的实际宽度写回来 ——
-    /// 与宿主侧栏里那两条分割条的做法一致。上界由列定义的 MaxWidth 兜着,
-    /// 因为"面板有多宽"只有视图知道。
-    /// </para>
-    /// </summary>
-    public double DrawerWidth
+    /// <inheritdoc />
+    public override ListColumns ColumnLayout => Columns;
+
+    /// <inheritdoc />
+    public override IEnumerable<string> ColumnTexts(string key) => key switch
     {
-        get => _drawerWidth;
-        set => SetField(ref _drawerWidth, Math.Max(MinDrawerWidth, value));
-    }
-
-    /// <summary>抽屉再窄就摆不下头里那一行了。</summary>
-    public static double MinimumDrawerWidth => MinDrawerWidth;
-
-    /// <summary>抽屉最大化(占满整个页签)。</summary>
-    public bool DetailMaximized
-    {
-        get => _detailMaximized;
-        set
-        {
-            if (SetField(ref _detailMaximized, value))
-            {
-                OnPropertiesChanged(nameof(ListVisible), nameof(CanResizeDrawer));
-            }
-        }
-    }
-
-    /// <summary>抽屉的分割条要不要露出来。</summary>
-    public bool CanResizeDrawer => HasDetail && !DetailMaximized;
+        "name" => View.Select(r => r.Name),
+        "image" => View.Select(r => r.Image),
+        "ports" => View.Select(r => r.Ports),
+        "cpu" => View.Select(r => r.CpuText),
+        "mem" => View.Select(r => r.MemText),
+        "uptime" => View.Select(r => r.Uptime),
+        _ => []
+    };
 
     /// <summary>列表这一块要不要露出来(日志模式取代它,抽屉最大化盖住它)。</summary>
-    public bool ListVisible => !IsLogsMode && !DetailMaximized;
-
-    /// <summary>
-    /// 把抽屉至少撑到这么宽。
-    /// <para>
-    /// 文件页那种三栏在 440px 里根本摆不开;但"撑满整个页签"又太狠 ——
-    /// 撑到够用就停,列表还在旁边,分割条也还在,用户随时能往回拖。
-    /// </para>
-    /// </summary>
-    public void EnsureDrawerAtLeast(double width) => DrawerWidth = Math.Max(DrawerWidth, width);
+    public bool ListVisible => !IsLogsMode && Drawer.ListVisible;
 
     /// <summary>切筛选。</summary>
     public RelayCommand SetFilterCommand { get; }
@@ -1110,9 +1082,6 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         {
             _ = detail.DisposeAsync();
             Detail = null;
-            // 最大化是抽屉的状态,抽屉没了它也就该没了 ——
-            // 不然下一次开抽屉会莫名其妙地直接铺满整页。
-            DetailMaximized = false;
             MarkCurrent(null);
         }
     }
@@ -1242,30 +1211,23 @@ public sealed class BatchSummaryState(
 /// <summary>
 /// 容器列表的列宽。
 /// <para>
-/// 与宿主的文件浏览器同一路数:列宽是一组 <see cref="GridLength" />,
-/// **列头和每一行的 ColumnDefinitions 绑的是同一份实例** ——
-/// Avalonia 没有 SharedSizeGroup,这是让列头与几百行单元格始终对齐的唯一办法。
-/// </para>
-/// <para>
 /// 六列全是定宽可拖的,富余的宽度交给「运行时长」与行尾动作之间的填充列。
 /// 不留弹性列:弹性列的边界是**算**出来的、拖不动,
 /// 而它往往正是最想拖的那一条(名称跟着窗口长到一千多像素,就是这么来的)。
 /// </para>
+/// <para>默认宽度取自设计稿 <c>C/ContainerRow</c>;镜像列比稿子宽一档,带 registry 前缀的名字本来就长。</para>
 /// </summary>
-public sealed class ContainerColumns : ObservableObject
+public sealed class ContainerColumns : ListColumns
 {
-    /// <summary>列与列之间那条拖拽轨道的宽度。</summary>
-    public const double SplitterWidth = 6;
-
-    /// <summary>可拖的列,次序与界面一致。</summary>
-    public static readonly string[] Keys = ["name", "image", "ports", "cpu", "mem", "uptime"];
-
     private GridLength _name = new(240);
     private GridLength _image = new(260);
     private GridLength _ports = new(118);
     private GridLength _cpu = new(108);
     private GridLength _mem = new(84);
     private GridLength _uptime = new(78);
+
+    /// <inheritdoc />
+    public override IReadOnlyList<string> Keys { get; } = ["name", "image", "ports", "cpu", "mem", "uptime"];
 
     /// <summary>名称列。</summary>
     public GridLength Name
@@ -1274,7 +1236,7 @@ public sealed class ContainerColumns : ObservableObject
         set => SetField(ref _name, Clamp(value, "name"));
     }
 
-    /// <summary>镜像列。带 registry 前缀的镜像名本来就长,默认给得比设计稿宽一档。</summary>
+    /// <summary>镜像列。</summary>
     public GridLength Image
     {
         get => _image;
@@ -1309,22 +1271,8 @@ public sealed class ContainerColumns : ObservableObject
         set => SetField(ref _uptime, Clamp(value, "uptime"));
     }
 
-    /// <summary>某一列的下限。再窄就只剩省略号了。</summary>
-    public static double MinWidthFor(string key) => key switch
-    {
-        "name" => 140,
-        "image" => 120,
-        "ports" => 70,
-        "cpu" => 78,
-        "mem" => 62,
-        _ => 62
-    };
-
-    /// <summary>某一列双击自适应时的上限。</summary>
-    public static double MaxAutoFitFor(string key) => key is "name" or "image" ? 760 : 300;
-
-    /// <summary>按名字读一列的宽度(拖拽代码用 Tag 认列)。</summary>
-    public double GetColumnWidth(string key) => key switch
+    /// <inheritdoc />
+    public override double Get(string key) => key switch
     {
         "name" => Name.Value,
         "image" => Image.Value,
@@ -1334,8 +1282,8 @@ public sealed class ContainerColumns : ObservableObject
         _ => Uptime.Value
     };
 
-    /// <summary>按名字写一列的宽度。</summary>
-    public void SetColumnWidth(string key, double width)
+    /// <inheritdoc />
+    public override void Set(string key, double width)
     {
         GridLength value = new(width);
         switch (key)
@@ -1349,11 +1297,26 @@ public sealed class ContainerColumns : ObservableObject
         }
     }
 
-    /// <summary>用户拖出来的列宽只可能是像素值 —— 星形和 Auto 在这里没有意义。</summary>
-    private static GridLength Clamp(GridLength value, string key)
+    /// <inheritdoc />
+    public override double Min(string key) => key switch
     {
-        double min = MinWidthFor(key);
-        double px = value.IsAbsolute ? value.Value : min;
-        return new(Math.Max(min, px));
-    }
+        "name" => 140,
+        "image" => 120,
+        "ports" => 70,
+        "cpu" => 78,
+        "mem" => 62,
+        _ => 62
+    };
+
+    /// <inheritdoc />
+    public override double MaxAutoFit(string key) => key is "name" or "image" ? 760 : 300;
+
+    /// <inheritdoc />
+    // 名称格里还坐着状态点与项目徽标;CPU 格里还坐着 sparkline。
+    public override double Padding(string key) => key switch
+    {
+        "name" => 90,
+        "cpu" => 74,
+        _ => 18
+    };
 }

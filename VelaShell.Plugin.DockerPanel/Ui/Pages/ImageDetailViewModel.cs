@@ -75,6 +75,12 @@ public sealed class ImageDetailViewModel : ObservableObject
     /// <summary>标题(第一个标签,悬空镜像用短 id)。</summary>
     public string Title => _row.IsDangling ? $"<none> · {ShortId}" : $"{_row.Repository}:{_row.Tag}";
 
+    /// <summary>
+    /// 抽屉所在的页面。
+    /// <para>抽屉的宽度与铺没铺满是**页面**的布局状态,界面要绑得到它。</para>
+    /// </summary>
+    public ImagesPageViewModel Owner => _page;
+
     /// <summary>拿去 <c>run</c> 的引用:有标签用标签,悬空镜像只能用 id。</summary>
     public string PrimaryReference =>
         _row.Summary.RepoTags?.FirstOrDefault(t => t != "<none>:<none>") ?? _row.Id;
