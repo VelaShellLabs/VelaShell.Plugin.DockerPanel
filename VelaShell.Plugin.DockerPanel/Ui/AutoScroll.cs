@@ -1,9 +1,8 @@
-using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Collections.Specialized;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
@@ -43,7 +42,7 @@ public static class AutoScroll
 
     private static void OnSourceChanged(Control control, AvaloniaPropertyChangedEventArgs e)
     {
-        if (Watchers.Remove(control, out Watcher? previous))
+        if (Watchers.Remove(control, out var previous))
         {
             previous.Detach();
         }

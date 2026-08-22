@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.VisualTree;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
@@ -95,7 +94,7 @@ public sealed class Glyph : Control
         {
             return;
         }
-        if (this.TryFindResource(key, out object? resource) && resource is Geometry geometry)
+        if (this.TryFindResource(key, out var resource) && resource is Geometry geometry)
         {
             Data = geometry;
         }
@@ -108,11 +107,11 @@ public sealed class Glyph : Control
         {
             return;
         }
-        double scale = Size / ViewBox;
+        var scale = Size / ViewBox;
         // 在实际分到的框里居中再画。默认对齐下这一步是零位移(框正好是 Size×Size);
         // 但调用方显式写了 Stretch、或父容器给了更大的框时,图标仍然待在正中,
         // 而不是缩在左上角。
-        Matrix transform = Matrix.CreateScale(scale, scale) *
+        var transform = Matrix.CreateScale(scale, scale) *
                            Matrix.CreateTranslation((Bounds.Width - Size) / 2, (Bounds.Height - Size) / 2);
         using (context.PushTransform(transform))
         {

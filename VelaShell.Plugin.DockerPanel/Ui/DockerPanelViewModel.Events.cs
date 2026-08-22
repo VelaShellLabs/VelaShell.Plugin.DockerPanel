@@ -57,7 +57,7 @@ public sealed partial class DockerPanelViewModel
     {
         _eventCts = CancellationTokenSource.CreateLinkedTokenSource(Lifetime);
         _eventsSince = DateTimeOffset.UtcNow;
-        CancellationToken token = _eventCts.Token;
+        var token = _eventCts.Token;
         _eventTask = Task.Run(() => EventLoopAsync(token), token);
     }
 
@@ -91,10 +91,10 @@ public sealed partial class DockerPanelViewModel
     {
         // 退避从 1 秒起、封顶 15 秒:daemon 重启时不该被我们每 100ms 敲一次,
         // 但用户也不该为了看到界面复活而等上一分钟。
-        TimeSpan backoff = TimeSpan.FromSeconds(1);
+        var backoff = TimeSpan.FromSeconds(1);
         while (!token.IsCancellationRequested)
         {
-            DockerClient? client = Client;
+            var client = Client;
             if (client is null)
             {
                 return;
@@ -146,7 +146,7 @@ public sealed partial class DockerPanelViewModel
         Ui.Post(() =>
         {
             Overview.AcceptEvent(dockerEvent);
-            bool wanted = ActivePage?.WantsRefresh(dockerEvent) ?? false;
+            var wanted = ActivePage?.WantsRefresh(dockerEvent) ?? false;
             // 总览页永远关心计数,即使它不在前台 —— 用户切回去时不该看到一份旧数字。
             if (!wanted && !Overview.WantsRefresh(dockerEvent))
             {

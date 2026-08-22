@@ -24,7 +24,7 @@ internal static class TarUtil
         DateTimeOffset? modified = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        byte[] header = new byte[BlockSize];
+        var header = new byte[BlockSize];
         WriteString(header, 0, 100, name);
         WriteOctal(header, 100, 8, (ulong)mode);
         WriteOctal(header, 108, 8, 0);                       // uid
@@ -36,20 +36,20 @@ internal static class TarUtil
         header[263] = (byte)'0';
         header[264] = (byte)'0';
         // 校验和的算法要求先把校验和字段当成 8 个空格再求和 —— 顺序反了 tar 会说文件损坏。
-        for (int i = 148; i < 156; i++)
+        for (var i = 148; i < 156; i++)
         {
             header[i] = (byte)' ';
         }
         uint checksum = 0;
-        foreach (byte b in header)
+        foreach (var b in header)
         {
             checksum += b;
         }
         WriteOctal(header, 148, 7, checksum);
         header[155] = (byte)' ';
 
-        int padded = (content.Length + BlockSize - 1) / BlockSize * BlockSize;
-        byte[] result = new byte[BlockSize + padded + BlockSize * 2];
+        var padded = (content.Length + BlockSize - 1) / BlockSize * BlockSize;
+        var result = new byte[BlockSize + padded + BlockSize * 2];
         header.CopyTo(result, 0);
         content.CopyTo(result.AsSpan(BlockSize));
         return result;
@@ -62,7 +62,7 @@ internal static class TarUtil
     public static async Task<(string Name, byte[] Content)?> ReadFirstFileAsync(Stream tar, long maxBytes,
         CancellationToken cancellationToken)
     {
-        byte[] header = new byte[BlockSize];
+        var header = new byte[BlockSize];
         while (true)
         {
             if (!await ReadExactlyAsync(tar, header, cancellationToken).ConfigureAwait(false))
@@ -74,10 +74,10 @@ internal static class TarUtil
             {
                 return null;
             }
-            string name = ReadString(header, 0, 100);
-            long size = (long)ReadOctal(header, 124, 12);
-            char type = (char)header[156];
-            int padded = (int)((size + BlockSize - 1) / BlockSize * BlockSize);
+            var name = ReadString(header, 0, 100);
+            var size = (long)ReadOctal(header, 124, 12);
+            var type = (char)header[156];
+            var padded = (int)((size + BlockSize - 1) / BlockSize * BlockSize);
             if (type is '0' or '\0')
             {
                 if (size > maxBytes)
@@ -85,7 +85,7 @@ internal static class TarUtil
                     throw new InvalidOperationException(
                         $"文件 {name} 有 {size:N0} 字节,超过了面板允许在线编辑的上限 {maxBytes:N0} 字节。");
                 }
-                byte[] content = new byte[size];
+                var content = new byte[size];
                 if (!await ReadExactlyAsync(tar, content, cancellationToken).ConfigureAwait(false))
                 {
                     return null;
@@ -109,8 +109,8 @@ internal static class TarUtil
     public static async Task<long> ExtractFirstFileAsync(Stream tar, Stream destination,
         CancellationToken cancellationToken)
     {
-        byte[] header = new byte[BlockSize];
-        byte[] buffer = new byte[64 * 1024];
+        var header = new byte[BlockSize];
+        var buffer = new byte[64 * 1024];
         while (true)
         {
             if (!await ReadExactlyAsync(tar, header, cancellationToken).ConfigureAwait(false)
@@ -118,19 +118,19 @@ internal static class TarUtil
             {
                 return 0;
             }
-            long size = (long)ReadOctal(header, 124, 12);
-            char type = (char)header[156];
-            long padded = (size + BlockSize - 1) / BlockSize * BlockSize;
+            var size = (long)ReadOctal(header, 124, 12);
+            var type = (char)header[156];
+            var padded = (size + BlockSize - 1) / BlockSize * BlockSize;
             if (type is not ('0' or '\0'))
             {
                 await SkipAsync(tar, padded, cancellationToken).ConfigureAwait(false);
                 continue;
             }
-            long remaining = size;
+            var remaining = size;
             while (remaining > 0)
             {
-                int want = (int)Math.Min(buffer.Length, remaining);
-                int read = await tar.ReadAsync(buffer.AsMemory(0, want), cancellationToken).ConfigureAwait(false);
+                var want = (int)Math.Min(buffer.Length, remaining);
+                var read = await tar.ReadAsync(buffer.AsMemory(0, want), cancellationToken).ConfigureAwait(false);
                 if (read <= 0)
                 {
                     // 流在中途断了。已经写出去的那部分是残缺的,必须说出来 ——
@@ -148,20 +148,20 @@ internal static class TarUtil
 
     private static void WriteString(byte[] buffer, int offset, int length, string value)
     {
-        byte[] bytes = Encoding.UTF8.GetBytes(value);
-        int n = Math.Min(bytes.Length, length - 1);
+        var bytes = Encoding.UTF8.GetBytes(value);
+        var n = Math.Min(bytes.Length, length - 1);
         Array.Copy(bytes, 0, buffer, offset, n);
     }
 
     private static void WriteOctal(byte[] buffer, int offset, int length, ulong value)
     {
-        string text = Convert.ToString((long)value, 8).PadLeft(length - 1, '0');
+        var text = Convert.ToString((long)value, 8).PadLeft(length - 1, '0');
         WriteString(buffer, offset, length, text);
     }
 
     private static string ReadString(byte[] buffer, int offset, int length)
     {
-        int end = offset;
+        var end = offset;
         while (end < offset + length && buffer[end] != 0)
         {
             end++;
@@ -172,9 +172,9 @@ internal static class TarUtil
     private static ulong ReadOctal(byte[] buffer, int offset, int length)
     {
         ulong value = 0;
-        for (int i = offset; i < offset + length; i++)
+        for (var i = offset; i < offset + length; i++)
         {
-            byte b = buffer[i];
+            var b = buffer[i];
             if (b is 0 or (byte)' ')
             {
                 continue;
@@ -190,11 +190,11 @@ internal static class TarUtil
 
     private static async Task SkipAsync(Stream stream, long count, CancellationToken cancellationToken)
     {
-        byte[] scratch = new byte[Math.Min(count, 64 * 1024) is var n && n > 0 ? n : 1];
-        long left = count;
+        var scratch = new byte[Math.Min(count, 64 * 1024) is var n && n > 0 ? n : 1];
+        var left = count;
         while (left > 0)
         {
-            int read = await stream.ReadAsync(scratch.AsMemory(0, (int)Math.Min(left, scratch.Length)), cancellationToken)
+            var read = await stream.ReadAsync(scratch.AsMemory(0, (int)Math.Min(left, scratch.Length)), cancellationToken)
                                    .ConfigureAwait(false);
             if (read <= 0)
             {
@@ -206,10 +206,10 @@ internal static class TarUtil
 
     private static async Task<bool> ReadExactlyAsync(Stream stream, Memory<byte> buffer, CancellationToken cancellationToken)
     {
-        int read = 0;
+        var read = 0;
         while (read < buffer.Length)
         {
-            int n = await stream.ReadAsync(buffer[read..], cancellationToken).ConfigureAwait(false);
+            var n = await stream.ReadAsync(buffer[read..], cancellationToken).ConfigureAwait(false);
             if (n <= 0)
             {
                 return false;

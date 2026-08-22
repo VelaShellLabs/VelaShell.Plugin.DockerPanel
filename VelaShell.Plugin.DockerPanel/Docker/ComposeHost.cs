@@ -57,7 +57,7 @@ public sealed class RemoteComposeHost(IRemoteExecApi exec, IRemoteFsApi remoteFs
     public async Task<int> StreamAsync(IReadOnlyList<string> arguments, IProgress<ExecOutput> output,
         CancellationToken cancellationToken = default)
     {
-        ExecStreamResult result = await exec
+        var result = await exec
             .StreamAsync(sessionId, Join(arguments), new ExecStreamOptions { IncludeStandardError = true },
                 output, cancellationToken)
             .ConfigureAwait(false);
@@ -67,7 +67,7 @@ public sealed class RemoteComposeHost(IRemoteExecApi exec, IRemoteFsApi remoteFs
     /// <inheritdoc />
     public async Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default)
     {
-        byte[] bytes = await remoteFs.ReadAllBytesAsync(sessionId, path, 4 << 20, cancellationToken)
+        var bytes = await remoteFs.ReadAllBytesAsync(sessionId, path, 4 << 20, cancellationToken)
                                      .ConfigureAwait(false);
         return Encoding.UTF8.GetString(bytes);
     }
@@ -168,7 +168,7 @@ public sealed class LocalComposeHost : IComposeHost
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
-        foreach (string argument in arguments)
+        foreach (var argument in arguments)
         {
             info.ArgumentList.Add(argument);
         }

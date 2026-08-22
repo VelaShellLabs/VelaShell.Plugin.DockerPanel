@@ -66,7 +66,7 @@ public class DfParsingTests
             /dev/sda1    100931731456 41231731456 54700000000      43% /var/lib/docker
             """;
 
-        (long total, long used) = SystemPageViewModel.ParseDf(output)!.Value;
+        (var total, var used) = SystemPageViewModel.ParseDf(output)!.Value;
 
         Assert.AreEqual(100931731456L, total);
         Assert.AreEqual(41231731456L, used);

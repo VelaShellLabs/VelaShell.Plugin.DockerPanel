@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Platform.Storage;
 using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
@@ -143,13 +142,13 @@ public sealed class ImagesPageViewModel : PageViewModel
             {
                 return false;
             }
-            int picked = View.Count(r => r.Selected);
+            var picked = View.Count(r => r.Selected);
             return picked == 0 ? false : picked == View.Count ? true : null;
         }
         set
         {
-            bool select = value is true;
-            foreach (ImageRow row in View)
+            var select = value is true;
+            foreach (var row in View)
             {
                 row.Selected = select;
             }
@@ -260,18 +259,18 @@ public sealed class ImagesPageViewModel : PageViewModel
         Busy = true;
         try
         {
-            ImageSummary[] summaries = await client.ListImagesAsync(false, cancellationToken).ConfigureAwait(true);
+            var summaries = await client.ListImagesAsync(false, cancellationToken).ConfigureAwait(true);
             List<ImageRow> incoming =
             [
                 .. summaries
                     .OrderByDescending(s => s.Created)
                     .Select(s => new ImageRow(s))
             ];
-            Dictionary<string, ImageRow> previous = _all.ToDictionary(r => r.Id);
+            var previous = _all.ToDictionary(r => r.Id);
             _all.Clear();
-            foreach (ImageRow row in incoming)
+            foreach (var row in incoming)
             {
-                if (previous.TryGetValue(row.Id, out ImageRow? existing))
+                if (previous.TryGetValue(row.Id, out var existing))
                 {
                     existing.Update(row);
                     _all.Add(existing);
@@ -289,7 +288,7 @@ public sealed class ImagesPageViewModel : PageViewModel
             OnPropertiesChanged(nameof(TotalCount), nameof(UsedCount), nameof(UnusedCount), nameof(DanglingCount));
             if (Detail is { } detail)
             {
-                ImageRow? updated = _all.FirstOrDefault(r => r.Id == detail.ImageId);
+                var updated = _all.FirstOrDefault(r => r.Id == detail.ImageId);
                 // 抽屉里那个镜像被删掉了(或者被 prune 掉了)就关上,
                 // 留一个指向已消失对象的抽屉只会让下一步操作报一个看不懂的错。
                 if (updated is null)
@@ -336,7 +335,7 @@ public sealed class ImagesPageViewModel : PageViewModel
     /// <summary>把"抽屉里开着的那一行"标出来。</summary>
     private void MarkCurrent(string? id)
     {
-        foreach (ImageRow row in _all)
+        foreach (var row in _all)
         {
             row.Current = row.Id == id;
         }
@@ -358,8 +357,8 @@ public sealed class ImagesPageViewModel : PageViewModel
 
     private void ApplyView()
     {
-        string needle = Search.Trim();
-        IEnumerable<ImageRow> filtered = _all.Where(row => Filter switch
+        var needle = Search.Trim();
+        var filtered = _all.Where(row => Filter switch
         {
             ImageFilter.Used => row.Summary.Containers > 0,
             ImageFilter.Unused => row.Summary.Containers <= 0 && !row.IsDangling,
@@ -385,7 +384,7 @@ public sealed class ImagesPageViewModel : PageViewModel
 
     private void ClearSelection()
     {
-        foreach (ImageRow row in _all.Where(r => r.Selected))
+        foreach (var row in _all.Where(r => r.Selected))
         {
             row.Selected = false;
         }
@@ -428,7 +427,7 @@ public sealed class ImagesPageViewModel : PageViewModel
     /// </summary>
     private static string RegistryOf(string repository)
     {
-        string head = repository.Split('/')[0];
+        var head = repository.Split('/')[0];
         return repository.Contains('/') &&
                (head.Contains('.') || head.Contains(':') || head == "localhost")
             ? head
@@ -441,12 +440,12 @@ public sealed class ImagesPageViewModel : PageViewModel
         {
             return;
         }
-        string reference = $"{row.Repository}:{row.Tag}";
-        PanelTask task = Shell.Tasks.Start("Icon.upload", $"推送 {reference}", indeterminate: false);
+        var reference = $"{row.Repository}:{row.Tag}";
+        var task = Shell.Tasks.Start("Icon.upload", $"推送 {reference}", indeterminate: false);
         var aggregator = new PullAggregator();
         try
         {
-            string? header = await auth.GetAuthHeaderAsync(row.Repository, task.Token).ConfigureAwait(true);
+            var header = await auth.GetAuthHeaderAsync(row.Repository, task.Token).ConfigureAwait(true);
             await client.PushImageAsync(row.Repository, row.Tag, header,
                 new DirectProgress<PullProgressFrame>(frame =>
                 {
@@ -487,22 +486,22 @@ public sealed class ImagesPageViewModel : PageViewModel
         }
         // 悬空镜像没有可用的引用,只能按 id 存。
         List<string> names = [.. targets.Select(t => t.IsDangling ? t.Id : $"{t.Repository}:{t.Tag}")];
-        string suggested = targets.Count == 1
+        var suggested = targets.Count == 1
             ? $"{(targets[0].IsDangling ? targets[0].ShortId : targets[0].Repository.Replace('/', '_'))}.tar"
             : $"images-{targets.Count}.tar";
-        IStorageFile? target = await FilePicker
+        var target = await FilePicker
             .PickSaveAsync(targets.Count == 1 ? $"导出 {names[0]}" : $"导出 {targets.Count} 个镜像", suggested, "tar")
             .ConfigureAwait(true);
         if (target is null)
         {
             return;
         }
-        PanelTask task = Shell.Tasks.Start("Docker.file-archive",
+        var task = Shell.Tasks.Start("Docker.file-archive",
             targets.Count == 1 ? $"导出 {names[0]}" : $"导出 {targets.Count} 个镜像", indeterminate: true);
         try
         {
-            await using Stream archive = await client.SaveImagesAsync(names, task.Token).ConfigureAwait(true);
-            await using Stream output = await target.OpenWriteAsync().ConfigureAwait(true);
+            await using var archive = await client.SaveImagesAsync(names, task.Token).ConfigureAwait(true);
+            await using var output = await target.OpenWriteAsync().ConfigureAwait(true);
             var buffer = new byte[128 * 1024];
             long total = 0;
             int read;
@@ -510,7 +509,7 @@ public sealed class ImagesPageViewModel : PageViewModel
             {
                 await output.WriteAsync(buffer.AsMemory(0, read), task.Token).ConfigureAwait(true);
                 total += read;
-                long written = total;
+                var written = total;
                 Ui.Post(() => task.Detail = $"已写出 {Humanize.Bytes(written)}");
             }
             task.Finish(PanelTaskState.Succeeded, "完成", Humanize.Bytes(total));
@@ -534,17 +533,17 @@ public sealed class ImagesPageViewModel : PageViewModel
         {
             return;
         }
-        IStorageFile? source = await FilePicker.PickOpenAsync("选一个 docker save 出来的 tar").ConfigureAwait(true);
+        var source = await FilePicker.PickOpenAsync("选一个 docker save 出来的 tar").ConfigureAwait(true);
         if (source is null)
         {
             return;
         }
-        PanelTask task = Shell.Tasks.Start("Docker.arrow-down-to-line", $"导入 {source.Name}", indeterminate: false);
+        var task = Shell.Tasks.Start("Docker.arrow-down-to-line", $"导入 {source.Name}", indeterminate: false);
         var aggregator = new PullAggregator();
         try
         {
             // 请求体直接挂在文件流上,不缓冲。
-            await using Stream input = await source.OpenReadAsync().ConfigureAwait(true);
+            await using var input = await source.OpenReadAsync().ConfigureAwait(true);
             await client.LoadImagesAsync(input, new DirectProgress<PullProgressFrame>(frame =>
             {
                 aggregator.Accept(frame);
@@ -575,7 +574,7 @@ public sealed class ImagesPageViewModel : PageViewModel
         {
             return;
         }
-        bool anyInUse = targets.Any(t => t.Summary.Containers > 0);
+        var anyInUse = targets.Any(t => t.Summary.Containers > 0);
         List<ConfirmConsequence> consequences =
         [
             new(2, "镜像层被删掉之后,重新拉回来要花时间与带宽。"),
@@ -585,7 +584,7 @@ public sealed class ImagesPageViewModel : PageViewModel
         {
             consequences.Insert(0, new(3, "其中有正在被容器使用的镜像 —— 需要 force,那会让那些容器失去它们的镜像引用。"));
         }
-        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        var confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
         {
             Title = targets.Count == 1 ? $"删除镜像 {targets[0].Repository}:{targets[0].Tag}?" : $"删除 {targets.Count} 个镜像?",
             Icon = "Icon.trash-2",
@@ -600,7 +599,7 @@ public sealed class ImagesPageViewModel : PageViewModel
         {
             return;
         }
-        BatchResult result = await BatchRunner.RunAsync(
+        var result = await BatchRunner.RunAsync(
             [.. targets.Select(t => (Target: t, Name: $"{t.Repository}:{t.Tag}"))],
             async (row, ct) => await client.RemoveImageAsync(row.Id, anyInUse, ct).ConfigureAwait(false),
             null, Shell.Lifetime).ConfigureAwait(true);
@@ -615,7 +614,7 @@ public sealed class ImagesPageViewModel : PageViewModel
         {
             return;
         }
-        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        var confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
         {
             Title = danglingOnly ? "清理悬空镜像?" : "清理全部未使用的镜像?",
             Icon = "Docker.broom",
@@ -642,7 +641,7 @@ public sealed class ImagesPageViewModel : PageViewModel
         }
         try
         {
-            PruneReport report = await client.PruneImagesAsync(danglingOnly, Shell.Lifetime).ConfigureAwait(true);
+            var report = await client.PruneImagesAsync(danglingOnly, Shell.Lifetime).ConfigureAwait(true);
             Shell.Feedback.Notify(FeedbackKind.Success, "清理完成",
                 $"删除 {report.DeletedCount} 项 · 回收 {Humanize.Bytes(report.SpaceReclaimed)}");
             await RefreshAsync(Shell.Lifetime).ConfigureAwait(true);

@@ -1,8 +1,8 @@
+using Avalonia.Threading;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
-using Avalonia.Threading;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
@@ -38,7 +38,7 @@ public abstract class ObservableObject : INotifyPropertyChanged
     /// <summary>触发一组通知。</summary>
     protected void OnPropertiesChanged(params string[] propertyNames)
     {
-        foreach (string name in propertyNames)
+        foreach (var name in propertyNames)
         {
             OnPropertyChanged(name);
         }
@@ -168,18 +168,18 @@ public sealed class KeyedCollection<T>(Func<T, string> keySelector) : Observable
     public void Merge(IReadOnlyList<T> snapshot, Action<T, T> update)
     {
         Dictionary<string, T> existing = [];
-        foreach (T item in this)
+        foreach (var item in this)
         {
             existing[keySelector(item)] = item;
         }
-        for (int i = 0; i < snapshot.Count; i++)
+        for (var i = 0; i < snapshot.Count; i++)
         {
-            T incoming = snapshot[i];
-            string key = keySelector(incoming);
-            if (existing.TryGetValue(key, out T? current))
+            var incoming = snapshot[i];
+            var key = keySelector(incoming);
+            if (existing.TryGetValue(key, out var current))
             {
                 update(current, incoming);
-                int at = IndexOf(current);
+                var at = IndexOf(current);
                 if (at != i && at >= 0)
                 {
                     Move(at, i);
@@ -191,7 +191,7 @@ public sealed class KeyedCollection<T>(Func<T, string> keySelector) : Observable
                 Insert(i, incoming);
             }
         }
-        foreach (T stale in existing.Values)
+        foreach (var stale in existing.Values)
         {
             Remove(stale);
         }

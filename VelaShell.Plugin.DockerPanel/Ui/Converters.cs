@@ -1,9 +1,9 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
+using System.Globalization;
 
 namespace VelaShell.Plugin.DockerPanel.Ui;
 
@@ -185,15 +185,15 @@ public static class Converters
     /// </summary>
     internal static object? Lookup(string key)
     {
-        return Application.Current is not { } app ? null : app.TryFindResource(key, app.ActualThemeVariant, out object? value) ? value : null;
+        return Application.Current is not { } app ? null : app.TryFindResource(key, app.ActualThemeVariant, out var value) ? value : null;
     }
 
     private sealed class ToneBrushConverter : IValueConverter
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            bool dim = (parameter as string) == "dim";
-            string key = value switch
+            var dim = (parameter as string) == "dim";
+            var key = value switch
             {
                 RowTone.Ok => dim ? "VelaShellGreenDim" : "VelaStatusConnected",
                 RowTone.Warn => dim ? "VelaShellYellowDim" : "VelaWarning",
@@ -212,7 +212,7 @@ public static class Converters
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
             value is double width && !double.IsNaN(width) &&
-            double.TryParse(parameter as string, NumberStyles.Float, CultureInfo.InvariantCulture, out double least) &&
+            double.TryParse(parameter as string, NumberStyles.Float, CultureInfo.InvariantCulture, out var least) &&
             width >= least;
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
@@ -254,7 +254,7 @@ public static class Converters
 
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            int index = value is int i && i >= 0 ? i : 0;
+            var index = value is int i && i >= 0 ? i : 0;
             return Resolve(Palette[index % Palette.Length], Brushes.Gray);
         }
 
@@ -281,8 +281,8 @@ public static class Converters
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            bool dim = (parameter as string) == "dim";
-            string key = value switch
+            var dim = (parameter as string) == "dim";
+            var key = value switch
             {
                 FeedbackKind.Success => dim ? "VelaShellGreenDim" : "VelaStatusConnected",
                 FeedbackKind.Warning => dim ? "VelaShellYellowDim" : "VelaWarning",
@@ -331,7 +331,7 @@ public sealed class DataLossBorderConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        string key = value is true ? "VelaError" : "VelaBorderSecondary";
+        var key = value is true ? "VelaError" : "VelaBorderSecondary";
         return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
     }
 
@@ -346,7 +346,7 @@ public sealed class ReadOnlyBackgroundConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        string key = value is true ? "VelaBgSurface" : "VelaBgInput";
+        var key = value is true ? "VelaBgSurface" : "VelaBgInput";
         return Converters.Lookup(key) as IBrush ?? Brushes.Transparent;
     }
 
@@ -361,7 +361,7 @@ public sealed class DangerTextConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        string key = value is true ? "VelaError" : "VelaTextTertiary";
+        var key = value is true ? "VelaError" : "VelaTextTertiary";
         return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
     }
 
@@ -390,7 +390,7 @@ public sealed class FollowForegroundConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        string key = value is true ? "VelaStatusConnected" : "VelaTextSecondary";
+        var key = value is true ? "VelaStatusConnected" : "VelaTextSecondary";
         return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
     }
 
@@ -425,7 +425,7 @@ public sealed class LogLineForegroundConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        string key = value is true ? "VelaShellRed" : "VelaShellWhite";
+        var key = value is true ? "VelaShellRed" : "VelaShellWhite";
         return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
     }
 
@@ -447,9 +447,9 @@ public sealed class LogBodyBrushConverter : IMultiValueConverter
     /// <inheritdoc />
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
-        bool isError = values.Count > 0 && values[0] is true;
-        LogLevel level = values.Count > 1 && values[1] is LogLevel l ? l : LogLevel.None;
-        string key = isError || level == LogLevel.Error ? "VelaShellRed"
+        var isError = values.Count > 0 && values[0] is true;
+        var level = values.Count > 1 && values[1] is LogLevel l ? l : LogLevel.None;
+        var key = isError || level == LogLevel.Error ? "VelaShellRed"
             : level == LogLevel.Warn ? "VelaWarning"
             : level == LogLevel.Debug ? "VelaTextTertiary"
             : "VelaShellWhite";
@@ -475,7 +475,7 @@ public sealed class AuthBrushConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        string key = value is true ? "VelaStatusConnected" : "VelaWarning";
+        var key = value is true ? "VelaStatusConnected" : "VelaWarning";
         return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
     }
 
@@ -502,12 +502,12 @@ public sealed class OutputLineForegroundConverter : IMultiValueConverter
     /// <inheritdoc />
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
-        bool isError = values.Count > 0 && values[0] is true;
-        bool isCommand = values.Count > 1 && values[1] is true;
-        LogLevel level = values.Count > 2 && values[2] is LogLevel l ? l : LogLevel.None;
+        var isError = values.Count > 0 && values[0] is true;
+        var isCommand = values.Count > 1 && values[1] is true;
+        var level = values.Count > 2 && values[2] is LogLevel l ? l : LogLevel.None;
         // 命令本身 > 走 stderr > 正文里认出来的级别。最后这一档平时不会触发
         // (compose 自己的输出没有级别),但 up 的时候服务把 ERROR 打到 stdout 是常有的事。
-        string key = isCommand ? "VelaStatusConnected"
+        var key = isCommand ? "VelaStatusConnected"
             : isError || level == LogLevel.Error ? "VelaShellRed"
             : level == LogLevel.Warn ? "VelaWarning"
             : "VelaShellWhite";
@@ -535,7 +535,7 @@ public sealed class PruneBorderConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        string key = value is RowTone.Danger ? "VelaShellRedDim" : "VelaBorderPrimary";
+        var key = value is RowTone.Danger ? "VelaShellRedDim" : "VelaBorderPrimary";
         return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
     }
 
@@ -550,7 +550,7 @@ public sealed class HotBrushConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        string key = value is true ? "VelaGaugeWarn" : "VelaGaugeCpu";
+        var key = value is true ? "VelaGaugeWarn" : "VelaGaugeCpu";
         return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
     }
 

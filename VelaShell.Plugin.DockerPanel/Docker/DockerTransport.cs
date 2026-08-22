@@ -52,7 +52,7 @@ public sealed class LocalTransport(string socketPath) : IDockerTransport
     {
         if (OperatingSystem.IsWindows() && Description.StartsWith(@"\\.\pipe\", StringComparison.Ordinal))
         {
-            string pipeName = Description[@"\\.\pipe\".Length..];
+            var pipeName = Description[@"\\.\pipe\".Length..];
             var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             try
             {

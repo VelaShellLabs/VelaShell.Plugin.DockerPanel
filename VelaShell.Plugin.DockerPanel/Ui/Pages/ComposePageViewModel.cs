@@ -1,5 +1,5 @@
-using System.Collections.ObjectModel;
 using Avalonia.Controls;
+using System.Collections.ObjectModel;
 using VelaShell.Plugin.DockerPanel.Docker;
 using VelaShell.PluginSdk.RemoteExec;
 
@@ -76,18 +76,18 @@ public static class MergedLog
     /// <param name="known">这个名字是不是本项目的服务 / 容器。</param>
     public static (string Source, string Body) Split(string line, Func<string, bool> known)
     {
-        int bar = line.IndexOf('|');
+        var bar = line.IndexOf('|');
         if (bar is <= 0 or > MaxNameLength)
         {
             return ("", line);
         }
-        string name = line[..bar].TrimEnd();
+        var name = line[..bar].TrimEnd();
         if (name.Length == 0 || name.AsSpan().ContainsAny(' ', '\t') || !known(name))
         {
             return ("", line);
         }
         // 竖线后面 compose 固定跟一个空格;没有也无所谓,别把正文的第一个字符吃掉。
-        string body = line[(bar + 1)..];
+        var body = line[(bar + 1)..];
         return (name, body.StartsWith(' ') ? body[1..] : body);
     }
 }
@@ -456,12 +456,12 @@ public sealed class ComposePageViewModel : PageViewModel
         try
         {
             ComposeAvailable = await compose.IsAvailableAsync(cancellationToken).ConfigureAwait(true);
-            ComposeProject[] projects = ComposeAvailable
+            var projects = ComposeAvailable
                 ? await compose.ListProjectsAsync(cancellationToken).ConfigureAwait(true)
                 : [];
-            string? keep = Selected?.Name;
+            var keep = Selected?.Name;
             Projects.Clear();
-            foreach (ComposeProject project in projects.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
+            foreach (var project in projects.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
             {
                 Projects.Add(project);
             }
@@ -579,8 +579,8 @@ public sealed class ComposePageViewModel : PageViewModel
         {
             return;
         }
-        string path = ComposeCli.EnvPath(project);
-        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        var path = ComposeCli.EnvPath(project);
+        var confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
         {
             Title = $"覆盖 {path}?",
             Icon = "Docker.shield-alert",
@@ -641,7 +641,7 @@ public sealed class ComposePageViewModel : PageViewModel
         Log($"$ docker compose {ProjectPrefix} {arguments} {service.Service}", isCommand: true);
         try
         {
-            int exit = await compose.RunForServiceAsync(project, Argv(arguments), service.Service,
+            var exit = await compose.RunForServiceAsync(project, Argv(arguments), service.Service,
                 new DirectProgress<ExecOutput>(output =>
                     Log(output.Line, output.Stream == ExecStream.StandardError)),
                 Shell.Lifetime).ConfigureAwait(true);
@@ -667,7 +667,7 @@ public sealed class ComposePageViewModel : PageViewModel
     private async Task OpenServiceTerminalAsync(ComposeService service)
     {
         await Shell.GoToAsync(PanelPage.Containers).ConfigureAwait(true);
-        ContainerRow? row = Shell.Containers.View.FirstOrDefault(r => r.Name == service.Name);
+        var row = Shell.Containers.View.FirstOrDefault(r => r.Name == service.Name);
         if (row is null)
         {
             Shell.Feedback.Status(FeedbackKind.Warning, $"容器列表里没有 {service.Name} —— 它可能还没起来。");
@@ -695,9 +695,9 @@ public sealed class ComposePageViewModel : PageViewModel
             return;
         }
         _logsCts = CancellationTokenSource.CreateLinkedTokenSource(Shell.Lifetime);
-        CancellationToken token = _logsCts.Token;
+        var token = _logsCts.Token;
         LogsFollowing = true;
-        string tail = Shell.Settings.LogTail;
+        var tail = Shell.Settings.LogTail;
         _ = Task.Run(async () =>
         {
             try
@@ -727,7 +727,7 @@ public sealed class ComposePageViewModel : PageViewModel
     /// </summary>
     private OutputLine MergedLine(ExecOutput output)
     {
-        (string source, string body) = MergedLog.Split(output.Line, IsKnownSource);
+        (var source, var body) = MergedLog.Split(output.Line, IsKnownSource);
         return new(DateTimeOffset.Now.ToString("HH:mm:ss"), body,
             output.Stream == ExecStream.StandardError, false, source, SourceIndex(source));
     }
@@ -741,7 +741,7 @@ public sealed class ComposePageViewModel : PageViewModel
     /// </summary>
     private bool IsKnownSource(string name)
     {
-        foreach (ComposeService service in Services)
+        foreach (var service in Services)
         {
             if (service.Service == name || service.Name == name)
             {
@@ -757,7 +757,7 @@ public sealed class ComposePageViewModel : PageViewModel
         {
             return 0;
         }
-        for (int i = 0; i < Services.Count; i++)
+        for (var i = 0; i < Services.Count; i++)
         {
             if (Services[i].Service == source || Services[i].Name == source)
             {
@@ -765,7 +765,7 @@ public sealed class ComposePageViewModel : PageViewModel
             }
         }
         // 服务列表里没有的来源(还没刷新到的、一次性任务),各自也要一个稳定的序号。
-        if (!_extraSources.TryGetValue(source, out int extra))
+        if (!_extraSources.TryGetValue(source, out var extra))
         {
             extra = Services.Count + _extraSources.Count;
             _extraSources[source] = extra;
@@ -802,7 +802,7 @@ public sealed class ComposePageViewModel : PageViewModel
         {
             return;
         }
-        string path = ComposePath.Combine(form.Directory, "compose.yaml");
+        var path = ComposePath.Combine(form.Directory, "compose.yaml");
         try
         {
             await compose.WriteFileAsync(path, NewComposeProjectForm.Skeleton(form.ProjectName), Shell.Lifetime)
@@ -824,9 +824,9 @@ public sealed class ComposePageViewModel : PageViewModel
         {
             return;
         }
-        ComposeService[] services = await compose.ListServicesAsync(project, cancellationToken).ConfigureAwait(true);
+        var services = await compose.ListServicesAsync(project, cancellationToken).ConfigureAwait(true);
         Services.Clear();
-        foreach (ComposeService service in services)
+        foreach (var service in services)
         {
             Services.Add(service);
         }
@@ -865,11 +865,11 @@ public sealed class ComposePageViewModel : PageViewModel
             return;
         }
         Running = true;
-        PanelTask task = Shell.Tasks.Start("Docker.boxes", $"{title} · {project.Name}", indeterminate: true);
+        var task = Shell.Tasks.Start("Docker.boxes", $"{title} · {project.Name}", indeterminate: true);
         Log($"$ docker compose {ProjectPrefix} {arguments}", isCommand: true);
         try
         {
-            int exit = await compose.RunAsync(project, Argv(arguments),
+            var exit = await compose.RunAsync(project, Argv(arguments),
                 new DirectProgress<ExecOutput>(output =>
                     Log(output.Line, output.Stream == ExecStream.StandardError)),
                 task.Token).ConfigureAwait(true);
@@ -917,7 +917,7 @@ public sealed class ComposePageViewModel : PageViewModel
         {
             return;
         }
-        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        var confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
         {
             Title = withVolumes ? $"down -v 项目 {project.Name}?" : $"down 项目 {project.Name}?",
             Icon = withVolumes ? "Docker.shield-alert" : "Icon.trash-2",
@@ -961,7 +961,7 @@ public sealed class ComposePageViewModel : PageViewModel
         Config = "正在展开…";
         try
         {
-            ExecResult result = await compose.ConfigAsync(project, Shell.Lifetime).ConfigureAwait(true);
+            var result = await compose.ConfigAsync(project, Shell.Lifetime).ConfigureAwait(true);
             // 展开的结果进它自己那一页,不再倒进执行记录 —— 几百行 YAML 会把记录冲干净。
             Config = result.IsSuccess ? result.Output : result.Error;
             Log(result.IsSuccess ? "✔ 配置可以解析 —— 语法没问题" : "✘ 配置有问题(见 config 页签)",
@@ -981,7 +981,7 @@ public sealed class ComposePageViewModel : PageViewModel
         {
             return;
         }
-        bool confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
+        var confirmed = await Shell.Confirm.AskAsync(Shell.BuildConfirm(new()
         {
             Title = $"覆盖 {project.PrimaryFile}?",
             Icon = "Docker.shield-alert",
@@ -1037,8 +1037,8 @@ public sealed class ComposePageViewModel : PageViewModel
     {
         // compose 的项目名默认取项目目录名 —— 与 compose 自己的规则一致,
         // 不一致的话面板起的容器会带上一个和命令行不同的前缀。
-        string directory = filePath[..Math.Max(0, filePath.LastIndexOf('/'))];
-        string name = projectName is { Length: > 0 } given
+        var directory = filePath[..Math.Max(0, filePath.LastIndexOf('/'))];
+        var name = projectName is { Length: > 0 } given
             ? given
             : directory[(directory.LastIndexOf('/') + 1)..];
         var project = new ComposeProject(name, "(未起过)", filePath);

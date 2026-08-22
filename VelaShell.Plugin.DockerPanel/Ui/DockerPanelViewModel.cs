@@ -142,10 +142,17 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         ApplySocketPathCommand = new RelayCommand(_ => ApplySocketPathAsync());
         // 一条命令把四个常见位置和 docker 自己的说法一次问清,省得用户挨个试。
         // 用 -S 而不是 -e:那个位置上摆着一个同名的普通文件,比不存在更难查。
+        //
+        // 光回答"有没有"是不够的。最常见的一种失败是:socket 在、daemon 也在跑,
+        // 但当前账号不在它的属组里 —— 那要用户对着 `ls -l` 和 `id` 两串输出自己交叉比对。
+        // 所以这里直接用 -r/-w 替他试一次,并把属组和他自己所在的组打在同一行上。
         DiscoverSocketCommand = new RelayCommand(_ => SendToHostTerminalAsync(
             "for s in /var/run/docker.sock \"$XDG_RUNTIME_DIR/docker.sock\" " +
-            "\"$HOME/.docker/run/docker.sock\" \"$HOME/.colima/default/docker.sock\"; " +
-            "do [ -S \"$s\" ] && echo \"有 $s\"; done; " +
+            "\"$HOME/.docker/run/docker.sock\" \"$HOME/.colima/default/docker.sock\"; do " +
+            "[ -S \"$s\" ] || continue; " +
+            "if [ -r \"$s\" ] && [ -w \"$s\" ]; then echo \"可用 $s\"; " +
+            "else echo \"有 $s,但当前账号读写不了:它属组 $(stat -c %G \"$s\" 2>/dev/null)," +
+            "而你在 $(id -nG)\"; fi; done; " +
             "docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null; " +
             "echo \"DOCKER_HOST=$DOCKER_HOST\""));
         ResetSocketPathCommand = new RelayCommand(_ =>
@@ -201,7 +208,9 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     public ObservableCollection<EndpointItem> Endpoints { get; } = [];
 
     /// <summary>当前端点。</summary>
-    public EndpointItem? SelectedEndpoint { get; private set
+    public EndpointItem? SelectedEndpoint
+    {
+        get; private set
         {
             if (SetField(ref field, value))
             {
@@ -209,7 +218,8 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
                 OnPropertiesChanged(nameof(EndpointName), nameof(EndpointDetail), nameof(HasEndpoint),
                     nameof(ComposeAvailable), nameof(SocketPathDefault), nameof(SocketPathChanged));
             }
-        } }
+        }
+    }
 
     /// <summary>顶栏显示的主机名。</summary>
     public string EndpointName => SelectedEndpoint?.DisplayName ?? "选择目标";
@@ -230,13 +240,16 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// 补救按钮把设置抽屉打开却没有这个框,等于把用户领到一堵墙前面。
     /// </para>
     /// </summary>
-    public string SocketPathInput { get; set
+    public string SocketPathInput
+    {
+        get; set
         {
             if (SetField(ref field, value))
             {
                 OnPropertyChanged(nameof(SocketPathChanged));
             }
-        } } = "";
+        }
+    } = "";
 
     /// <summary>当前端点默认的 socket 路径(用来判断"是不是改过了")。</summary>
     public string SocketPathDefault =>
@@ -264,7 +277,9 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     // ── 连接状态 ──────────────────────────────────────────────────
 
     /// <summary>连接状态。</summary>
-    public PanelConnectionState State { get; private set
+    public PanelConnectionState State
+    {
+        get; private set
         {
             if (SetField(ref field, value))
             {
@@ -272,7 +287,8 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
                     nameof(EventsDegraded));
                 RefreshCommand.RaiseCanExecuteChanged();
             }
-        } } = PanelConnectionState.NoEndpoint;
+        }
+    } = PanelConnectionState.NoEndpoint;
 
     /// <summary>还没选端点。</summary>
     public bool NeedsEndpoint => State == PanelConnectionState.NoEndpoint;
@@ -328,14 +344,17 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     public IReadOnlyList<PageViewModel> AllPages { get; }
 
     /// <summary>当前页标识(左导航栏据此选中)。</summary>
-    public PanelPage CurrentPage { get; private set
+    public PanelPage CurrentPage
+    {
+        get; private set
         {
             if (SetField(ref field, value))
             {
                 OnPropertiesChanged(nameof(IsOverview), nameof(IsContainers), nameof(IsImages),
                     nameof(IsVolumes), nameof(IsNetworks), nameof(IsCompose), nameof(IsSystem));
             }
-        } } = PanelPage.Overview;
+        }
+    } = PanelPage.Overview;
 
     /// <summary>当前页的视图模型。</summary>
     public PageViewModel? ActivePage
@@ -427,9 +446,9 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         }
 
         // ── 动作:对具体容器的高频操作。放最前面,因为它们是"要做一件事"而不是"要看一眼"。
-        foreach (ContainerRow row in Containers.View.Where(r => r.IsRunning).Take(20))
+        foreach (var row in Containers.View.Where(r => r.IsRunning).Take(20))
         {
-            ContainerRow target = row;
+            var target = row;
             entries.Add(new("动作", $"重启 {target.Name}", DescribeContainer(target), "Docker.rotate-cw",
                 RowTone.Ok, false, () => { Containers.RestartCommand.Execute(target); return Task.CompletedTask; }));
             entries.Add(new("动作", $"停止 {target.Name}", DescribeContainer(target), "Icon.square",
@@ -437,24 +456,24 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         }
 
         // ── 容器 / 镜像 / 卷:导航到某个对象。
-        foreach (ContainerRow row in Containers.View.Take(40))
+        foreach (var row in Containers.View.Take(40))
         {
-            ContainerRow target = row;
+            var target = row;
             entries.Add(new("容器", target.Name, DescribeContainer(target), "Docker.box",
                 target.Tone, false, () => Containers.OpenDetailCommand is { } open
                     ? Task.Run(() => Ui.Post(() => open.Execute(target)))
                     : Task.CompletedTask));
         }
-        foreach (ImageRow row in Images.View.Take(40))
+        foreach (var row in Images.View.Take(40))
         {
-            ImageRow target = row;
+            var target = row;
             entries.Add(new("镜像 / 卷", $"{target.Repository}:{target.Tag}", $"镜像 · {target.SizeText}",
                 "Icon.layers", RowTone.Idle, false,
                 () => { Images.OpenDetailCommand.Execute(target); return Task.CompletedTask; }));
         }
-        foreach (VolumeRow row in Volumes.View.Take(40))
+        foreach (var row in Volumes.View.Take(40))
         {
-            VolumeRow target = row;
+            var target = row;
             entries.Add(new("镜像 / 卷", target.Name, $"卷 · {target.SizeText}", "Icon.hard-drive",
                 RowTone.Idle, false, () => { Volumes.SelectCommand.Execute(target); return Task.CompletedTask; }));
         }
@@ -468,7 +487,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
             RowTone.Idle, true, () => { Images.PruneDanglingCommand.Execute(null); return Task.CompletedTask; }));
         entries.Add(new("面板命令", "打开设置", "连接、显示、行为", "Icon.settings",
             RowTone.Idle, false, () => { SettingsOpen = true; return Task.CompletedTask; }));
-        foreach ((PanelPage page, string title, string icon) in ((PanelPage, string, string)[])
+        foreach ((var page, var title, var icon) in ((PanelPage, string, string)[])
                  [
                      (PanelPage.Overview, "总览", "Docker.layout-dashboard"),
                      (PanelPage.Containers, "容器", "Docker.box"),
@@ -478,7 +497,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
                      (PanelPage.System, "系统", "Icon.gauge")
                  ])
         {
-            PanelPage target = page;
+            var target = page;
             entries.Add(new("面板命令", $"转到{title}", "切换页面", icon, RowTone.Idle, false,
                 () => GoToAsync(target)));
         }
@@ -555,9 +574,9 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         [
             new(DockerEndpoint.Local("本机 Docker"), true, "可用", FeedbackKind.Info)
         ];
-        foreach (SessionInfo session in sessions.OrderBy(s => s.Host, StringComparer.OrdinalIgnoreCase))
+        foreach (var session in sessions.OrderBy(s => s.Host, StringComparer.OrdinalIgnoreCase))
         {
-            bool connected = session.State == SessionState.Connected;
+            var connected = session.State == SessionState.Connected;
             items.Add(new(
                 DockerEndpoint.Remote(session.SessionId, session.Host, $"{session.Username}@{session.Host}:{session.Port}"),
                 connected,
@@ -567,7 +586,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         Ui.Post(() =>
         {
             Endpoints.Clear();
-            foreach (EndpointItem item in items)
+            foreach (var item in items)
             {
                 Endpoints.Add(item);
             }
@@ -599,7 +618,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         // 点进去却是上一台机器的项目。
         Compose = null;
         OnPropertyChanged(nameof(ComposeAvailable));
-        foreach (PageViewModel page in AllPages)
+        foreach (var page in AllPages)
         {
             page.Reset();
         }
@@ -607,8 +626,8 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         State = PanelConnectionState.Connecting;
         RecoveryActions.Clear();
 
-        DockerEndpoint endpoint = item.Endpoint;
-        string? remembered = await Settings.GetSocketPathAsync(endpoint.DisplayName, _lifetime.Token).ConfigureAwait(true);
+        var endpoint = item.Endpoint;
+        var remembered = await Settings.GetSocketPathAsync(endpoint.DisplayName, _lifetime.Token).ConfigureAwait(true);
         if (!string.IsNullOrWhiteSpace(remembered) && remembered != endpoint.SocketPath)
         {
             endpoint = endpoint with { SocketPath = remembered };
@@ -621,7 +640,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         var client = new DockerClient(endpoint, transport);
         try
         {
-            SystemVersion version = await client.PingAsync(_lifetime.Token).ConfigureAwait(true);
+            var version = await client.PingAsync(_lifetime.Token).ConfigureAwait(true);
             Client = client;
             RegistryAuth = new(Context.RemoteFs, endpoint);
             // compose 只有 CLI,所以要一条"跑命令"的通道:远端是 SSH,本机是本地进程。
@@ -660,7 +679,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         {
             return;
         }
-        string path = SocketPathInput.Trim();
+        var path = SocketPathInput.Trim();
         if (path.Length == 0)
         {
             Feedback.Status(FeedbackKind.Warning, "socket 路径不能为空。");
@@ -737,18 +756,30 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
                     ErrorIcon = "Docker.circle-x";
                     ErrorTitle = "打不开到 docker.sock 的通道";
                     ErrorDetail = "路径不存在、daemon 没在跑,或者当前账号根本碰不到这个 socket —— 远端只回了一句笼统的失败,自己分不出是哪一种。下面这条命令一次看清。";
-                    // 三种可能一条命令全覆盖:socket 在不在(ls)、账号在不在 docker 组(id)、
-                    // daemon 跑没跑(systemctl)。分三次让用户来回试不如一次问清。
+                    // 三种可能一条命令全覆盖:socket 在不在、当前账号读不读得动它、daemon 跑没跑。
+                    // 关键是**替他判**,而不是把 `ls -l` 和 `id` 两串输出丢过去让他自己对 ——
+                    // 权限这一档最常见,而 "srw-rw---- root docker" 与 "groups=Users"
+                    // 要交叉比对才看得出来。
                     RecoveryActions.Add(new("在终端里检查", "Icon.terminal", true,
                         () => _ = SendToHostTerminalAsync(
-                            $"ls -l {item.Endpoint.SocketPath}; id; systemctl status docker --no-pager | head -5")));
+                            $"s={item.Endpoint.SocketPath}; " +
+                            "if [ ! -S \"$s\" ]; then echo \"没有 $s —— 换条路径,或者远端压根没装 Docker\"; " +
+                            "elif [ -r \"$s\" ] && [ -w \"$s\" ]; then echo \"$s 可读写 —— 问题不在权限\"; " +
+                            "else echo \"$s 在,但当前账号读写不了:它属组 $(stat -c %G \"$s\" 2>/dev/null)," +
+                            "而你在 $(id -nG)\"; fi; " +
+                            "systemctl status docker --no-pager | head -3")));
                     RecoveryActions.Add(new("换一个 socket 路径", "Icon.settings", false, () => SettingsOpen = true));
                     item.Update(false, "打不开通道", FeedbackKind.Error);
                     break;
                 case DockerUnreachableReason.PermissionDenied:
                     ErrorIcon = "Docker.lock";
                     ErrorTitle = "当前账号没有 docker.sock 的读写权限";
-                    ErrorDetail = "账号不在 docker 组。把账号加进 docker 组,或者换一个有权限的账号 —— 面板不会替你 sudo,那需要一个它拿不到也不该拿的口令。";
+                    ErrorDetail = "账号不在 socket 的属组里。把账号加进 docker 组,或者换一个有权限的账号 —— " +
+                                  "面板不会替你 sudo,那需要一个它拿不到也不该拿的口令。";
+                    // 这一句不是啰嗦:组是**登录时**读进去的,usermod 改完之后当前这条 SSH 会话
+                    // 仍然带着旧的组。不说清楚的话,用户会以为那条命令没生效,然后反复再跑一遍。
+                    ErrorHint = "改完要重开一条 SSH 会话再连 —— 组是登录时定的,现有会话不会自己更新。" +
+                                "另外:docker 组等同于 root(能挂载宿主根目录),给之前先掂量一下。";
                     RecoveryActions.Add(new("加进 docker 组", "Docker.users", true,
                         () => _ = SendToHostTerminalAsync("sudo usermod -aG docker $USER")));
                     // sudo -n 只在**已经配了免密**时才成 —— 面板绝不弹口令框,
@@ -785,6 +816,97 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         }
         RecoveryActions.Add(new("重试", "Icon.refresh-cw", RecoveryActions.Count == 0, () => _ = ConnectAsync(item)));
         Context.Log.Warn($"connect to docker failed: {ex.Message}");
+        // 上面那一屏是"还不知道是哪种连不上"时的说法。真去问一句要跑一条远端命令,
+        // 不该让用户对着转圈等 —— 先显示笼统的版本,探出结果再替换成具体的那一屏。
+        if (ex is DockerUnreachableException
+            {
+                Reason: DockerUnreachableReason.SocketMissing
+                or DockerUnreachableReason.PermissionDenied or DockerUnreachableReason.Unknown
+            })
+        {
+            _ = RefineFailureAsync(item);
+        }
+    }
+
+    /// <summary>
+    /// 连不上之后,替用户把"到底是哪种连不上"问清楚,再用一句人话重写这一屏。
+    /// <para>
+    /// 为什么值得多跑一次:sshd 打不开通道时只回一句笼统的失败,面板分不出"没这个文件"
+    /// 与"你没权限"。而这两件事要做的完全不一样。分不出来,界面就只能说
+    /// "自己去终端看看",再把 <c>ls -l</c> 与 <c>id</c> 两串输出丢给用户交叉比对 ——
+    /// 那是把诊断工作外包给了最不该做诊断的人。
+    /// </para>
+    /// <para>
+    /// 探测是只读的,而且**不阻塞**上面那一屏:先把笼统的版本显示出来,探出结果再替换。
+    /// 探不出来就什么都不动。
+    /// </para>
+    /// </summary>
+    private async Task RefineFailureAsync(EndpointItem item)
+    {
+        var probe = await SocketProbe
+            .RunAsync(Context.RemoteExec, item.Endpoint, _lifetime.Token).ConfigureAwait(true);
+        // 探测期间用户可能已经换了端点、或者又连上了 —— 那就别再动这一屏。
+        if (State != PanelConnectionState.Failed || !ReferenceEquals(SelectedEndpoint, item))
+        {
+            return;
+        }
+        switch (probe.Kind)
+        {
+            case SocketProbeKind.PermissionDenied:
+                ShowPermissionDenied(item, probe);
+                break;
+            case SocketProbeKind.Missing:
+                ShowSocketMissing(item);
+                break;
+            case SocketProbeKind.Ready:
+                // 文件在、也读得动,却还是连不上 —— 那就不是这两件事。别再引导用户去加组。
+                ErrorHint = $"{item.Endpoint.SocketPath} 存在而且当前账号读写得动,所以问题不在路径也不在权限。" +
+                            "多半是 Docker 服务本身没起来,或者这条 SSH 会话中途断了。";
+                break;
+        }
+    }
+
+    /// <summary>
+    /// "没权限"这一屏。
+    /// <para>
+    /// 句子里的账号名与组名都是**探出来的真名**,不是"当前账号""某个组"。
+    /// 用户不需要知道什么叫属组,他只需要看懂"joes 不在 docker 里面,把它加进去"。
+    /// </para>
+    /// </summary>
+    private void ShowPermissionDenied(EndpointItem item, SocketProbeResult probe)
+    {
+        var account = probe.Account is { Length: > 0 } a ? a : "当前账号";
+        var group = probe.Group is { Length: > 0 } g ? g : "docker";
+        ErrorIcon = "Docker.lock";
+        ErrorTitle = $"账号「{account}」还不被允许使用这台机器上的 Docker";
+        ErrorDetail = $"Docker 装着、也在跑,只是它只对 {group} 组开放,而 {account} 不在这个组里" +
+                      (probe.Groups is { Length: > 0 } groups ? $"(它现在属于:{groups})" : "") +
+                      $"。把 {account} 加进 {group} 组就能用了 —— 这一步要管理员口令,面板不会替你做。";
+        // 这一句不是啰嗦:账号属于哪些组是**登录那一刻**定下来的。改完不重连,
+        // 用户会以为那条命令没生效,然后反复再跑一遍。
+        ErrorHint = "加完之后要重新连一次这条 SSH 会话才算数 —— 账号属于哪些组是登录时定下来的," +
+                    "现在这条连接还带着旧的。 · 提醒:进了这个组就等于拿到这台机器的完全控制权,加之前先想清楚。";
+        RecoveryActions.Clear();
+        RecoveryActions.Add(new($"把 {account} 加进 {group} 组", "Docker.users", true,
+            () => _ = SendToHostTerminalAsync($"sudo usermod -aG {group} {account}")));
+        RecoveryActions.Add(new("改好了,重新连", "Icon.refresh-cw", false, () => _ = ConnectAsync(item)));
+        item.Update(true, "没有权限", FeedbackKind.Warning);
+    }
+
+    /// <summary>"那个位置上没有 socket"这一屏。三种原因各给一条出路。</summary>
+    private void ShowSocketMissing(EndpointItem item)
+    {
+        ErrorIcon = "Docker.circle-x";
+        ErrorTitle = "这台机器上找不到 Docker 的接口";
+        ErrorDetail = $"面板要找的是 {item.Endpoint.SocketPath} 这个文件,但它不在那儿。" +
+                      "常见的就三种:这台机器没装 Docker、Docker 服务没启动,或者它把接口放在了别的位置。";
+        ErrorHint = "";
+        RecoveryActions.Clear();
+        RecoveryActions.Add(new("看看 Docker 服务在不在跑", "Icon.terminal", true,
+            () => _ = SendToHostTerminalAsync("systemctl status docker --no-pager | head -5")));
+        RecoveryActions.Add(new("换一个位置", "Icon.settings", false, () => SettingsOpen = true));
+        RecoveryActions.Add(new("重新连", "Icon.refresh-cw", false, () => _ = ConnectAsync(item)));
+        item.Update(false, "找不到接口", FeedbackKind.Error);
     }
 
     /// <summary>切页。</summary>
@@ -889,7 +1011,7 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         Tasks.CancelAll();
         await _lifetime.CancelAsync().ConfigureAwait(false);
         await StopEventStreamAsync().ConfigureAwait(false);
-        foreach (PageViewModel page in AllPages)
+        foreach (var page in AllPages)
         {
             if (page is IAsyncDisposable disposable)
             {

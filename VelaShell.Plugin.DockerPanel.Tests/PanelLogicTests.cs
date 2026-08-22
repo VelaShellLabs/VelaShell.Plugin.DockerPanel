@@ -19,7 +19,7 @@ public class PanelLogicTests
     [TestMethod]
     public async Task Batch_JudgesEachTargetSeparatelyAndKeepsGoing()
     {
-        BatchResult result = await BatchRunner.RunAsync(
+        var result = await BatchRunner.RunAsync(
             [("a", "worker-1"), ("b", "postgres-main"), ("c", "worker-2")],
             (target, _) => target == "b"
                 ? throw new DockerApiException(System.Net.HttpStatusCode.Conflict,
@@ -37,8 +37,8 @@ public class PanelLogicTests
     [TestMethod]
     public async Task Batch_StopsAfterTheConnectionDies()
     {
-        int attempts = 0;
-        BatchResult result = await BatchRunner.RunAsync(
+        var attempts = 0;
+        var result = await BatchRunner.RunAsync(
             [("a", "one"), ("b", "two"), ("c", "three")],
             (_, _) =>
             {
@@ -129,7 +129,7 @@ public class PanelLogicTests
         var a = new Item("a");
         var b = new Item("b");
         collection.Merge([a, b], (_, _) => { });
-        Item keptA = collection[0];
+        var keptA = collection[0];
 
         collection.Merge([new Item("a"), new Item("b")], (current, incoming) => current.Version++);
 
@@ -198,12 +198,12 @@ public class PanelLogicTests
     public async Task Gate_ConfirmAndCancelResolveTheWaiter()
     {
         var gate = new ConfirmGate();
-        Task<bool> pending = gate.AskAsync(DataLossRequest());
+        var pending = gate.AskAsync(DataLossRequest());
         gate.TypedWord = "delete";
         gate.ConfirmCommand.Execute(null);
         Assert.IsTrue(await pending);
 
-        Task<bool> second = gate.AskAsync(DataLossRequest());
+        var second = gate.AskAsync(DataLossRequest());
         gate.CancelCommand.Execute(null);
         Assert.IsFalse(await second);
     }
@@ -212,7 +212,7 @@ public class PanelLogicTests
     public async Task Gate_RefusesASecondRequestWhileOneIsOpen()
     {
         var gate = new ConfirmGate();
-        Task<bool> first = gate.AskAsync(DataLossRequest());
+        var first = gate.AskAsync(DataLossRequest());
 
         // 两层确认框叠在一起,用户不可能说清自己在确认哪一个。
         Assert.IsFalse(await gate.AskAsync(DataLossRequest()));
@@ -272,7 +272,7 @@ public class PanelLogicTests
         form.Volumes.Rows.Add(new("/srv/conf", "/etc/nginx/conf.d"));
         form.Env.Rows.Add(new("KEY", "value"));
 
-        ContainerCreateRequest request = form.ToRequest();
+        var request = form.ToRequest();
 
         Assert.AreEqual("nginx:1.27-alpine", request.Image);
         Assert.AreEqual("8081", request.HostConfig!.PortBindings!["80/tcp"][0].HostPort);
@@ -305,8 +305,8 @@ public class PanelLogicTests
     public void CreateNetworkForm_DisablesOverlayWhenSwarmIsInactive()
     {
         var form = new CreateNetworkForm(swarmActive: false);
-        ChoiceField driver = form.Fields.OfType<ChoiceField>().Single(f => f.Label == "驱动");
-        ChoiceOption overlay = driver.Options.Single(o => o.Value == "overlay");
+        var driver = form.Fields.OfType<ChoiceField>().Single(f => f.Label == "驱动");
+        var overlay = driver.Options.Single(o => o.Value == "overlay");
 
         // 直接置灰而不是让用户去撞一条 daemon 的错误。
         Assert.IsFalse(overlay.Enabled);
@@ -321,7 +321,7 @@ public class PanelLogicTests
             ("a", "one", "运行中", true, ""),
             ("b", "two", "运行中", true, "")
         ]);
-        foreach (SelectItem item in form.Containers.Items)
+        foreach (var item in form.Containers.Items)
         {
             item.Selected = true;
         }

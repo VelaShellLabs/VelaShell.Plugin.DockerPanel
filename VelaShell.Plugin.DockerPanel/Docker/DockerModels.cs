@@ -35,7 +35,7 @@ public static class DockerJson
     /// </remarks>
     public static T? TryDeserialize<T>(string json) where T : class
     {
-        ReadOnlySpan<char> body = json.AsSpan().Trim();
+        var body = json.AsSpan().Trim();
         if (body.IsEmpty || (body[0] != '{' && body[0] != '['))
         {
             return null;
@@ -55,7 +55,7 @@ public static class DockerJson
     {
         try
         {
-            using JsonDocument doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json);
             return JsonSerializer.Serialize(doc.RootElement, HumanJson);
         }
         catch (JsonException)
@@ -974,13 +974,13 @@ public sealed record ContainerStats
             {
                 return 0;
             }
-            double cpuDelta = (double)CpuStats.CpuUsage.TotalUsage - PreCpuStats.CpuUsage.TotalUsage;
-            double systemDelta = (double)CpuStats.SystemCpuUsage - PreCpuStats.SystemCpuUsage;
+            var cpuDelta = (double)CpuStats.CpuUsage.TotalUsage - PreCpuStats.CpuUsage.TotalUsage;
+            var systemDelta = (double)CpuStats.SystemCpuUsage - PreCpuStats.SystemCpuUsage;
             if (cpuDelta <= 0 || systemDelta <= 0)
             {
                 return 0;
             }
-            int cpus = CpuStats.OnlineCpus > 0
+            var cpus = CpuStats.OnlineCpus > 0
                 ? CpuStats.OnlineCpus
                 : CpuStats.CpuUsage.PerCpuUsage?.Length ?? 1;
             return cpuDelta / systemDelta * cpus * 100.0;
@@ -1006,11 +1006,11 @@ public sealed record ContainerStats
             ulong cache = 0;
             if (MemoryStats.Stats is { } stats)
             {
-                if (stats.TryGetValue("inactive_file", out ulong inactive))
+                if (stats.TryGetValue("inactive_file", out var inactive))
                 {
                     cache = inactive;
                 }
-                else if (stats.TryGetValue("cache", out ulong c))
+                else if (stats.TryGetValue("cache", out var c))
                 {
                     cache = c;
                 }
