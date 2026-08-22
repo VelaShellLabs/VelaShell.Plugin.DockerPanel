@@ -25,7 +25,7 @@
         <!-- 坐在弹性列里而不是自己的 Auto 列里:窄下来时它该被省略号截断,
              而不是把右边那一排按钮顶出去。 -->
         <TextBlock Grid.Column="3" Text="{Binding HeaderText}" Classes="cell" Margin="9,0,9,0"
-                   ToolTip.Tip="{Binding HeaderText}"
+                   ToolTip.Tip="{Binding HeaderText, Converter={x:Static ui:Converters.TipText}}"
                    Foreground="{DynamicResource VelaTextTertiary}" />
 
         <Border Grid.Column="4" Classes="chip" Margin="0,0,9,0"

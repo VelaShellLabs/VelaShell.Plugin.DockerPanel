@@ -56,7 +56,15 @@
           <TextBlock Text="{Binding HostName}" FontFamily="{DynamicResource VelaUiMonoFont}"
                      FontSize="{DynamicResource VelaFontSize12}" FontWeight="SemiBold"
                      Foreground="{DynamicResource VelaTextPrimary}" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding HostDetail}" Classes="meta" />
+          <TextBlock Text="{Binding HostDetail}" Classes="meta">
+            <TextBlock.Foreground>
+              <Binding Path="HostWarning">
+                <Binding.Converter>
+                  <ui:DangerTextConverter />
+                </Binding.Converter>
+              </Binding>
+            </TextBlock.Foreground>
+          </TextBlock>
         </StackPanel>
       </Border>
 

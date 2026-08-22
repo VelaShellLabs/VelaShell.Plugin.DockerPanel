@@ -88,6 +88,9 @@ public sealed class VolumesPageViewModel : PageViewModel
     /// <summary>列表空了。</summary>
     public bool IsEmpty => LoadedOnce && _all.Count == 0;
 
+    /// <summary>筛完之后没有匹配项 —— 与"这台机器上没有卷"是两回事,得分开说。</summary>
+    public bool NoMatch => LoadedOnce && _all.Count > 0 && View.Count == 0;
+
     /// <summary>当前选中的卷(右侧详情)。</summary>
     public VolumeRow? Selected
     {
@@ -282,7 +285,7 @@ public sealed class VolumesPageViewModel : PageViewModel
                 r.Project.Contains(needle, StringComparison.OrdinalIgnoreCase));
         }
         View.Merge([.. filtered], (_, _) => { });
-        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertiesChanged(nameof(IsEmpty), nameof(NoMatch), nameof(UnusedCount), nameof(UsedCount));
     }
 
     private async Task CreateAsync()
@@ -362,7 +365,12 @@ public sealed class VolumesPageViewModel : PageViewModel
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Shell.Feedback.ReportError("删除卷", ex);
+            // 409 的真实含义是"还有容器挂着它",而挂着它的是谁,这一页早就知道 ——
+            // 把这句话直接说出来,并给一条过去看的路。
+            ToastAction[] actions = ex is DockerApiException { IsConflict: true } && _users.TryGetValue(row.Name, out List<string>? holders) && holders.Count > 0
+                ? [new($"看看是谁在占({holders.Count} 个容器)", () => Selected = row)]
+                : [];
+            Shell.Feedback.ReportError("删除卷", ex, actions);
         }
     }
 
@@ -385,7 +393,7 @@ public sealed class VolumesPageViewModel : PageViewModel
             DataLossHeadline = $"当前有 {UnusedCount} 个未使用的卷,它们里面的数据会被永久删除",
             DataLossPoints =
             [
-                "\"未使用\"只是说没有容器**现在**挂着它 —— 一个刚 down 掉的 compose 项目,它的数据卷就在这个名单里。",
+                "\"未使用\"只是说没有容器「现在」挂着它 —— 一个刚 down 掉的 compose 项目,它的数据卷就在这个名单里。",
                 "Docker 不做回收站。",
                 .. _all.Where(r => r.RefCount == 0).Take(5).Select(r => $"将被删除:{r.Name}({r.SizeText})")
             ]

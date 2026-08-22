@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Net;
 using Avalonia.Threading;
 using VelaShell.Plugin.DockerPanel.Docker;
 
@@ -180,21 +181,48 @@ public sealed class Feedback : ObservableObject
         Notify(FeedbackKind.Warning, summary, detail, [.. actions]);
     }
 
-    /// <summary>把一个异常如实报出来。连不上与操作失败的语气不一样。</summary>
-    public void ReportError(string what, Exception ex)
+    /// <summary>
+    /// 把一个异常报出来。连不上与操作失败的语气不一样。
+    /// <para>
+    /// daemon 的原文一律留着 —— 它是唯一的事实。但只给原文不够:
+    /// <c>409 volume is in use</c> 这种话,用户读完还是不知道下一步该做什么。
+    /// 所以在原文**前面**加一句人话,并且允许调用方挂一颗补救按钮
+    /// (「看看是谁在占」这类);两者都没有的时候,行为与从前一致。
+    /// </para>
+    /// </summary>
+    /// <param name="what">在做什么(“删除卷”)。</param>
+    /// <param name="ex">异常。</param>
+    /// <param name="actions">补救动作,调用方按场景给。</param>
+    public void ReportError(string what, Exception ex, params ToastAction[] actions)
     {
-        string detail = ex switch
-        {
-            DockerApiException api => api.Message,
-            DockerUnreachableException unreachable => unreachable.Message,
-            OperationCanceledException => "已取消。",
-            _ => ex.Message
-        };
         if (ex is OperationCanceledException)
         {
             Status(FeedbackKind.Info, $"{what} 已取消");
             return;
         }
-        Notify(FeedbackKind.Error, $"{what} 失败", detail);
+        string detail = ex switch
+        {
+            DockerApiException api => Explain(api) is { Length: > 0 } why ? $"{why}\n{api.Message}" : api.Message,
+            DockerUnreachableException unreachable => unreachable.Message,
+            _ => ex.Message
+        };
+        Notify(FeedbackKind.Error, $"{what} 失败", detail, actions);
     }
+
+    /// <summary>
+    /// 给 daemon 的状态码配一句人话。
+    /// <para>
+    /// 只翻译**状态码本身**的含义,不猜具体是哪个资源出的事 ——
+    /// 后者要看上下文,由调用方用补救动作去说。
+    /// </para>
+    /// </summary>
+    private static string Explain(DockerApiException api) => api.StatusCode switch
+    {
+        HttpStatusCode.Conflict => "冲突:目标正被别的东西占着,或者当前状态不允许这个动作。",
+        HttpStatusCode.NotFound => "目标已经不在了 —— 多半是别处(或另一个面板)已经删掉了。",
+        HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "认证不通过:凭据过期、没登录,或者这个仓库不让你做这件事。",
+        HttpStatusCode.BadRequest => "daemon 认为这个请求本身有问题 —— 多半是参数或名字不合法。",
+        HttpStatusCode.InternalServerError => "daemon 内部出错。它的日志(journalctl -u docker)里会有更完整的一段。",
+        _ => ""
+    };
 }

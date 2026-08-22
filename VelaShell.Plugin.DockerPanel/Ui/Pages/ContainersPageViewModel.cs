@@ -803,18 +803,6 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
 
     private RelayCommand? _exitLogs;
 
-    /// <summary>把某个来源从合并流里去掉(顶部 chip 上那个 ×)。</summary>
-    public RelayCommand RemoveSourceCommand => _removeSource ??= new(p =>
-    {
-        if (p is LogSource source)
-        {
-            RemoveLogSource(source);
-        }
-        return Task.CompletedTask;
-    });
-
-    private RelayCommand? _removeSource;
-
     /// <summary>
     /// 从合并流里摘掉一条来源。
     /// 走勾选那条路,左边面板的状态跟着一起变 —— 两处不能各说各话。
@@ -928,14 +916,6 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     }
 
     // ── 行级动作(右键菜单 / 命令面板都走这几个)────────────────────
-
-    /// <summary>打开详情并停在指定页签。</summary>
-    public RelayCommand OpenTabCommand => _openTab ??= new(p =>
-        p is object[] { Length: 2 } args && args[0] is ContainerRow row && args[1] is DetailTab tab
-            ? OpenDetailAtTabAsync(row, tab)
-            : Task.CompletedTask);
-
-    private RelayCommand? _openTab;
 
     /// <summary>看这一个容器的日志(详情抽屉的日志页签)。</summary>
     public RelayCommand RowLogsCommand => _rowLogs ??= new(p =>

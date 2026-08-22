@@ -459,7 +459,7 @@
                                  TextTrimming="CharacterEllipsis" />
                       <TextBlock Grid.Column="2" Text="{Binding Cpu}" Classes="cell" VerticalAlignment="Center" />
                       <TextBlock Grid.Column="3" Text="{Binding Command}" Classes="code" VerticalAlignment="Center"
-                                 TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Command}" />
+                                 TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Command, Converter={x:Static ui:Converters.TipText}}" />
                     </Grid>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>

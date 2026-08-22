@@ -272,6 +272,13 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
             Connected = false;
             Status = $"建立失败:{ex.Message}";
             view.Write($"\u001b[31m无法在 {containerName} 里启动 {Shell}:{ex.Message}\u001b[0m\r\n");
+            // daemon 的原文(多半是一句 "no such file or directory")指不出下一步该做什么。
+            // 建不起来的原因就那么三种,直说 —— 对着一句原文没人猜得到该换什么。
+            string warn = (char)0x1b + "[33m";
+            string reset = (char)0x1b + "[0m";
+            view.Write($"{warn}常见原因:容器没在跑;镜像里根本没有 shell(distroless 一类);" +
+                       $"或者指定的用户在容器里不存在。{reset}\r\n");
+            view.Write($"{warn}工具条上的「切换用户」可以换 shell 与身份,换完会自动重连。{reset}\r\n");
         }
     }
 

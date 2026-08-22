@@ -235,7 +235,7 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
         {
             if (SetField(ref _authState, value))
             {
-                OnPropertiesChanged(nameof(AuthOk), nameof(AuthWarn));
+                OnPropertiesChanged(nameof(AuthOk), nameof(AuthWarn), nameof(AuthTone));
             }
         }
     }
@@ -245,6 +245,21 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
 
     /// <summary>凭据取不到。</summary>
     public bool AuthWarn => AuthState is RegistryAuthState.HelperOnly or RegistryAuthState.Missing;
+
+    /// <summary>
+    /// 凭据状态的语气,界面据此上色与选图标。
+    /// <para>
+    /// 三档而不是两档:<b>HelperOnly</b>(凭据交给了 credential helper,面板取不到)与
+    /// <b>Missing</b>(压根没有)对用户是两件不同的事,而原来两者都跟"认证失败"一个样子 ——
+    /// 前者往往拉公开镜像照样成功,后者一定失败。
+    /// </para>
+    /// </summary>
+    public RowTone AuthTone => AuthState switch
+    {
+        RegistryAuthState.Available or RegistryAuthState.NotRequired => RowTone.Ok,
+        RegistryAuthState.HelperOnly => RowTone.Warn,
+        _ => RowTone.Danger
+    };
 
     /// <summary>总进度 0–1。</summary>
     public double Progress

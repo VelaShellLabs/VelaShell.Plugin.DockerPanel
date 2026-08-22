@@ -416,6 +416,19 @@ public sealed class ComposePageViewModel : PageViewModel
     /// <inheritdoc />
     public override bool WantsRefresh(DockerEvent dockerEvent) => dockerEvent.Type == "container";
 
+    /// <summary>
+    /// 把用户送到 Compose 页并选中这个项目 —— 执行记录就在那一页的右侧那一栏。
+    /// <para>已经在这一页、而且选的就是它,就什么都不做:重选一次会把刚出的那份记录冲掉。</para>
+    /// </summary>
+    private async Task ShowOutputAsync(ComposeProject project)
+    {
+        await Shell.GoToAsync(PanelPage.Compose).ConfigureAwait(true);
+        if (Selected?.Name != project.Name)
+        {
+            await SelectAsync(project).ConfigureAwait(true);
+        }
+    }
+
     private async Task SelectAsync(ComposeProject project)
     {
         await StopLogsAsync().ConfigureAwait(true);
@@ -730,8 +743,10 @@ public sealed class ComposePageViewModel : PageViewModel
             {
                 task.Finish(PanelTaskState.Failed, $"退出码 {exit}");
                 Log($"✘ {title} 失败 · 退出码 {exit}", isError: true);
+                // 执行记录就在 Compose 页右侧那一栏 —— 把用户送过去并选中出事的那个项目。
+                // 原来这颗按钮挂的是一个空 lambda:点了什么都不会发生。
                 Shell.Feedback.Notify(FeedbackKind.Error, $"{title} 失败", $"{project.Name} · 退出码 {exit}",
-                    new ToastAction("查看执行记录", () => { }));
+                    new ToastAction("查看执行记录", () => _ = ShowOutputAsync(project)));
             }
             await RefreshAsync(Shell.Lifetime).ConfigureAwait(true);
         }
@@ -773,7 +788,7 @@ public sealed class ComposePageViewModel : PageViewModel
                 :
                 [
                     new(2, "项目的容器与默认网络会被删除。"),
-                    new(1, "**命名卷不受影响** —— 数据还在,下次 up 会挂回去。"),
+                    new(1, "命名卷不受影响 —— 数据还在,下次 up 会挂回去。"),
                     new(0, "compose 文件不动,随时可以再 up 起来。")
                 ],
             DataLossHeadline = withVolumes ? "-v 会把这个项目的命名卷一起删掉,数据永久丢失" : null,
@@ -837,7 +852,7 @@ public sealed class ComposePageViewModel : PageViewModel
             DataLossPoints =
             [
                 "面板不做备份,远端也没有版本历史 —— 除非那个目录在 git 里。",
-                "保存**不会**自动 up:改动要等下一次 up -d 才生效。",
+                "保存不会自动 up:改动要等下一次 up -d 才生效。",
                 "保存前建议先跑一次 config 确认语法能解析。"
             ]
         })).ConfigureAwait(true);

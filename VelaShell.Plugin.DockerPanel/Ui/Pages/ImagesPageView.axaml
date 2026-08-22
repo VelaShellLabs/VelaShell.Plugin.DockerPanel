@@ -89,7 +89,7 @@
           </StackPanel>
         </Button>
         <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
-                ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
+                ToolTip.Tip="刷新(F5)" Command="{Binding RefreshCommand}">
           <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
         </Button>
       </Grid>
@@ -241,7 +241,7 @@
                       </Binding>
                     </ui:Glyph.Key>
                   </ui:Glyph>
-                  <TextBlock Text="{Binding Repository}" Classes="name" ToolTip.Tip="{Binding Repository}" />
+                  <TextBlock Text="{Binding Repository}" Classes="name" ToolTip.Tip="{Binding Repository, Converter={x:Static ui:Converters.TipText}}" />
                 </StackPanel>
                 <!-- 标签自成一列:latest 与 1.27-alpine 之间的差别常常比仓库名更要紧,
                      挤在名字后面当徽标就只能跟着名字长短到处跑。 -->

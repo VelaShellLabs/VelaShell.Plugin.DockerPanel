@@ -25,11 +25,17 @@
     <ResourceDictionary x:Key="Light">
       <SolidColorBrush x:Key="DockerWarnDim" Color="#26B26A00" />
       <SolidColorBrush x:Key="DockerBrand" Color="#0B72C4" />
-      <!-- 亮色下的代码色沿用 Alucard:终端/代码底仍是深色,所以这几个不跟着变浅。 -->
-      <SolidColorBrush x:Key="DockerCodeString" Color="#F1FA8C" />
-      <SolidColorBrush x:Key="DockerCodeNumber" Color="#BD93F9" />
-      <SolidColorBrush x:Key="DockerCodeKey" Color="#8BE9FD" />
-      <SolidColorBrush x:Key="DockerCodeComment" Color="#6272A4" />
+      <!--
+        亮色下换成 Alucard(Dracula 的官方亮色变体)的那几个深色。
+
+        这四个原来直接沿用了暗色值,理由写的是"终端/代码底仍是深色" ——
+        **那个前提是错的**:宿主的 VelaBgTerminal 在亮色下是 #FFFBEB(奶白),
+        于是 #F1FA8C 的浅黄压在 #FFFBEB 上,对比度只有 1.1:1,等于看不见。
+      -->
+      <SolidColorBrush x:Key="DockerCodeString" Color="#846E15" />
+      <SolidColorBrush x:Key="DockerCodeNumber" Color="#644AC9" />
+      <SolidColorBrush x:Key="DockerCodeKey" Color="#036A96" />
+      <SolidColorBrush x:Key="DockerCodeComment" Color="#6C664B" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 

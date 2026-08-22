@@ -451,14 +451,14 @@ public sealed class SystemPageViewModel : PageViewModel
                 :
                 [
                     new(2, "会删掉全部未被容器使用的镜像 —— 重新拉要花时间与带宽。"),
-                    new(1, "**不含卷**:数据卷不受影响。"),
+                    new(1, "不含卷:数据卷不受影响。"),
                     new(0, $"预计回收 {ReclaimableText}。")
                 ],
             DataLossHeadline = withVolumes ? "未被任何容器使用的卷会被删除,里面的数据永久丢失" : null,
             DataLossPoints = withVolumes
                 ?
                 [
-                    "\"未使用\"只是说没有容器**现在**挂着它 —— 一个刚 down 掉的项目,它的数据卷就在名单里。",
+                    "\"未使用\"只是说没有容器「现在」挂着它 —— 一个刚 down 掉的项目,它的数据卷就在名单里。",
                     "Docker 不做回收站,也没有快照。",
                     "只想回收镜像与缓存的话,用不带卷的那一档。"
                 ]

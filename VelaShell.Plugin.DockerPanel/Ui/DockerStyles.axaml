@@ -224,7 +224,8 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
-  <!-- 终端/日志/代码面板:亮色主题下也保持深底 —— 这些内容本来就是终端里的东西。 -->
+  <!-- 终端 / 日志 / 代码面板:跟着宿主的终端底色走(VelaBgTerminal 暗色 #282A36、亮色 #FFFBEB),
+       前景一律用 VelaShellWhite —— 那是个**语义**令牌("终端前景"),亮色下它自己会变成 #1F1F1F。 -->
   <Style Selector="Border.terminal">
     <Setter Property="Background" Value="{DynamicResource VelaBgTerminal}" />
   </Style>

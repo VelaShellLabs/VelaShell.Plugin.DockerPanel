@@ -85,30 +85,14 @@
             <!-- 仓库凭据:HTTP API 下必须由面板自己带上,daemon 不读 ~/.docker/config.json -->
             <StackPanel Orientation="Horizontal" Spacing="7"
                         IsVisible="{Binding AuthText, Converter={x:Static ui:Converters.NotEmpty}}">
-              <ui:Glyph Size="13">
-                <ui:Glyph.Key>
-                  <Binding Path="AuthOk">
-                    <Binding.Converter>
-                      <ui:AuthIconConverter />
-                    </Binding.Converter>
-                  </Binding>
-                </ui:Glyph.Key>
-                <ui:Glyph.Brush>
-                  <Binding Path="AuthOk">
-                    <Binding.Converter>
-                      <ui:AuthBrushConverter />
-                    </Binding.Converter>
-                  </Binding>
-                </ui:Glyph.Brush>
-              </ui:Glyph>
+              <!-- 三档语气:已登录 / 不需要 = 绿;凭据在 credential helper 里(面板取不到)= 黄;
+                   压根没有凭据 = 红。原来只有"绿或红"两档,后两种长得一模一样。 -->
+              <ui:Glyph Size="13" Key="{Binding AuthTone, Converter={x:Static ui:Converters.ToneIcon}}"
+                        Brush="{Binding AuthTone, Converter={x:Static ui:Converters.ToneBrush}}" />
               <TextBlock Text="{Binding AuthText}" FontSize="{DynamicResource VelaFontSize10}"
                          TextWrapping="Wrap" MaxWidth="380">
                 <TextBlock.Foreground>
-                  <Binding Path="AuthOk">
-                    <Binding.Converter>
-                      <ui:AuthBrushConverter />
-                    </Binding.Converter>
-                  </Binding>
+                  <Binding Path="AuthTone" Converter="{x:Static ui:Converters.ToneBrush}" />
                 </TextBlock.Foreground>
               </TextBlock>
             </StackPanel>

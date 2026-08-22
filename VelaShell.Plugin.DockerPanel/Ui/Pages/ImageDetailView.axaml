@@ -14,7 +14,7 @@
         <ui:Glyph Grid.Column="0" Key="Icon.layers" Size="15" VerticalAlignment="Center"
                   Brush="{DynamicResource VelaAccent}" />
         <TextBlock Grid.Column="1" Text="{Binding Title}" Classes="h2" Margin="8,0,0,0"
-                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" />
+                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title, Converter={x:Static ui:Converters.TipText}}" />
         <!-- 铺开 / 还原与关闭并排,位置与容器抽屉一致 —— 四个页面之间来回切时,
              "关闭在哪、铺开在哪"永远是同一个位置。 -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
@@ -180,7 +180,7 @@
               <DataTemplate x:DataType="pages:DetailField">
                 <Grid ColumnDefinitions="106,*" Margin="0,2">
                   <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label"
-                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key}" />
+                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key, Converter={x:Static ui:Converters.TipText}}" />
                   <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" Classes="code" TextWrapping="Wrap" />
                 </Grid>
               </DataTemplate>
@@ -194,7 +194,7 @@
               <DataTemplate x:DataType="pages:DetailField">
                 <Grid ColumnDefinitions="106,*" Margin="0,2">
                   <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label"
-                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key}" />
+                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key, Converter={x:Static ui:Converters.TipText}}" />
                   <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" TextWrapping="Wrap" />
                 </Grid>
               </DataTemplate>

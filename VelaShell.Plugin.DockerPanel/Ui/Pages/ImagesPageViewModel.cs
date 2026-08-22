@@ -425,6 +425,22 @@ public sealed class ImagesPageViewModel : PageViewModel
         }
     }
 
+    /// <summary>
+    /// 从仓库名里取出 registry 主机。
+    /// <para>
+    /// 第一段带点或冒号(或者就是 localhost)才是主机名 —— 否则那是 Docker Hub 的
+    /// 用户名段,<c>docker login</c> 不带参数就是登它。
+    /// </para>
+    /// </summary>
+    private static string RegistryOf(string repository)
+    {
+        string head = repository.Split('/')[0];
+        return repository.Contains('/') &&
+               (head.Contains('.') || head.Contains(':') || head == "localhost")
+            ? head
+            : "";
+    }
+
     private async Task PushAsync(ImageRow row)
     {
         if (Client is not { } client || Shell.RegistryAuth is not { } auth)
@@ -453,7 +469,12 @@ public sealed class ImagesPageViewModel : PageViewModel
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             task.Finish(PanelTaskState.Failed, "失败", ex.Message);
-            Shell.Feedback.ReportError("推送", ex);
+            // 401/403 的出路只有一条:去登录。面板不代劳(那要一个它不该拿的口令),
+            // 但可以把命令连着 registry 一起送到终端里。
+            ToastAction[] actions = ex is DockerApiException { StatusCode: System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden }
+                ? [new("去终端登录", () => _ = Shell.SendToHostTerminalAsync($"docker login {RegistryOf(row.Repository)}"))]
+                : [];
+            Shell.Feedback.ReportError("推送", ex, actions);
         }
     }
 
@@ -617,7 +638,7 @@ public sealed class ImagesPageViewModel : PageViewModel
                 ]
                 :
                 [
-                    new(2, "会连带删掉**有标签但当前没有容器在用**的镜像 —— 重新拉要花时间与带宽。"),
+                    new(2, "会连带删掉「有标签但当前没有容器在用」的镜像 —— 重新拉要花时间与带宽。"),
                     new(0, $"当前有 {UnusedCount} 个未使用镜像 + {DanglingCount} 个悬空镜像。")
                 ]
         })).ConfigureAwait(true);

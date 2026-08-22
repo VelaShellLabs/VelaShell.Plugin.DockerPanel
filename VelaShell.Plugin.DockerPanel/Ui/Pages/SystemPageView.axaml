@@ -79,7 +79,7 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="pages:DiskSegment">
-                  <Border Height="26" ToolTip.Tip="{Binding Label}" Tag="{Binding Weight}">
+                  <Border Height="26" ToolTip.Tip="{Binding Label, Converter={x:Static ui:Converters.TipText}}" Tag="{Binding Weight}">
                     <Border.Background>
                       <Binding Path="Brush">
                         <Binding.Converter>

@@ -12,7 +12,13 @@
   <!-- 底色走 VelaBgContentHeader(映射表里 bg-elevated 的那一档)。
        原来写的 VelaBgElevated 宿主根本没有这个键 —— DynamicResource 查不到就不画,
        于是整个命令面板是透明的,后面的卡片全透出来。 -->
-  <Border Width="560" MaxHeight="480" CornerRadius="8"
+  <!--
+    ClipToBounds:底部那条页脚是**带底色**的,而它自己是方角。
+    不裁剪的话,页脚的两个方角会直接盖住外框的圆角 ——
+    看上去就是左下、右下两处圆角发毛、边线断掉。
+    确认闸门、表单、拉取对话框早就都裁了,只有这一处漏了。
+  -->
+  <Border Width="560" MaxHeight="480" CornerRadius="8" ClipToBounds="True"
           Background="{DynamicResource VelaBgContentHeader}"
           BorderBrush="{DynamicResource VelaBorderSecondary}" BorderThickness="1"
           BoxShadow="0 12 32 0 #66000000">

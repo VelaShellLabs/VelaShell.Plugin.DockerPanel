@@ -32,6 +32,14 @@ public sealed partial class RunContainerForm : PanelForm
     {
         Image = image;
         ImageDetail = imageDetail;
+        // 第一格是只读的源镜像:这张表单从镜像页、命令面板、总览都点得进来,
+        // 而"我正要跑的是哪一个"不该只出现在最底下那条等效命令里。
+        Fields.Add(new TextField("源镜像")
+        {
+            Value = image,
+            Hint = imageDetail,
+            ReadOnly = true
+        });
         _name = new("容器名称") { Hint = "留空由 Docker 生成", Placeholder = "my-service" };
         Ports = new("端口映射")
         {
