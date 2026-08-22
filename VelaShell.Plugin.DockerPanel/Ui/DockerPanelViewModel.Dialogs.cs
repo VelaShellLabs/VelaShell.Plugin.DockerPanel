@@ -68,6 +68,40 @@ public sealed partial class DockerPanelViewModel
     /// <summary>取消表单。</summary>
     public RelayCommand FormCancelCommand => _formCancel ??= new(_ => CompleteForm(false));
 
+    /// <summary>
+    /// 关掉最上面那一层弹层(Esc 与点击遮罩都走这里)。
+    /// <para>
+    /// 次序与它们在视觉上的层叠次序一致:对话框 → 表单 → 闸门 → 命令面板。
+    /// 一次只关一层 —— 命令面板唤出的动作往往还要再弹一次闸门,
+    /// 一按 Esc 就把两层一起收掉,用户会以为自己刚才那下点丢了。
+    /// </para>
+    /// </summary>
+    /// <returns>确实关掉了一层。</returns>
+    public bool CloseTopOverlay()
+    {
+        if (HasDialog)
+        {
+            CloseDialogCommand.Execute(null);
+            return true;
+        }
+        if (HasForm)
+        {
+            FormCancelCommand.Execute(null);
+            return true;
+        }
+        if (Confirm.IsOpen)
+        {
+            Confirm.CancelCommand.Execute(null);
+            return true;
+        }
+        if (Palette.IsOpen)
+        {
+            Palette.CloseCommand.Execute(null);
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>关掉自定义对话框。</summary>
     public RelayCommand CloseDialogCommand => _closeDialog ??= new(_ =>
     {

@@ -185,6 +185,15 @@
     <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Height" Value="28" />
     <Setter Property="Padding" Value="8,0" />
+    <!--
+      底色铺到边框**外沿**,而不是默认的只填到内侧。
+      1px 的描边跑到 4px 的圆角上时必然要抗锯齿,而这套配色里描边(#3B3E51)与
+      输入框底(#282A36)只差二十来级灰;默认填法下,圆弧上那几个半覆盖像素混的是
+      描边与**面板底色**,亮度掉到 47–59,恰好落回底色附近 —— 看上去就是四个角上
+      的线断了、发毛。铺到外沿之后同样几个像素是 53–63,线连得上。
+      (100% 缩放下最明显;150% 时圆弧本来就有更多像素可用,两种画法几乎没差别。)
+    -->
+    <Setter Property="BackgroundSizing" Value="OuterBorderEdge" />
   </Style>
   <Style Selector="Border.input:pointerover">
     <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderSecondary}" />
@@ -300,6 +309,21 @@
   </Style>
 
   <!-- 破坏性动作:只染边和字,不染底 —— 填充红会让人以为它已经在跑了。 -->
+  <!--
+    表单里被选中的那一项(分段选项、带说明的单选列表)。
+    改的是模板里那块 Border 而不是按钮自己的 Background —— 主题在 :pointerover 上
+    直接改模板部件,写在按钮上会在指针一压上去就被抹掉,变成"移上去反而看不出选中"。
+  -->
+  <Style Selector="Button.picked /template/ Border">
+    <Setter Property="Background" Value="{DynamicResource VelaAccentDim}" />
+  </Style>
+  <Style Selector="Button.picked TextBlock.pick-label">
+    <Setter Property="Foreground" Value="{DynamicResource VelaAccent}" />
+  </Style>
+  <Style Selector="Button.picked Ellipse">
+    <Setter Property="Stroke" Value="{DynamicResource VelaAccent}" />
+  </Style>
+
   <Style Selector="Button.danger">
     <Setter Property="BorderBrush" Value="{DynamicResource VelaShellRedDim}" />
     <Setter Property="Foreground" Value="{DynamicResource VelaError}" />

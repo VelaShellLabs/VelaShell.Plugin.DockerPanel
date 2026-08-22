@@ -190,7 +190,8 @@ public sealed class ImagesPageViewModel : PageViewModel
     /// <inheritdoc />
     public override IEnumerable<string> ColumnTexts(string key) => key switch
     {
-        "repo" => View.Select(r => $"{r.Repository}  {r.Tag}"),
+        "repo" => View.Select(r => r.Repository),
+        "tag" => View.Select(r => r.Tag),
         "id" => View.Select(r => r.ShortId),
         "size" => View.Select(r => r.SizeText),
         "created" => View.Select(r => r.CreatedText),
@@ -653,24 +654,38 @@ public sealed class DirectProgress<T>(Action<T> handler) : IProgress<T>
 
 /// <summary>
 /// 镜像列表的列宽。默认宽度取自设计稿 <c>C/ImageRow</c>
-/// (仓库/标签 356 / ID 104 / 大小 84 / 创建 118 / 使用中 96)。
+/// (ID 104 / 大小 84 / 创建 118 / 使用中 96)。
+/// <para>
+/// 设计稿把仓库名与标签画在同一格里(共 356),这里拆成**两列**:
+/// 标签是一个可以独立排序、独立读的维度 —— <c>latest</c> 与 <c>1.27-alpine</c> 之间的差别,
+/// 常常比仓库名本身更要紧;挤在一格里,它只能是名字后面一块跟着跑的小徽标。
+/// 240 + 116 与稿子的 356 等宽,整张表的其余部分一根像素都不动。
+/// </para>
 /// </summary>
 public sealed class ImageColumns : ListColumns
 {
-    private GridLength _repo = new(356);
+    private GridLength _repo = new(240);
+    private GridLength _tag = new(116);
     private GridLength _id = new(104);
     private GridLength _size = new(84);
     private GridLength _created = new(118);
     private GridLength _used = new(96);
 
     /// <inheritdoc />
-    public override IReadOnlyList<string> Keys { get; } = ["repo", "id", "size", "created", "used"];
+    public override IReadOnlyList<string> Keys { get; } = ["repo", "tag", "id", "size", "created", "used"];
 
-    /// <summary>仓库 / 标签列。</summary>
+    /// <summary>镜像列(仓库名)。</summary>
     public GridLength Repo
     {
         get => _repo;
         set => SetField(ref _repo, Clamp(value, "repo"));
+    }
+
+    /// <summary>标签列。</summary>
+    public GridLength Tag
+    {
+        get => _tag;
+        set => SetField(ref _tag, Clamp(value, "tag"));
     }
 
     /// <summary>镜像 ID 列。</summary>
@@ -705,6 +720,7 @@ public sealed class ImageColumns : ListColumns
     public override double Get(string key) => key switch
     {
         "repo" => Repo.Value,
+        "tag" => Tag.Value,
         "id" => Id.Value,
         "size" => Size.Value,
         "created" => Created.Value,
@@ -718,6 +734,7 @@ public sealed class ImageColumns : ListColumns
         switch (key)
         {
             case "repo": Repo = value; break;
+            case "tag": Tag = value; break;
             case "id": Id = value; break;
             case "size": Size = value; break;
             case "created": Created = value; break;
@@ -728,7 +745,8 @@ public sealed class ImageColumns : ListColumns
     /// <inheritdoc />
     public override double Min(string key) => key switch
     {
-        "repo" => 160,
+        "repo" => 120,
+        "tag" => 70,
         "id" => 80,
         "size" => 62,
         "created" => 70,
@@ -739,6 +757,6 @@ public sealed class ImageColumns : ListColumns
     public override double MaxAutoFit(string key) => key is "repo" ? 760 : 300;
 
     /// <inheritdoc />
-    // 仓库格里还坐着一枚类型图标和一块标签徽标。
-    public override double Padding(string key) => key is "repo" ? 60 : 18;
+    public override double Padding(string key) => key is "repo" ? 44 : 18;
+
 }

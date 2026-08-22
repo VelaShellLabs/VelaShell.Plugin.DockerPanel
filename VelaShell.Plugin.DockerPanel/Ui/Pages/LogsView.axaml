@@ -52,7 +52,7 @@
 
         <!-- 补历史的行数。最先收起的一组:它是"开流之前定一次"的东西,
              不像开关和搜索那样要反复用。 -->
-        <Border Grid.Column="3" CornerRadius="4" Padding="2" Background="{DynamicResource VelaBgInput}"
+        <Border Grid.Column="3" CornerRadius="4" Padding="2" BackgroundSizing="OuterBorderEdge" Background="{DynamicResource VelaBgInput}"
                 IsVisible="{Binding $parent[UserControl].Bounds.Width,
                                     Converter={x:Static ui:Converters.WiderThan}, ConverterParameter=940}"
                 BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">

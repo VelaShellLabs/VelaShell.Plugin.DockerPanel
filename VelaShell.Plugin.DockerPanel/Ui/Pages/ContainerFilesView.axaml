@@ -149,7 +149,7 @@
           </Border>
 
           <!-- 编辑 / 差异:差异比的是**这次编辑前后**,不是相对镜像 -->
-          <Border Grid.Column="5" CornerRadius="4" Padding="2" Margin="0,0,9,0"
+          <Border Grid.Column="5" CornerRadius="4" Padding="2" BackgroundSizing="OuterBorderEdge" Margin="0,0,9,0"
                   Background="{DynamicResource VelaBgInput}"
                   BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
             <StackPanel Orientation="Horizontal" Spacing="2">

@@ -90,14 +90,46 @@ public sealed class ToggleField(string label) : FormField(label)
     public event Action? Changed;
 }
 
-/// <summary>下拉/分段里的一个选项。</summary>
-/// <param name="Value">值。</param>
-/// <param name="Label">显示文字。</param>
-/// <param name="Description">补充说明(单选列表才显示)。</param>
-/// <param name="Enabled">能不能选。</param>
-/// <param name="DisabledReason">不能选的原因。</param>
-public sealed record ChoiceOption(string Value, string Label, string Description = "", bool Enabled = true,
-    string DisabledReason = "");
+/// <summary>
+/// 下拉 / 分段 / 单选列表里的一个选项。
+/// <para>
+/// 是类而不是 record:选中态要由界面**看得见**,而看得见就意味着这一项自己得会发通知。
+/// 换成"在模板里拿选项的值跟字段的值比一比"也行,但那需要一条多值绑定 ——
+/// 把这一位状态放在选项自己身上,模板里就只剩一句 <c>Classes.picked</c>。
+/// </para>
+/// </summary>
+/// <param name="value">值。</param>
+/// <param name="label">显示文字。</param>
+/// <param name="description">补充说明(单选列表才显示)。</param>
+/// <param name="enabled">能不能选。</param>
+/// <param name="disabledReason">不能选的原因。</param>
+public sealed class ChoiceOption(string value, string label, string description = "", bool enabled = true,
+    string disabledReason = "") : ObservableObject
+{
+    private bool _picked;
+
+    /// <summary>值。</summary>
+    public string Value { get; } = value;
+
+    /// <summary>显示文字。</summary>
+    public string Label { get; } = label;
+
+    /// <summary>补充说明(单选列表才显示)。</summary>
+    public string Description { get; } = description;
+
+    /// <summary>能不能选。</summary>
+    public bool Enabled { get; } = enabled;
+
+    /// <summary>不能选的原因。</summary>
+    public string DisabledReason { get; } = disabledReason;
+
+    /// <summary>选中的是不是这一项。</summary>
+    public bool Picked
+    {
+        get => _picked;
+        internal set => SetField(ref _picked, value);
+    }
+}
 
 /// <summary>一组互斥选项(分段控件或下拉)。</summary>
 public sealed class ChoiceField : FormField
@@ -105,7 +137,8 @@ public sealed class ChoiceField : FormField
     private string _value = "";
 
     /// <summary>建一组互斥选项。</summary>
-    public ChoiceField(string label) : base(label) =>
+    public ChoiceField(string label) : base(label)
+    {
         SelectCommand = new(p =>
         {
             if (p is ChoiceOption { Enabled: true } option)
@@ -113,6 +146,10 @@ public sealed class ChoiceField : FormField
                 Value = option.Value;
             }
         });
+        // 选项常常是建好字段之后才一条条加进来的(有些还要看 swarm 开没开),
+        // 那时候 Value 可能已经设过了 —— 加一条就得跟着把选中态对一遍。
+        Options.CollectionChanged += (_, _) => SyncPicked();
+    }
 
     /// <summary>选项。</summary>
     public ObservableCollection<ChoiceOption> Options { get; } = [];
@@ -125,9 +162,18 @@ public sealed class ChoiceField : FormField
         {
             if (SetField(ref _value, value))
             {
+                SyncPicked();
                 OnPropertyChanged(nameof(SelectedLabel));
                 Changed?.Invoke();
             }
+        }
+    }
+
+    private void SyncPicked()
+    {
+        foreach (ChoiceOption option in Options)
+        {
+            option.Picked = option.Value == _value;
         }
     }
 
@@ -150,7 +196,8 @@ public sealed class RadioListField : FormField
     private string _value = "";
 
     /// <summary>建一个单选列表。</summary>
-    public RadioListField(string label) : base(label) =>
+    public RadioListField(string label) : base(label)
+    {
         SelectCommand = new(p =>
         {
             if (p is ChoiceOption { Enabled: true } option)
@@ -158,6 +205,8 @@ public sealed class RadioListField : FormField
                 Value = option.Value;
             }
         });
+        Options.CollectionChanged += (_, _) => SyncPicked();
+    }
 
     /// <summary>选项。</summary>
     public ObservableCollection<ChoiceOption> Options { get; } = [];
@@ -170,8 +219,17 @@ public sealed class RadioListField : FormField
         {
             if (SetField(ref _value, value))
             {
+                SyncPicked();
                 OnPropertyChanged(nameof(SelectedValue));
             }
+        }
+    }
+
+    private void SyncPicked()
+    {
+        foreach (ChoiceOption option in Options)
+        {
+            option.Picked = option.Value == _value;
         }
     }
 
