@@ -17,6 +17,7 @@ public sealed class NetworksPageViewModel : PageViewModel
     private string _search = "";
     private NetworkRow? _selected;
     private bool _swarmActive;
+    private bool _customOnly;
 
     /// <summary>建网络页。</summary>
     public NetworksPageViewModel(DockerPanelViewModel shell) : base(shell)
@@ -62,6 +63,26 @@ public sealed class NetworksPageViewModel : PageViewModel
 
     /// <summary>内置网络数。</summary>
     public int PredefinedCount => _all.Count(r => r.IsPredefined);
+
+    /// <summary>
+    /// 只看自定义网络。
+    /// <para>
+    /// bridge / host / none 这三个内置的删不掉、改不了,却永远占着列表最前面几行;
+    /// 用户来这一页多半是找自己建的那几个。计数早就算好了(<see cref="CustomCount" />),
+    /// 一直缺的只是这个开关。
+    /// </para>
+    /// </summary>
+    public bool CustomOnly
+    {
+        get => _customOnly;
+        set
+        {
+            if (SetField(ref _customOnly, value))
+            {
+                ApplyView();
+            }
+        }
+    }
 
     /// <summary>未接入任何容器的自定义网络数。</summary>
     public int UnusedCount => _all.Count(r => !r.IsPredefined && r.AttachedCount == 0);
@@ -360,14 +381,20 @@ public sealed class NetworksPageViewModel : PageViewModel
     private void ApplyView()
     {
         string needle = _search.Trim();
-        IEnumerable<NetworkRow> filtered = needle.Length == 0
-            ? _all
-            : _all.Where(r =>
+        IEnumerable<NetworkRow> filtered = _all;
+        if (_customOnly)
+        {
+            filtered = filtered.Where(r => !r.IsPredefined);
+        }
+        if (needle.Length > 0)
+        {
+            filtered = filtered.Where(r =>
                 r.Name.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
                 r.Subnet.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
                 r.Driver.Contains(needle, StringComparison.OrdinalIgnoreCase));
+        }
         View.Merge([.. filtered], (_, _) => { });
-        OnPropertiesChanged(nameof(IsEmpty), nameof(NoMatch));
+        OnPropertiesChanged(nameof(IsEmpty), nameof(NoMatch), nameof(CustomCount), nameof(PredefinedCount));
     }
 
     private async Task SelectAsync(NetworkRow? row)
@@ -522,7 +549,12 @@ public sealed class NetworksPageViewModel : PageViewModel
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Shell.Feedback.ReportError("删除网络", ex);
+            // 409 = 还连着容器。RemoveHint 里那句话本来就是为这件事写的,
+            // 却只在按钮置灰时才说过 —— 真撞上了反而只剩 daemon 的原文。
+            ToastAction[] actions = ex is DockerApiException { IsConflict: true }
+                ? [new("看看还连着谁", () => Selected = row)]
+                : [];
+            Shell.Feedback.ReportError("删除网络", ex, actions);
         }
     }
 

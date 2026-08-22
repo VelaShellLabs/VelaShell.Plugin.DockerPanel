@@ -325,13 +325,20 @@ public sealed class PullAggregator
         : LayerCount > 0 ? (double)CompletedLayers / LayerCount
         : 0;
 
-    /// <summary>一行摘要,给任务中心与对话框共用。</summary>
+    /// <summary>
+    /// 一行摘要,给任务中心与对话框共用。
+    /// <para>
+    /// 写成"完成 3 / 12 层"而不是"12 层":拉一个大镜像要几分钟,
+    /// 用户盯着的是**还剩多少**,而层总数从头到尾都不变,说了等于没说。
+    /// (<c>CompletedLayers</c> 早就算好了,只是一直没进这句话。)
+    /// </para>
+    /// </summary>
     public string Summary =>
         LayerCount == 0
             ? "正在连接仓库…"
             : TotalBytes > 0
-                ? $"{LayerCount} 层 · {Humanize.Bytes(CurrentBytes)} / {Humanize.Bytes(TotalBytes)} · 复用 {ReusedLayers} 层"
-                : $"{LayerCount} 层 · 复用 {ReusedLayers} 层";
+                ? $"完成 {CompletedLayers} / {LayerCount} 层 · {Humanize.Bytes(CurrentBytes)} / {Humanize.Bytes(TotalBytes)} · 复用 {ReusedLayers} 层"
+                : $"完成 {CompletedLayers} / {LayerCount} 层 · 复用 {ReusedLayers} 层";
 
     /// <summary>逐层快照,给对话框里的层列表用。</summary>
     public IReadOnlyList<(string Id, string Status, double Progress, string SizeText)> Snapshot() =>

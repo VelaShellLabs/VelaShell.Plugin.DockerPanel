@@ -162,7 +162,23 @@ public sealed partial class DockerPanelViewModel
         {
             networks = ["bridge"];
         }
-        var form = new RunContainerForm(image, "", networks);
+        // 镜像的小字:大小与平台。表单里原来完全看不到自己要跑的是哪个镜像
+        // (只有最底下那条等效命令里出现过),而这颗按钮是从好几个地方点进来的。
+        string detail = "";
+        try
+        {
+            ImageSummary[] images = await client.ListImagesAsync(false, Lifetime).ConfigureAwait(true);
+            if (images.FirstOrDefault(i => i.RepoTags?.Contains(image) == true) is { } match)
+            {
+                detail = Humanize.Bytes(match.Size);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 小字而已,取不到就不写 —— 不值得为它把整张表单挡下来。
+            Context.Log.Debug($"read image size failed: {ex.Message}");
+        }
+        var form = new RunContainerForm(image, detail, networks);
         if (!await ShowFormAsync(form).ConfigureAwait(true))
         {
             return;

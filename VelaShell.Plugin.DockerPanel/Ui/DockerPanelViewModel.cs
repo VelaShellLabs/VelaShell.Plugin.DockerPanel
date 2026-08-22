@@ -747,7 +747,11 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
     /// 那是终端的主场;而且它经宿主的授权闸,面板不越过那道门。
     /// </para>
     /// </summary>
-    private async Task SendToHostTerminalAsync(string command)
+    /// <summary>
+    /// 把一条命令送到宿主终端里去(补救动作用:登录 registry、查 socket、看 daemon 日志)。
+    /// <para>本机端点没有终端可送 —— 那就把命令原样告诉用户,让他自己敲。</para>
+    /// </summary>
+    public async Task SendToHostTerminalAsync(string command)
     {
         if (SelectedEndpoint?.Endpoint is not { Kind: DockerEndpointKind.Remote } endpoint)
         {

@@ -365,7 +365,12 @@ public sealed class VolumesPageViewModel : PageViewModel
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Shell.Feedback.ReportError("删除卷", ex);
+            // 409 的真实含义是"还有容器挂着它",而挂着它的是谁,这一页早就知道 ——
+            // 把这句话直接说出来,并给一条过去看的路。
+            ToastAction[] actions = ex is DockerApiException { IsConflict: true } && _users.TryGetValue(row.Name, out List<string>? holders) && holders.Count > 0
+                ? [new($"看看是谁在占({holders.Count} 个容器)", () => Selected = row)]
+                : [];
+            Shell.Feedback.ReportError("删除卷", ex, actions);
         }
     }
 
