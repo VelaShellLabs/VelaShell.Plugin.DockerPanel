@@ -286,7 +286,8 @@ public sealed partial class DockerPanelViewModel : ObservableObject, IAsyncDispo
         {
             if (SetField(ref _state, value))
             {
-                OnPropertiesChanged(nameof(IsConnecting), nameof(IsReady), nameof(IsFailed), nameof(NeedsEndpoint));
+                OnPropertiesChanged(nameof(IsConnecting), nameof(IsReady), nameof(IsFailed), nameof(NeedsEndpoint),
+                    nameof(EventsDegraded));
                 RefreshCommand.RaiseCanExecuteChanged();
             }
         }

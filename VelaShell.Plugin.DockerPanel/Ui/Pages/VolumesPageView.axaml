@@ -31,8 +31,7 @@
                          Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
-          <Button Grid.Column="6" Theme="{StaticResource DockerToolButton}" Margin="0,0,8,0"
-                  Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
+          <Button Grid.Column="6" Theme="{StaticResource DockerToolButton}" Classes="primary" Margin="0,0,9,0"
                   Command="{Binding CreateCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <ui:Glyph Key="Icon.plus" Size="13" Brush="{DynamicResource VelaAccentForeground}" />
@@ -40,14 +39,15 @@
                          Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
-          <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}" Command="{Binding RefreshCommand}">
+          <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
+                  ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
             <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
           </Button>
         </Grid>
       </Border>
 
       <Border Grid.Row="1" Classes="header-row">
-        <Grid ColumnDefinitions="*,90,150,100,120,110">
+        <Grid ColumnDefinitions="*,90,180,96,112,104">
           <TextBlock Grid.Column="0" Text="名称" Classes="col" Margin="12,0,0,0" />
           <TextBlock Grid.Column="1" Text="驱动" Classes="col" />
           <TextBlock Grid.Column="2" Text="使用者" Classes="col" />
@@ -65,7 +65,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="0"
                         Command="{Binding $parent[ItemsControl].((pages:VolumesPageViewModel)DataContext).SelectCommand}"
                         CommandParameter="{Binding}">
-                  <Grid Height="32" ColumnDefinitions="*,90,150,100,120,110">
+                  <Grid Height="32" ColumnDefinitions="*,90,180,96,112,104">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="7" Margin="12,0"
                                 VerticalAlignment="Center">
                       <ui:Glyph Key="Docker.database" Size="13"
@@ -107,26 +107,77 @@
       </Grid>
     </Grid>
 
-    <!-- 详情 -->
-    <Border Grid.Column="1" Width="360" IsVisible="{Binding HasSelection}"
-            Background="{DynamicResource VelaBgSurface}"
+    <!-- 详情抽屉。与容器 / 镜像抽屉同一副骨架:标题条 / 动作条 / 内容,
+         这样在四个页面之间来回切时,"关闭在哪、主动作在哪"永远是同一个位置。 -->
+    <Border Grid.Column="1" Width="440" IsVisible="{Binding HasSelection}"
+            Background="{DynamicResource VelaBgContentHeader}"
             BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1,0,0,0">
+      <DockPanel>
+        <ContentControl DockPanel.Dock="Top" Content="{Binding Selected}">
+          <ContentControl.ContentTemplate>
+            <DataTemplate DataType="ui:VolumeRow">
+              <Border Height="44" Padding="14,0"
+                      BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+                  <ui:Glyph Grid.Column="0" Key="Docker.database" Size="15" VerticalAlignment="Center"
+                            Brush="{DynamicResource VelaAccent}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="h2" Margin="8,0,0,0" />
+                  <Border Grid.Column="2" Classes="chip" Margin="8,0,0,0"
+                          Background="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}, ConverterParameter=dim}">
+                    <TextBlock Text="{Binding UsageText}" FontSize="{DynamicResource VelaFontSize10}"
+                               Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}"
+                               VerticalAlignment="Center" />
+                  </Border>
+                  <Button Grid.Column="4" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
+                          ToolTip.Tip="关闭"
+                          Command="{Binding $parent[UserControl].((pages:VolumesPageViewModel)DataContext).ClearSelectionCommand}">
+                    <ui:Glyph Key="Icon.x" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
+                  </Button>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ContentControl.ContentTemplate>
+        </ContentControl>
+
+        <Border DockPanel.Dock="Top" Height="42" Padding="14,0"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Button Theme="{StaticResource DockerToolButton}"
+                    Background="{DynamicResource VelaAccentDim}" BorderBrush="Transparent"
+                    IsEnabled="{Binding CanBrowse}"
+                    ToolTip.Tip="{Binding BrowseHint}"
+                    Command="{Binding BrowseCommand}" CommandParameter="{Binding Selected}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Icon.folder-open" Size="13" Brush="{DynamicResource VelaAccent}" />
+                <TextBlock Text="浏览卷内文件" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaAccent}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <!-- 备份走的是浏览那条路:借一个挂着它的运行中容器,把挂载点整包取成 tar -->
+            <Button Theme="{StaticResource DockerToolButton}" IsEnabled="{Binding CanBackup}"
+                    ToolTip.Tip="把卷里的内容整包存成本地 tar"
+                    Command="{Binding BackupCommand}" CommandParameter="{Binding Selected}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <ui:Glyph Key="Icon.download" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
+                <TextBlock Text="备份为 tar…" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Border>
+
       <ScrollViewer>
-        <StackPanel Margin="14,12" Spacing="12">
+        <StackPanel Margin="14,12" Spacing="10">
           <!-- 选中卷自己的那几格走 ContentControl:没选中时 Selected 是 null,
                而 IsVisible 只是不画,子树照样建、绑定照样求值。模板在 Content 为 null 时
                根本不实例化,既没有空绑定,行对象更新时又照样能推过来。 -->
           <ContentControl Content="{Binding Selected}">
             <ContentControl.ContentTemplate>
               <DataTemplate DataType="ui:VolumeRow">
-                <StackPanel Spacing="12">
-                  <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ui:Glyph Key="Docker.database" Size="15" Brush="{DynamicResource VelaAccent}" />
-                    <TextBlock Text="{Binding Name}" Classes="h2" />
-                  </StackPanel>
-
-                  <Border Classes="divider" />
-                  <TextBlock Text="基本信息" Classes="h3" />
+                <StackPanel Spacing="10">
+                  <Grid ColumnDefinitions="Auto,*" Height="24">
+                    <TextBlock Grid.Column="0" Text="基本信息" Classes="h4" />
+                  </Grid>
                   <Grid ColumnDefinitions="80,*" Height="22">
                     <TextBlock Grid.Column="0" Text="驱动" Classes="label" />
                     <TextBlock Grid.Column="1" Text="{Binding Driver}" Classes="cell" />
@@ -149,7 +200,7 @@
           </ContentControl>
 
           <Border Classes="divider" />
-          <TextBlock Text="使用者" Classes="h3" />
+          <TextBlock Text="使用者" Classes="h4" />
           <ItemsControl ItemsSource="{Binding SelectedUsers}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="x:String">
@@ -160,11 +211,11 @@
           <TextBlock Text="{Binding BrowseHint}" Classes="hint" />
 
           <Border Classes="divider" />
-          <TextBlock Text="标签" Classes="h3" />
+          <TextBlock Text="标签" Classes="h4" />
           <ItemsControl ItemsSource="{Binding SelectedLabels}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="pages:DetailField">
-                <Grid ColumnDefinitions="120,*" Margin="0,2">
+                <Grid ColumnDefinitions="106,*" Margin="0,2">
                   <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label"
                              TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key}" />
                   <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" TextWrapping="Wrap" />
@@ -175,11 +226,11 @@
           <TextBlock Text="(无)" Classes="hint" IsVisible="{Binding !SelectedLabels.Count}" />
 
           <Border Classes="divider" />
-          <TextBlock Text="驱动选项" Classes="h3" />
+          <TextBlock Text="驱动选项" Classes="h4" />
           <ItemsControl ItemsSource="{Binding SelectedOptions}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="pages:DetailField">
-                <Grid ColumnDefinitions="120,*" Margin="0,2">
+                <Grid ColumnDefinitions="106,*" Margin="0,2">
                   <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label" />
                   <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" TextWrapping="Wrap" />
                 </Grid>
@@ -188,20 +239,6 @@
           </ItemsControl>
           <TextBlock Text="使用默认 local 驱动" Classes="hint" IsVisible="{Binding !SelectedOptions.Count}" />
 
-          <Border Classes="divider" />
-          <!-- 备份走的是浏览那条路:借一个挂着它的运行中容器,把挂载点整包取成 tar -->
-          <Button Theme="{StaticResource DockerToolButton}" Height="26" HorizontalAlignment="Left"
-                  IsEnabled="{Binding CanBackup}"
-                  ToolTip.Tip="把卷里的内容整包存成本地 tar"
-                  Command="{Binding BackupCommand}" CommandParameter="{Binding Selected}">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <ui:Glyph Key="Docker.file-archive" Size="13" Brush="{DynamicResource VelaTextSecondary}" />
-              <TextBlock Text="备份为 tar…" FontSize="{DynamicResource VelaFontSize11}"
-                         Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
-
-          <Border Classes="divider" />
           <!-- 危险区:删卷永远是"会丢数据"那一档 -->
           <Border CornerRadius="6" Padding="12,10" Background="{DynamicResource VelaShellRedDim}"
                   BorderBrush="{DynamicResource VelaError}" BorderThickness="1">
@@ -227,6 +264,7 @@
           </Border>
         </StackPanel>
       </ScrollViewer>
+      </DockPanel>
     </Border>
   </Grid>
 </UserControl>

@@ -29,7 +29,7 @@ public sealed partial class DockerPanelViewModel
         {
             if (SetField(ref _eventsConnected, value))
             {
-                OnPropertyChanged(nameof(EventsText));
+                OnPropertiesChanged(nameof(EventsText), nameof(EventsDegraded), nameof(EventsDegradedText));
             }
         }
     }
@@ -38,6 +38,20 @@ public sealed partial class DockerPanelViewModel
     public string EventsText => EventsConnected
         ? "事件流 已连接"
         : Settings.AutoRefreshFallback ? "事件流 断开 · 已退化为 30s 轮询" : "事件流 断开";
+
+    /// <summary>
+    /// 已经连上 daemon,但事件流断了。
+    /// <para>
+    /// 这一档要在**页面里**说,不能只让顶栏那枚徽章灭掉:此刻列表看起来一切正常,
+    /// 而它显示的可能是 30 秒前的世界 —— 在这种状态下按「删除」是要出事的。
+    /// </para>
+    /// </summary>
+    public bool EventsDegraded => IsReady && !EventsConnected;
+
+    /// <summary>退化横幅上的那句话。</summary>
+    public string EventsDegradedText => Settings.AutoRefreshFallback
+        ? "事件流已断开,已退化为 30 秒定时刷新 —— 看到的状态最多可能滞后 30 秒。"
+        : "事件流已断开,且自动刷新是关的 —— 现在看到的状态不会自己更新。";
 
     /// <summary>起事件流。</summary>
     private void StartEventStream()

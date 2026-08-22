@@ -243,6 +243,11 @@ public sealed class NetworksPageViewModel : PageViewModel
     /// <summary>选中一行。</summary>
     public RelayCommand SelectCommand { get; }
 
+    /// <summary>关掉右侧详情。</summary>
+    public RelayCommand ClearSelectionCommand => _clearSelection ??= new(_ => SelectAsync(null));
+
+    private RelayCommand? _clearSelection;
+
     /// <summary>新建网络。</summary>
     public RelayCommand CreateCommand { get; }
 

@@ -58,6 +58,8 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     private string _cpuText = "—";
     private string _memText = "—";
     private string _memLimitText = "";
+    private string _cpuPeakText = "";
+    private string _memRatioText = "";
     private double _memRatio;
 
     /// <summary>建抽屉。</summary>
@@ -218,6 +220,24 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     {
         get => _memRatio;
         private set => SetField(ref _memRatio, value);
+    }
+
+    /// <summary>
+    /// 卡片右上角那行小字。CPU 给的是这段采样里的峰值 ——
+    /// 当前值是 2%、峰值是 90% 的容器,和一直 2% 的容器是两回事,
+    /// 而只看当下那一个数字,这两者长得一模一样。
+    /// </summary>
+    public string CpuPeakText
+    {
+        get => _cpuPeakText;
+        private set => SetField(ref _cpuPeakText, value);
+    }
+
+    /// <summary>内存卡片右上角:占上限的百分比。没有上限时为空。</summary>
+    public string MemRatioText
+    {
+        get => _memRatioText;
+        private set => SetField(ref _memRatioText, value);
     }
 
     /// <summary>CPU 采样(抽屉里那条图)。</summary>
@@ -524,6 +544,12 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
     private async Task SetTabAsync(DetailTab tab)
     {
         Tab = tab;
+        // 文件页是设计稿里的整屏三栏(文件树 / 编辑器 / 属性),440px 的抽屉装不下 ——
+        // 切过去就自动铺开。用户仍然可以手动还原。
+        if (tab is DetailTab.Files)
+        {
+            Maximized = true;
+        }
         switch (tab)
         {
             case DetailTab.Logs:
@@ -622,8 +648,10 @@ public sealed class ContainerDetailViewModel : ObservableObject, IAsyncDisposabl
         MemText = Humanize.Bytes(stats.MemoryUsed);
         MemLimitText = stats.MemoryLimit > 0 ? $"/ {Humanize.Bytes(stats.MemoryLimit)}" : "";
         MemRatio = stats.MemoryLimit > 0 ? Math.Clamp((double)stats.MemoryUsed / stats.MemoryLimit, 0, 1) : 0;
+        MemRatioText = stats.MemoryLimit > 0 ? Humanize.Percent(MemRatio * 100) : "";
         Append(CpuHistory, stats.CpuPercent);
         Append(MemHistory, MemRatio * 100);
+        CpuPeakText = CpuHistory.Count > 0 ? $"峰值 {Humanize.Percent(CpuHistory.Max())}" : "";
     }
 
     private static void Append(ObservableCollection<double> series, double value)

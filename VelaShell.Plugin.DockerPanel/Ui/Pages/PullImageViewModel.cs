@@ -150,7 +150,7 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
             if (SetField(ref _reference, value))
             {
                 StartCommand.RaiseCanExecuteChanged();
-                OnPropertyChanged(nameof(FullReference));
+                OnPropertiesChanged(nameof(FullReference), nameof(CommandPreview), nameof(CommandNote));
                 _ = RefreshAuthAsync();
             }
         }
@@ -164,7 +164,7 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
         {
             if (SetField(ref _tag, value))
             {
-                OnPropertyChanged(nameof(FullReference));
+                OnPropertiesChanged(nameof(FullReference), nameof(CommandPreview), nameof(CommandNote));
             }
         }
     }
@@ -173,7 +173,13 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
     public string Platform
     {
         get => _platform;
-        set => SetField(ref _platform, value);
+        set
+        {
+            if (SetField(ref _platform, value))
+            {
+                OnPropertyChanged(nameof(CommandNote));
+            }
+        }
     }
 
     /// <summary>拉取全部标签。</summary>
@@ -184,13 +190,26 @@ public sealed class PullImageViewModel : ObservableObject, IAsyncDisposable
         {
             if (SetField(ref _allTags, value))
             {
-                OnPropertyChanged(nameof(FullReference));
+                OnPropertiesChanged(nameof(FullReference), nameof(CommandPreview), nameof(CommandNote));
             }
         }
     }
 
     /// <summary>完整引用。</summary>
     public string FullReference => AllTags ? $"{Reference}(全部标签)" : $"{Reference}:{(Tag.Length > 0 ? Tag : "latest")}";
+
+    /// <summary>
+    /// 这一拉是拉到**哪台机器**上。
+    /// <para>
+    /// 与确认闸门同一个理由:同时开着生产与测试两个面板时,
+    /// 一个不写清主机的「开始拉取」会把 8 GB 拉到错的那台机器上。
+    /// </para>
+    /// </summary>
+    public string HostName => _shell.EndpointName;
+
+    /// <summary>主机那一行右边的补充(传输方式 / 引擎版本)。</summary>
+    public string HostDetail =>
+        $"{_shell.EndpointDetail}{(_shell.EngineVersion.Length > 0 ? $" · {_shell.EngineVersion}" : "")}";
 
     /// <summary>等效命令。</summary>
     public string CommandPreview =>

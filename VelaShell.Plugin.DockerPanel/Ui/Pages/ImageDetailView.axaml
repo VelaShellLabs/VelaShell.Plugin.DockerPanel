@@ -114,11 +114,11 @@
       <!-- 概览 -->
       <ScrollViewer IsVisible="{Binding IsOverview}">
         <StackPanel Margin="14,12" Spacing="12">
-          <TextBlock Text="基本信息" Classes="h3" />
+          <TextBlock Text="基本信息" Classes="h4" />
           <ItemsControl ItemsSource="{Binding Basics}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="pages:DetailField">
-                <Grid ColumnDefinitions="120,*" Height="22">
+                <Grid ColumnDefinitions="106,*" Height="22">
                   <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label" />
                   <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell"
                              Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
@@ -128,7 +128,7 @@
           </ItemsControl>
 
           <Border Classes="divider" IsVisible="{Binding Tags.Count}" />
-          <TextBlock Text="标签" Classes="h3" IsVisible="{Binding Tags.Count}" />
+          <TextBlock Text="标签" Classes="h4" IsVisible="{Binding Tags.Count}" />
           <ItemsControl ItemsSource="{Binding Tags}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="x:String">
@@ -139,7 +139,7 @@
           </ItemsControl>
 
           <Border Classes="divider" IsVisible="{Binding Digests.Count}" />
-          <TextBlock Text="摘要" Classes="h3" IsVisible="{Binding Digests.Count}" />
+          <TextBlock Text="摘要" Classes="h4" IsVisible="{Binding Digests.Count}" />
           <ItemsControl ItemsSource="{Binding Digests}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="x:String">
@@ -150,11 +150,11 @@
           </ItemsControl>
 
           <Border Classes="divider" IsVisible="{Binding Runtime.Count}" />
-          <TextBlock Text="默认运行配置" Classes="h3" IsVisible="{Binding Runtime.Count}" />
+          <TextBlock Text="默认运行配置" Classes="h4" IsVisible="{Binding Runtime.Count}" />
           <ItemsControl ItemsSource="{Binding Runtime}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="pages:DetailField">
-                <Grid ColumnDefinitions="120,*" Margin="0,2">
+                <Grid ColumnDefinitions="106,*" Margin="0,2">
                   <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label" />
                   <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" Classes="code"
                                        TextWrapping="Wrap"
@@ -165,11 +165,11 @@
           </ItemsControl>
 
           <Border Classes="divider" IsVisible="{Binding Environment.Count}" />
-          <TextBlock Text="环境变量" Classes="h3" IsVisible="{Binding Environment.Count}" />
+          <TextBlock Text="环境变量" Classes="h4" IsVisible="{Binding Environment.Count}" />
           <ItemsControl ItemsSource="{Binding Environment}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="pages:DetailField">
-                <Grid ColumnDefinitions="120,*" Margin="0,2">
+                <Grid ColumnDefinitions="106,*" Margin="0,2">
                   <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label"
                              TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key}" />
                   <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" Classes="code" TextWrapping="Wrap" />
@@ -179,11 +179,11 @@
           </ItemsControl>
 
           <Border Classes="divider" IsVisible="{Binding Labels.Count}" />
-          <TextBlock Text="镜像标签" Classes="h3" IsVisible="{Binding Labels.Count}" />
+          <TextBlock Text="镜像标签" Classes="h4" IsVisible="{Binding Labels.Count}" />
           <ItemsControl ItemsSource="{Binding Labels}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="pages:DetailField">
-                <Grid ColumnDefinitions="120,*" Margin="0,2">
+                <Grid ColumnDefinitions="106,*" Margin="0,2">
                   <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label"
                              TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Key}" />
                   <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" TextWrapping="Wrap" />

@@ -10,7 +10,7 @@
     「转入后台」把进度移交给顶栏的任务中心,任务继续跑。
   -->
 
-  <Border Width="460" CornerRadius="10"
+  <Border Width="440" CornerRadius="10"
           Background="{DynamicResource VelaBgSurface}"
           BorderBrush="{DynamicResource VelaBorderSecondary}" BorderThickness="1"
           BoxShadow="{DynamicResource VelaShadowWindow}" ClipToBounds="True">
@@ -33,26 +33,38 @@
         </Grid>
       </Border>
 
+      <!-- 目标主机。8 GB 拉到错的那台机器上,是这个对话框能造成的最贵的一次误操作。 -->
+      <Border Height="30" Padding="16,0" Background="{DynamicResource VelaBgContentHeader}"
+              BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+          <ui:Glyph Key="Docker.server" Size="12" Brush="{DynamicResource VelaStatusConnected}" />
+          <TextBlock Text="{Binding HostName}" FontFamily="{DynamicResource VelaUiMonoFont}"
+                     FontSize="{DynamicResource VelaFontSize11}" FontWeight="SemiBold"
+                     Foreground="{DynamicResource VelaTextPrimary}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding HostDetail}" Classes="meta" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+      </Border>
+
       <ScrollViewer MaxHeight="460">
         <StackPanel Margin="16,14" Spacing="12">
 
           <!-- ── 填表 ────────────────────────────────────── -->
           <StackPanel Spacing="12" IsVisible="{Binding IsForm}">
             <StackPanel Spacing="5">
-              <TextBlock Text="镜像引用" Classes="h3" />
+              <TextBlock Text="镜像引用" Classes="h4" />
               <Border Classes="input" Height="30">
                 <TextBox Classes="bare mono" Text="{Binding Reference}" PlaceholderText="ghcr.io/acme/api 或 nginx" />
               </Border>
             </StackPanel>
             <Grid ColumnDefinitions="*,10,*">
               <StackPanel Grid.Column="0" Spacing="5">
-                <TextBlock Text="标签" Classes="h3" />
+                <TextBlock Text="标签" Classes="h4" />
                 <Border Classes="input" Height="30">
                   <TextBox Classes="bare mono" Text="{Binding Tag}" PlaceholderText="latest" />
                 </Border>
               </StackPanel>
               <StackPanel Grid.Column="2" Spacing="5">
-                <TextBlock Text="平台" Classes="h3" />
+                <TextBlock Text="平台" Classes="h4" />
                 <Border Classes="input" Height="30">
                   <TextBox Classes="bare mono" Text="{Binding Platform}" PlaceholderText="留空用 daemon 默认" />
                 </Border>
@@ -100,6 +112,18 @@
                 </TextBlock.Foreground>
               </TextBlock>
             </StackPanel>
+
+            <!-- 等效命令。视图模型上早就算好了这两行,却一直没有地方显示 ——
+                 而"我这一按到底发了什么请求"正是这个面板一贯给的交代。 -->
+            <Border CornerRadius="4" Padding="11,9" Background="{DynamicResource VelaBgTerminal}">
+              <StackPanel Spacing="3">
+                <TextBlock Text="{Binding CommandPreview}" Classes="code"
+                           FontSize="{DynamicResource VelaFontSize10}" LineHeight="15" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding CommandNote}" FontFamily="{DynamicResource VelaUiMonoFont}"
+                           FontSize="{DynamicResource VelaFontSize9}" LineHeight="15"
+                           Foreground="{DynamicResource DockerCodeComment}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
           </StackPanel>
 
           <!-- ── 拉取中 ──────────────────────────────────── -->

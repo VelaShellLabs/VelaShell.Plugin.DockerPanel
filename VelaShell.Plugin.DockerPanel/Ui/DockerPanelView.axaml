@@ -50,10 +50,19 @@
     </DataTemplate>
   </UserControl.DataTemplates>
 
+  <!-- 刷新的按钮在每一页自己的工具条上(刷的是那一页的东西),
+       但键盘上还是要有一个总的入口。 -->
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}" />
+  </UserControl.KeyBindings>
+
   <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource VelaBgDockDocument}">
 
     <!-- ── 顶栏 ──────────────────────────────────────────────── -->
     <Border Grid.Row="0" Classes="toolbar">
+      <!-- 设计稿的顶栏是「身份在左、检索在右」:品牌 / 主机 顶到左边缘,
+           搜索、实时徽章、设置贴右边缘,中间整段留空。
+           刷新不在这里 —— 它属于每一页自己的工具条,因为刷的是那一页的东西。 -->
       <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
 
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
@@ -78,8 +87,8 @@
         </Button>
 
         <!-- 全局搜索:点开就是命令面板。Ctrl+K 是同一个入口。 -->
-        <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Width="300" Height="26"
-                Margin="12,0" HorizontalAlignment="Left" HorizontalContentAlignment="Stretch"
+        <Button Grid.Column="5" Theme="{StaticResource DockerToolButton}" Width="300" Height="26"
+                Margin="10,0,0,0" HorizontalContentAlignment="Stretch"
                 Background="{DynamicResource VelaBgInput}"
                 IsEnabled="{Binding IsReady}" Command="{Binding OpenPaletteCommand}">
           <Grid ColumnDefinitions="Auto,*,Auto">
@@ -109,7 +118,7 @@
         </Button>
 
         <!-- 「实时」徽章:亮着才代表事件流真的接上了。 -->
-        <Border Grid.Column="5" Classes="chip" Margin="8,0,0,0"
+        <Border Grid.Column="6" Classes="chip" Margin="10,0,0,0"
                 Background="{Binding EventsConnected, Converter={x:Static ui:Converters.FeedbackBrush}, ConverterParameter=dim}">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
             <Ellipse Width="5" Height="5" VerticalAlignment="Center"
@@ -119,12 +128,8 @@
           </StackPanel>
         </Border>
 
-        <Button Grid.Column="6" Theme="{StaticResource DockerIconButton}" Margin="6,0,0,0"
-                ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
-          <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
-        </Button>
-        <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}"
-                ToolTip.Tip="设置" Command="{Binding ToggleSettingsCommand}">
+        <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
+                Margin="6,0,0,0" ToolTip.Tip="设置" Command="{Binding ToggleSettingsCommand}">
           <ui:Glyph Key="Icon.settings" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
         </Button>
       </Grid>
@@ -134,9 +139,21 @@
     <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
 
       <!-- 左导航栏 -->
-      <Border Grid.Column="0" Width="52" Background="{DynamicResource VelaBgPage}"
+      <Border Grid.Column="0" Width="56" Background="{DynamicResource VelaBgPage}"
               BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,1,0">
         <DockPanel LastChildFill="False">
+          <!-- 设置钉在最底下,和上面七项之间隔着整段留白 ——
+               它不是"第八个页面",而是这一栏的另一类东西。 -->
+          <Button DockPanel.Dock="Bottom" Theme="{StaticResource DockerRailActionButton}"
+                  Margin="0,0,0,6" ToolTip.Tip="面板设置"
+                  Command="{Binding ToggleSettingsCommand}">
+            <StackPanel Spacing="3" HorizontalAlignment="Center">
+              <ui:Glyph Key="Icon.settings" Size="17" HorizontalAlignment="Center"
+                        Brush="{Binding $parent[Button].Foreground}" />
+              <TextBlock Text="设置" FontSize="{DynamicResource VelaFontSize9}" HorizontalAlignment="Center"
+                         Foreground="{Binding $parent[Button].Foreground}" />
+            </StackPanel>
+          </Button>
           <StackPanel DockPanel.Dock="Top" Margin="0,6,0,0">
             <RadioButton Theme="{StaticResource DockerRailButton}" GroupName="rail"
                          IsChecked="{Binding IsOverview, Mode=OneWay}"
@@ -222,7 +239,33 @@
       </Border>
 
       <!-- 内容区:连上了才显示页面,否则是状态页(未选会话 / 建立中 / 连不上)。 -->
-      <Grid Grid.Column="1">
+      <DockPanel Grid.Column="1">
+
+        <!-- 退化横幅。事件流断了时列表看起来一切正常,而它显示的可能是 30 秒前的世界 ——
+             这句话必须在页面里说,只让顶栏那枚徽章灭掉是不够的。 -->
+        <Border DockPanel.Dock="Top" Height="30" Padding="12,0"
+                IsVisible="{Binding EventsDegraded}"
+                Background="{DynamicResource DockerWarnDim}"
+                BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+            <ui:Glyph Grid.Column="0" Key="Icon.wifi-off" Size="13" VerticalAlignment="Center"
+                      Brush="{DynamicResource VelaWarning}" />
+            <TextBlock Grid.Column="1" Text="{Binding EventsDegradedText}" Margin="7,0,0,0"
+                       FontSize="{DynamicResource VelaFontSize11}"
+                       Foreground="{DynamicResource VelaWarning}" VerticalAlignment="Center" />
+            <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Height="22"
+                    BorderBrush="{DynamicResource VelaShellYellowDim}"
+                    ToolTip.Tip="重开一条事件流" Command="{Binding ReconnectCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <ui:Glyph Key="Icon.refresh-cw" Size="12" Brush="{DynamicResource VelaWarning}" />
+                <TextBlock Text="重连" FontSize="{DynamicResource VelaFontSize11}"
+                           Foreground="{DynamicResource VelaWarning}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </Grid>
+        </Border>
+
+      <Grid>
         <ContentControl Content="{Binding ActivePage}" IsVisible="{Binding IsReady}" />
 
         <!-- 建立通道中:骨架屏保留真实列宽,数据到达时不跳版。 -->
@@ -297,6 +340,7 @@
           <TextBlock Text="{Binding ErrorHint}" Classes="meta" TextAlignment="Center" TextWrapping="Wrap" />
         </StackPanel>
       </Grid>
+      </DockPanel>
     </Grid>
 
     <!-- ── 状态条:永远说最后一件事的结果 ──────────────────────── -->

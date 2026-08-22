@@ -12,36 +12,94 @@
   -->
 
   <DockPanel>
-    <Border DockPanel.Dock="Top" Classes="subbar">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+    <!--
+      一条 40px 的工具条,左半边说"这是谁的日志",右半边全是"怎么看"。
+      三个开关(时间戳 / 换行 / 仅错误)对应视图模型上早就存在、却一直没有入口的三个状态。
+    -->
+    <Border DockPanel.Dock="Top" Classes="toolbar">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+        <ui:Glyph Grid.Column="0" Key="Docker.scroll-text" Size="15" VerticalAlignment="Center"
+                  Brush="{DynamicResource VelaTextSecondary}" />
+
+        <!-- 来源 chips:合并多条流时才有。点 × 就把它从流里摘掉。 -->
+        <ItemsControl Grid.Column="1" ItemsSource="{Binding Sources}" Margin="8,0,0,0"
+                      IsVisible="{Binding IsMerged}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="pages:LogSource">
+              <Button Theme="{StaticResource DockerToolButton}" Height="20" Padding="7,0"
+                      ToolTip.Tip="从合并流里移除"
+                      IsVisible="{Binding $parent[ItemsControl].((pages:LogsViewModel)DataContext).CanRemoveSources}"
+                      Command="{Binding $parent[ItemsControl].((pages:LogsViewModel)DataContext).RemoveSourceCommand}"
+                      CommandParameter="{Binding}">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                  <TextBlock Text="{Binding Name}" FontSize="{DynamicResource VelaFontSize10}"
+                             Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
+                  <ui:Glyph Key="Icon.x" Size="10" Brush="{DynamicResource VelaTextTertiary}" />
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- 补历史的行数 -->
-        <Border Grid.Column="0" CornerRadius="4" Padding="2" Background="{DynamicResource VelaBgInput}"
+        <Border Grid.Column="3" CornerRadius="4" Padding="2" Background="{DynamicResource VelaBgInput}"
                 BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="1">
           <StackPanel Orientation="Horizontal" Spacing="2">
-            <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="7,0"
+            <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="9,0"
                     Command="{Binding SetTailCommand}" CommandParameter="100">
               <TextBlock Text="100" FontSize="{DynamicResource VelaFontSize10}"
                          FontFamily="{DynamicResource VelaUiMonoFont}" />
             </Button>
-            <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="7,0"
+            <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="9,0"
                     Command="{Binding SetTailCommand}" CommandParameter="500">
               <TextBlock Text="500" FontSize="{DynamicResource VelaFontSize10}"
                          FontFamily="{DynamicResource VelaUiMonoFont}" />
             </Button>
-            <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="7,0"
+            <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="9,0"
                     Command="{Binding SetTailCommand}" CommandParameter="2000">
               <TextBlock Text="2000" FontSize="{DynamicResource VelaFontSize10}"
                          FontFamily="{DynamicResource VelaUiMonoFont}" />
             </Button>
-            <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="7,0"
+            <Button Theme="{StaticResource DockerIconButton}" Width="NaN" Height="20" Padding="9,0"
                     Command="{Binding SetTailCommand}" CommandParameter="all">
               <TextBlock Text="全部" FontSize="{DynamicResource VelaFontSize10}" />
             </Button>
           </StackPanel>
         </Border>
 
+        <!-- 三个视图开关。亮起来的那颗才是"正在生效"。 -->
+        <ToggleButton Grid.Column="4" Theme="{StaticResource DockerChipToggle}" Margin="8,0,0,0"
+                      ToolTip.Tip="显示每一行的时间戳" IsChecked="{Binding Timestamps}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <ui:Glyph Key="Icon.timer" Size="12" Brush="{Binding $parent[ToggleButton].Foreground}" />
+            <TextBlock Text="时间戳" FontSize="{DynamicResource VelaFontSize11}" VerticalAlignment="Center"
+                       Foreground="{Binding $parent[ToggleButton].Foreground}" />
+          </StackPanel>
+        </ToggleButton>
+        <ToggleButton Grid.Column="5" Theme="{StaticResource DockerChipToggle}" Margin="6,0,0,0"
+                      ToolTip.Tip="长行折行显示,而不是横向截断" IsChecked="{Binding Wrap}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <ui:Glyph Key="Docker.wrap-text" Size="12" Brush="{Binding $parent[ToggleButton].Foreground}" />
+            <TextBlock Text="换行" FontSize="{DynamicResource VelaFontSize11}" VerticalAlignment="Center"
+                       Foreground="{Binding $parent[ToggleButton].Foreground}" />
+          </StackPanel>
+        </ToggleButton>
+        <ToggleButton Grid.Column="6" Theme="{StaticResource DockerChipToggle}" Margin="6,0,0,0"
+                      ToolTip.Tip="只留 WARN / ERROR 那些行" IsChecked="{Binding ErrorsOnly}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <ui:Glyph Key="Icon.triangle-alert" Size="12" Brush="{Binding $parent[ToggleButton].Foreground}" />
+            <TextBlock Text="仅错误" FontSize="{DynamicResource VelaFontSize11}" VerticalAlignment="Center"
+                       Foreground="{Binding $parent[ToggleButton].Foreground}" />
+          </StackPanel>
+        </ToggleButton>
+
         <!-- 搜索 -->
-        <Border Grid.Column="1" Classes="input" Width="180" Height="24" Margin="8,0,0,0">
+        <Border Grid.Column="7" Classes="input" Width="210" Height="24" Margin="8,0,0,0">
           <Grid ColumnDefinitions="Auto,*,Auto,Auto">
             <ui:Glyph Grid.Column="0" Key="Icon.search" Size="12" Brush="{DynamicResource VelaTextTertiary}" />
             <TextBox Grid.Column="1" Classes="bare mono" Margin="6,0,0,0" Text="{Binding Search}"
@@ -53,7 +111,7 @@
         </Border>
 
         <!-- 跟随 -->
-        <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Height="24" Margin="0,0,6,0"
+        <Button Grid.Column="8" Theme="{StaticResource DockerToolButton}" Height="24" Margin="8,0,6,0"
                 Command="{Binding ToggleFollowCommand}">
           <Button.Background>
             <Binding Path="Follow">
@@ -72,7 +130,7 @@
                 </Binding>
               </ui:Glyph.Brush>
             </ui:Glyph>
-            <TextBlock Text="跟随" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
+            <TextBlock Text="{Binding FollowLabel}" FontSize="{DynamicResource VelaFontSize11}" FontWeight="Medium"
                        VerticalAlignment="Center">
               <TextBlock.Foreground>
                 <Binding Path="Follow">
@@ -85,18 +143,18 @@
           </StackPanel>
         </Button>
 
-        <Button Grid.Column="4" Theme="{StaticResource DockerIconButton}"
+        <Button Grid.Column="9" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
                 IsVisible="{Binding CanPickFiles}" ToolTip.Tip="把当前这些行存成本地文件"
                 Command="{Binding DownloadCommand}">
-          <ui:Glyph Key="Docker.arrow-down-to-line" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+          <ui:Glyph Key="Icon.download" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
         </Button>
-        <Button Grid.Column="5" Theme="{StaticResource DockerIconButton}" ToolTip.Tip="复制全部"
-                Command="{Binding CopyCommand}">
-          <ui:Glyph Key="Icon.copy" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+        <Button Grid.Column="10" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
+                ToolTip.Tip="复制全部" Command="{Binding CopyCommand}">
+          <ui:Glyph Key="Icon.copy" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
         </Button>
-        <Button Grid.Column="6" Theme="{StaticResource DockerIconButton}" ToolTip.Tip="清屏"
-                Command="{Binding ClearCommand}">
-          <ui:Glyph Key="Docker.eraser" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
+        <Button Grid.Column="11" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
+                ToolTip.Tip="清屏" Command="{Binding ClearCommand}">
+          <ui:Glyph Key="Docker.eraser" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
         </Button>
       </Grid>
     </Border>
@@ -121,7 +179,9 @@
         <ItemsControl ItemsSource="{Binding Lines}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="pages:LogLineItem">
-              <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="12,0" MinHeight="17">
+              <!-- 一行 18px:时间戳 76 / 来源 78 / 级别 38 / 正文。
+                   前三列都是定宽的,眼睛才能沿着一条竖线往下扫。 -->
+              <Grid ColumnDefinitions="76,10,78,10,38,10,*" Margin="12,0" MinHeight="18">
                 <Grid.Background>
                   <Binding Path="Matched">
                     <Binding.Converter>
@@ -129,25 +189,24 @@
                     </Binding.Converter>
                   </Binding>
                 </Grid.Background>
-                <TextBlock Grid.Column="0" Text="{Binding Timestamp}" Width="80"
+                <TextBlock Grid.Column="0" Text="{Binding Timestamp}"
+                           IsVisible="{Binding $parent[ItemsControl].((pages:LogsViewModel)DataContext).Timestamps}"
                            FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize10}"
-                           Foreground="{DynamicResource DockerCodeComment}" VerticalAlignment="Center" />
+                           Foreground="{DynamicResource VelaTextMuted}" VerticalAlignment="Center" />
                 <!-- 来源:颜色跟着序号走,合并多条流时靠色块分辨比读名字快 -->
-                <TextBlock Grid.Column="1" Text="{Binding Source}" IsVisible="{Binding HasSource}" Width="92"
+                <TextBlock Grid.Column="2" Text="{Binding Source}" IsVisible="{Binding HasSource}"
                            FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize10}"
                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                            Foreground="{Binding SourceIndex, Converter={x:Static ui:Converters.SourceBrush}}" />
                 <!-- 级别:从行首那一小段里认,认不出来就不占位 -->
-                <Border Grid.Column="2" IsVisible="{Binding HasLevel}" Width="46" Height="14" CornerRadius="3"
-                        Margin="0,0,7,0" VerticalAlignment="Center"
-                        Background="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}, ConverterParameter=dim}">
-                  <TextBlock Text="{Binding LevelLabel}" FontSize="9" FontWeight="SemiBold"
-                             HorizontalAlignment="Center" VerticalAlignment="Center"
-                             Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
-                </Border>
-                <SelectableTextBlock Grid.Column="3" Text="{Binding Text}"
+                <TextBlock Grid.Column="4" Text="{Binding LevelLabel}" IsVisible="{Binding HasLevel}"
+                           FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize9}"
+                           VerticalAlignment="Center"
+                           Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                <SelectableTextBlock Grid.Column="6" Text="{Binding Text}"
                                      FontFamily="{DynamicResource VelaUiMonoFont}"
-                                     FontSize="{DynamicResource VelaFontSize11}" VerticalAlignment="Center">
+                                     FontSize="{DynamicResource VelaFontSize11}" VerticalAlignment="Center"
+                                     TextWrapping="{Binding $parent[ItemsControl].((pages:LogsViewModel)DataContext).Wrap, Converter={x:Static ui:Converters.WrapMode}}">
                   <SelectableTextBlock.Foreground>
                     <Binding Path="IsError">
                       <Binding.Converter>

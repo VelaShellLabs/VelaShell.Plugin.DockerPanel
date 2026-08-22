@@ -46,7 +46,7 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
         {
             if (SetField(ref _shell, value))
             {
-                OnPropertyChanged(nameof(HeaderText));
+                OnPropertiesChanged(nameof(HeaderText), nameof(ShellName));
             }
         }
     }
@@ -125,6 +125,9 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
     /// <summary>终端尺寸文字。</summary>
     public string SizeText => _view is { } view ? $"{view.Columns} × {view.Rows}" : "—";
 
+    /// <summary>状态条上显示的 shell 名(去掉路径,只留 bash / sh / ash)。</summary>
+    public string ShellName => Shell[(Shell.LastIndexOf('/') + 1)..];
+
     /// <summary>exec 实例 id 的短形态(排查时对得上 daemon 的日志)。</summary>
     public string ExecIdText => _session is { } session ? Humanize.ShortId(session.ExecId) : "—";
 
@@ -154,6 +157,45 @@ public sealed class ContainerTerminalViewModel(DockerPanelViewModel shell, strin
     public RelayCommand ReconnectCommand => _reconnect ??= new(_ => RestartAsync());
 
     private RelayCommand? _reconnect;
+
+    /// <summary>
+    /// 换用户 / 换 shell,然后重开会话。
+    /// <para>
+    /// exec 的用户与 shell 是**开会话时**定死的,改不了活着的那一个 ——
+    /// 所以这里改完就直接重连,而不是让用户自己再想起来按一次刷新。
+    /// </para>
+    /// </summary>
+    public RelayCommand SwitchUserCommand => _switchUser ??= new(_ => SwitchUserAsync());
+
+    private RelayCommand? _switchUser;
+
+    /// <summary>换工作目录,然后重开会话。</summary>
+    public RelayCommand SwitchWorkingDirCommand => _switchDir ??= new(_ => SwitchWorkingDirAsync());
+
+    private RelayCommand? _switchDir;
+
+    private async Task SwitchUserAsync()
+    {
+        var form = new ExecUserForm(User, Shell);
+        if (!await shell.ShowFormAsync(form).ConfigureAwait(true))
+        {
+            return;
+        }
+        User = form.User;
+        Shell = form.Shell;
+        await RestartAsync().ConfigureAwait(true);
+    }
+
+    private async Task SwitchWorkingDirAsync()
+    {
+        var form = new ExecWorkingDirForm(WorkingDir);
+        if (!await shell.ShowFormAsync(form).ConfigureAwait(true))
+        {
+            return;
+        }
+        WorkingDir = form.WorkingDir;
+        await RestartAsync().ConfigureAwait(true);
+    }
 
     /// <summary>
     /// 在宿主那个 SSH 终端里开一个会话。

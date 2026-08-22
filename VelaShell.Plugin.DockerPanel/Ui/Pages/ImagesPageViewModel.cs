@@ -134,6 +134,32 @@ public sealed class ImagesPageViewModel : PageViewModel
     /// <summary>选中条文字。</summary>
     public string SelectionText => $"已选 {SelectedCount} 个镜像";
 
+    /// <summary>
+    /// 列头那枚全选框。作用范围是当前**筛选出来**的那些行 ——
+    /// 筛到「悬空 12」时按全选,要的是这 12 个,不是背后的 34 个。
+    /// </summary>
+    public bool? AllSelected
+    {
+        get
+        {
+            if (View.Count == 0)
+            {
+                return false;
+            }
+            int picked = View.Count(r => r.Selected);
+            return picked == 0 ? false : picked == View.Count ? true : null;
+        }
+        set
+        {
+            bool select = value is true;
+            foreach (ImageRow row in View)
+            {
+                row.Selected = select;
+            }
+            RecountSelection();
+        }
+    }
+
     /// <summary>列表空了。</summary>
     public bool IsEmpty => LoadedOnce && _all.Count == 0;
 
@@ -276,6 +302,7 @@ public sealed class ImagesPageViewModel : PageViewModel
         }
         var detail = new ImageDetailViewModel(Shell, this, row);
         Detail = detail;
+        MarkCurrent(row.Id);
         try
         {
             await detail.LoadAsync(Shell.Lifetime).ConfigureAwait(true);
@@ -286,7 +313,20 @@ public sealed class ImagesPageViewModel : PageViewModel
         }
     }
 
-    private void CloseDetail() => Detail = null;
+    private void CloseDetail()
+    {
+        Detail = null;
+        MarkCurrent(null);
+    }
+
+    /// <summary>把"抽屉里开着的那一行"标出来。</summary>
+    private void MarkCurrent(string? id)
+    {
+        foreach (ImageRow row in _all)
+        {
+            row.Current = row.Id == id;
+        }
+    }
 
     /// <inheritdoc />
     public override void Reset()
@@ -320,10 +360,14 @@ public sealed class ImagesPageViewModel : PageViewModel
                 row.ShortId.StartsWith(needle, StringComparison.OrdinalIgnoreCase));
         }
         View.Merge([.. filtered], (_, _) => { });
-        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertiesChanged(nameof(IsEmpty), nameof(AllSelected));
     }
 
-    private void RecountSelection() => SelectedCount = _all.Count(r => r.Selected);
+    private void RecountSelection()
+    {
+        SelectedCount = _all.Count(r => r.Selected);
+        OnPropertyChanged(nameof(AllSelected));
+    }
 
     private void ClearSelection()
     {
@@ -332,6 +376,7 @@ public sealed class ImagesPageViewModel : PageViewModel
             row.Selected = false;
         }
         SelectedCount = 0;
+        OnPropertyChanged(nameof(AllSelected));
     }
 
     private IReadOnlyList<ImageRow> Targets(object? parameter) =>

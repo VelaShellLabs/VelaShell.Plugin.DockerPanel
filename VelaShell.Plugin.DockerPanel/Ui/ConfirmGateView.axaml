@@ -64,7 +64,7 @@
         <StackPanel Margin="18,16" Spacing="12">
 
           <!-- 将要执行的**那几条真请求**,不是一句概括 -->
-          <TextBlock Text="将要执行" Classes="h3" />
+          <TextBlock Text="将要执行" Classes="h4" />
           <Border CornerRadius="4" Padding="12,10" Background="{DynamicResource VelaBgTerminal}">
             <StackPanel Spacing="3">
               <ItemsControl ItemsSource="{Binding Commands}">
@@ -82,7 +82,7 @@
 
           <!-- 目标列表 -->
           <StackPanel Spacing="2" IsVisible="{Binding HasTargets}">
-            <TextBlock Text="目标" Classes="h3" />
+            <TextBlock Text="目标" Classes="h4" />
             <ItemsControl ItemsSource="{Binding Targets}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="ui:ConfirmTarget">
@@ -100,7 +100,7 @@
 
           <!-- 后果说明 -->
           <StackPanel Spacing="5" IsVisible="{Binding HasConsequences}">
-            <TextBlock Text="后果" Classes="h3" />
+            <TextBlock Text="后果" Classes="h4" />
             <ItemsControl ItemsSource="{Binding Consequences}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="ui:ConfirmConsequence">
@@ -153,11 +153,11 @@
           <!-- 手打确认串 -->
           <StackPanel Spacing="5" IsVisible="{Binding IsDataLoss}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="请输入" Classes="h3" />
+              <TextBlock Text="请输入" Classes="h4" />
               <TextBlock Text="{Binding ConfirmWord}" FontFamily="{DynamicResource VelaUiMonoFont}"
                          FontSize="{DynamicResource VelaFontSize12}" FontWeight="SemiBold"
                          Foreground="{DynamicResource VelaError}" VerticalAlignment="Center" />
-              <TextBlock Text="以确认" Classes="h3" />
+              <TextBlock Text="以确认" Classes="h4" />
             </StackPanel>
             <Border Classes="input" Height="34" BorderBrush="{DynamicResource VelaError}">
               <Grid ColumnDefinitions="*,Auto">
@@ -176,7 +176,12 @@
         <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
           <ui:Glyph Grid.Column="0" Key="Docker.keyboard" Size="13" VerticalAlignment="Center"
                     Brush="{DynamicResource VelaTextTertiary}" />
-          <TextBlock Grid.Column="1" Text="Esc 取消 · 回车不会触发" Classes="meta" Margin="7,0,0,0" />
+          <!-- 只有会丢数据那一档才需要说"回车不会触发" ——
+               一般破坏性那一档回车**是**确认,写反了比不写更糟。 -->
+          <TextBlock Grid.Column="1" Text="Esc 取消" Classes="meta" Margin="7,0,0,0"
+                     IsVisible="{Binding !IsDataLoss}" />
+          <TextBlock Grid.Column="1" Text="Esc 取消 · 回车不会触发" Classes="meta" Margin="7,0,0,0"
+                     IsVisible="{Binding IsDataLoss}" />
           <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Height="30" Margin="0,0,9,0"
                   Command="{Binding CancelCommand}">
             <TextBlock Text="取消" FontSize="{DynamicResource VelaFontSize12}"

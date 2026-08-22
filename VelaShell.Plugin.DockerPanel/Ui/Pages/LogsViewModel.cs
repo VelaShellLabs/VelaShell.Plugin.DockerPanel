@@ -167,6 +167,24 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
     /// <summary>当前来源的名字(顶部 chips 用)。</summary>
     public IReadOnlyList<LogSource> Sources => _sources;
 
+    /// <summary>
+    /// 顶部 chip 上那个 × 该做什么。由拥有来源清单的那一方(容器页)装上。
+    /// <para>
+    /// 不在这里直接改 <see cref="_sources" />:左边面板的勾选才是唯一的真相,
+    /// 两处各改各的,取消一个来源之后左边还亮着,就成了两套互相矛盾的状态。
+    /// </para>
+    /// </summary>
+    public Func<LogSource, Task>? SourceRemover { get; set; }
+
+    /// <summary>能不能从 chip 上摘掉来源(单容器的日志页签不能)。</summary>
+    public bool CanRemoveSources => SourceRemover is not null;
+
+    /// <summary>从合并流里摘掉一条来源。</summary>
+    public RelayCommand RemoveSourceCommand => _removeSource ??= new(p =>
+        p is LogSource source && SourceRemover is { } remover ? remover(source) : Task.CompletedTask);
+
+    private RelayCommand? _removeSource;
+
     /// <summary>底部那句"几条流、跑了多久"。</summary>
     public string StreamSummary
     {
@@ -207,10 +225,14 @@ public sealed partial class LogsViewModel : ObservableObject, IAsyncDisposable
         {
             if (SetField(ref _follow, value))
             {
+                OnPropertyChanged(nameof(FollowLabel));
                 _ = RestartAsync();
             }
         }
     }
+
+    /// <summary>跟随按钮上的字。开着时说"跟随中" —— 这颗按钮本身就是状态灯。</summary>
+    public string FollowLabel => Follow ? "跟随中" : "跟随";
 
     /// <summary>只看标准错误。</summary>
     public bool ErrorsOnly

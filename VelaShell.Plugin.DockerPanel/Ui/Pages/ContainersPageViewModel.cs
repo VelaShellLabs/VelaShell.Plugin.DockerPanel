@@ -19,12 +19,24 @@ public enum ContainerFilter
     Problem
 }
 
+/// <summary>
+/// 筛选弹层里的一项 compose 项目(设计稿 19 号板)。
+/// <para>
+/// 名字为空串代表「不属于任何项目」—— 那也是一档真实的筛选,而不是"没选"。
+/// </para>
+/// </summary>
+/// <param name="Name">项目名;空串表示不属于任何项目。</param>
+/// <param name="Label">显示文字。</param>
+/// <param name="Count">这一档有几个容器。</param>
+public readonly record struct ProjectFilterItem(string Name, string Label, int Count);
+
 /// <summary>容器页。</summary>
 public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
 {
     private readonly List<ContainerRow> _all = [];
     private readonly StatsSampler _sampler;
     private ContainerFilter _filter = ContainerFilter.All;
+    private string? _project;
     private string _search = "";
     private int _selectedCount;
     private ContainerDetailViewModel? _detail;
@@ -120,6 +132,80 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>异常数量。</summary>
     public int ProblemCount => _all.Count(r => r.IsUnhealthy || r.IsFailed);
 
+    /// <summary>
+    /// 筛选弹层里的 compose 项目清单(设计稿 19 号板)。
+    /// <para>
+    /// 状态那一档已经在工具条的分段控件上,所以弹层里只放项目 ——
+    /// 同一个筛选出现在两个地方,用户改了一处就再也说不清当前到底筛掉了什么。
+    /// </para>
+    /// </summary>
+    public ObservableCollection<ProjectFilterItem> ProjectFilters { get; } = [];
+
+    /// <summary>当前项目筛选;<see langword="null" /> 表示不按项目筛。</summary>
+    public string? ProjectFilter
+    {
+        get => _project;
+        private set
+        {
+            if (SetField(ref _project, value))
+            {
+                OnPropertiesChanged(nameof(HasProjectFilter), nameof(ProjectFilterLabel));
+                ApplyView();
+            }
+        }
+    }
+
+    /// <summary>按项目筛着没有。</summary>
+    public bool HasProjectFilter => _project is not null;
+
+    /// <summary>筛选按钮上显示的文字。</summary>
+    public string ProjectFilterLabel => _project switch
+    {
+        null => "项目",
+        "" => "不属于任何项目",
+        _ => _project
+    };
+
+    /// <summary>选一个项目来筛;参数为 <see langword="null" /> 时清除。</summary>
+    public RelayCommand SetProjectFilterCommand => _setProject ??= new(p =>
+    {
+        ProjectFilter = p as string;
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _setProject;
+
+    /// <summary>清除项目筛选。</summary>
+    public RelayCommand ClearProjectFilterCommand => _clearProject ??= new(_ =>
+    {
+        ProjectFilter = null;
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _clearProject;
+
+    private void BuildProjectFilters()
+    {
+        ProjectFilters.Clear();
+        foreach (IGrouping<string, ContainerRow> group in _all
+                     .GroupBy(r => r.Project)
+                     .Where(g => g.Key.Length > 0)
+                     .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            ProjectFilters.Add(new(group.Key, group.Key, group.Count()));
+        }
+        int loose = _all.Count(r => r.Project.Length == 0);
+        if (loose > 0)
+        {
+            ProjectFilters.Add(new("", "(不属于任何项目)", loose));
+        }
+        // 筛着的项目没了(最后一个容器被删了)就自动松开,否则列表会空得莫名其妙。
+        if (_project is { } current && ProjectFilters.All(p => p.Name != current))
+        {
+            ProjectFilter = null;
+        }
+    }
+
     /// <summary>已勾选的数量。</summary>
     public int SelectedCount
     {
@@ -138,6 +224,34 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
 
     /// <summary>选中条上的文字。</summary>
     public string SelectionText => $"已选 {SelectedCount} 个容器";
+
+    /// <summary>
+    /// 列头那枚全选框。作用范围是**当前可见的**那些行,不是 _all ——
+    /// 筛到「已停止 5」时按下全选,用户要的是这 5 个;
+    /// 把背后那 13 个运行中的一起勾上,下一步「删除」就成了事故。
+    /// 部分勾选时停在第三态,再按一次全勾上。
+    /// </summary>
+    public bool? AllSelected
+    {
+        get
+        {
+            if (View.Count == 0)
+            {
+                return false;
+            }
+            int picked = View.Count(r => r.Selected);
+            return picked == 0 ? false : picked == View.Count ? true : null;
+        }
+        set
+        {
+            bool select = value is true;
+            foreach (ContainerRow row in View)
+            {
+                row.Selected = select;
+            }
+            RecountSelection();
+        }
+    }
 
     /// <summary>列表是不是空的(且已经加载过)。</summary>
     public bool IsEmpty => LoadedOnce && _all.Count == 0;
@@ -197,10 +311,18 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>刷新。</summary>
     public RelayCommand RefreshCommand { get; }
 
-    /// <summary>空列表那一屏的「运行容器…」:去镜像页挑一个。</summary>
+    /// <summary>
+    /// 「运行容器…」:去镜像页挑一个。
+    /// 不直接开运行表单 —— 那张表单的镜像字段是只读的,得先有镜像才谈得上运行。
+    /// </summary>
     public RelayCommand RunFromImagesCommand => _runFromImages ??= new(_ => Shell.GoToAsync(PanelPage.Images));
 
     private RelayCommand? _runFromImages;
+
+    /// <summary>工具条上的「拉取镜像」:和镜像页那颗是同一个对话框。</summary>
+    public RelayCommand PullImageCommand => _pullImage ??= new(_ => Shell.ShowPullDialogAsync(null));
+
+    private RelayCommand? _pullImage;
 
     /// <summary>空列表那一屏的「从 compose 起一套」。</summary>
     public RelayCommand GoComposeCommand => _goCompose ??= new(_ => Shell.GoToAsync(PanelPage.Compose));
@@ -297,6 +419,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
                 }
             }
             LoadedOnce = true;
+            BuildProjectFilters();
             ApplyView();
             OnPropertiesChanged(nameof(TotalCount), nameof(RunningCount), nameof(StoppedCount), nameof(ProblemCount));
             Shell.SetContainerCount(_all.Count);
@@ -338,6 +461,10 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
             ContainerFilter.Problem => row.IsUnhealthy || row.IsFailed,
             _ => Shell.Settings.ShowStopped || row.IsRunning || row.IsPaused
         });
+        if (_project is { } project)
+        {
+            filtered = filtered.Where(row => row.Project == project);
+        }
         if (needle.Length > 0)
         {
             filtered = filtered.Where(row =>
@@ -347,10 +474,14 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
                 row.Id.StartsWith(needle, StringComparison.OrdinalIgnoreCase));
         }
         View.Merge([.. filtered], (_, _) => { });
-        OnPropertiesChanged(nameof(IsEmpty), nameof(NoMatch));
+        OnPropertiesChanged(nameof(IsEmpty), nameof(NoMatch), nameof(AllSelected));
     }
 
-    private void RecountSelection() => SelectedCount = _all.Count(r => r.Selected);
+    private void RecountSelection()
+    {
+        SelectedCount = _all.Count(r => r.Selected);
+        OnPropertyChanged(nameof(AllSelected));
+    }
 
     private void ClearSelection()
     {
@@ -359,6 +490,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
             row.Selected = false;
         }
         SelectedCount = 0;
+        OnPropertyChanged(nameof(AllSelected));
     }
 
     /// <summary>
@@ -638,16 +770,26 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     /// <summary>把某个来源从合并流里去掉(顶部 chip 上那个 ×)。</summary>
     public RelayCommand RemoveSourceCommand => _removeSource ??= new(p =>
     {
-        if (p is LogSource source
-            && LogSources.FirstOrDefault(s => s.Source.ContainerId == source.ContainerId) is { } item)
+        if (p is LogSource source)
         {
-            // 走勾选那条路,左边面板的状态跟着一起变 —— 两处不能各说各话。
-            item.Selected = false;
+            RemoveLogSource(source);
         }
         return Task.CompletedTask;
     });
 
     private RelayCommand? _removeSource;
+
+    /// <summary>
+    /// 从合并流里摘掉一条来源。
+    /// 走勾选那条路,左边面板的状态跟着一起变 —— 两处不能各说各话。
+    /// </summary>
+    private void RemoveLogSource(LogSource source)
+    {
+        if (LogSources.FirstOrDefault(s => s.Source.ContainerId == source.ContainerId) is { } item)
+        {
+            item.Selected = false;
+        }
+    }
 
     /// <summary>来源全选 / 全不选。</summary>
     public RelayCommand ToggleAllSourcesCommand => _toggleAll ??= new(_ =>
@@ -665,7 +807,15 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
     private async Task EnterLogsModeAsync(IReadOnlyList<ContainerRow> seed)
     {
         BuildLogSources(seed);
-        var logs = new LogsViewModel(Shell, SelectedSources());
+        var logs = new LogsViewModel(Shell, SelectedSources())
+        {
+            // chip 上的 × 走勾选那条路,左边面板跟着一起变。
+            SourceRemover = source =>
+            {
+                RemoveLogSource(source);
+                return Task.CompletedTask;
+            }
+        };
         MergedLogs = logs;
         await logs.EnsureStartedAsync().ConfigureAwait(true);
     }
@@ -885,6 +1035,7 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         CloseDetail(force: true);
         var detail = new ContainerDetailViewModel(Shell, this, row);
         Detail = detail;
+        MarkCurrent(row.Id);
         await detail.LoadAsync(Shell.Lifetime).ConfigureAwait(true);
     }
 
@@ -895,6 +1046,19 @@ public sealed class ContainersPageViewModel : PageViewModel, IAsyncDisposable
         {
             _ = detail.DisposeAsync();
             Detail = null;
+            MarkCurrent(null);
+        }
+    }
+
+    /// <summary>
+    /// 把"抽屉里开着的那一行"标出来。走 _all 而不是 View ——
+    /// 抽屉钉住时用户可能已经切走了筛选,那一行不在可见集里也仍然是当前行。
+    /// </summary>
+    private void MarkCurrent(string? id)
+    {
+        foreach (ContainerRow row in _all)
+        {
+            row.Current = row.Id == id;
         }
     }
 

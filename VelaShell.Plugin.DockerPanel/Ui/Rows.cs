@@ -32,6 +32,7 @@ public enum RowTone
 public abstract class RowBase(string id) : ObservableObject
 {
     private bool _selected;
+    private bool _current;
     private bool _busy;
     private double _busyProgress;
 
@@ -52,6 +53,20 @@ public abstract class RowBase(string id) : ObservableObject
                 SelectionChanged?.Invoke();
             }
         }
+    }
+
+    /// <summary>
+    /// 这一行就是右侧抽屉里正开着的那一个。
+    /// <para>
+    /// 与 <see cref="Selected" /> 是两件事,底色也不同:勾选是"批量的目标"(强调色底),
+    /// 当前是"我正在看的那一个"(中性选中底)。混成一种,勾了三行再点开第四行时
+    /// 就分不出哪一行会被下一步的「删除」打到。
+    /// </para>
+    /// </summary>
+    public bool Current
+    {
+        get => _current;
+        set => SetField(ref _current, value);
     }
 
     /// <summary>

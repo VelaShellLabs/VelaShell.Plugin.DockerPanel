@@ -155,17 +155,18 @@
     </Style>
   </ControlTheme>
 
-  <!-- 左导航栏的一项:图标在上、文字在下,选中时整块药丸底 + 强调色。 -->
+  <!-- 左导航栏的一项:图标在上、文字在下,选中时整块药丸底 + 强调色。
+       56×48 的格子里放一枚 46×42 的药丸 —— 药丸不贴边,悬停底才不会糊到导航栏边界上。 -->
   <ControlTheme x:Key="DockerRailButton" TargetType="RadioButton">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
-    <Setter Property="Width" Value="52" />
-    <Setter Property="Height" Value="46" />
+    <Setter Property="Width" Value="56" />
+    <Setter Property="Height" Value="48" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Border Name="Pill" Background="{TemplateBinding Background}" CornerRadius="7" Margin="3,1">
+        <Border Name="Pill" Background="{TemplateBinding Background}" CornerRadius="8" Margin="5,3">
           <ContentPresenter Content="{TemplateBinding Content}"
                             ContentTemplate="{TemplateBinding ContentTemplate}"
                             Foreground="{TemplateBinding Foreground}"
@@ -185,12 +186,42 @@
     </Style>
   </ControlTheme>
 
+  <!-- 导航栏底部那一项(设置)。长得和上面的导航项一模一样,但它开的是覆盖层不是页面 ——
+       所以是 Button 而不是 RadioButton:它按下去不该把当前页的高亮抢走。 -->
+  <ControlTheme x:Key="DockerRailActionButton" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Width" Value="56" />
+    <Setter Property="Height" Value="48" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Pill" Background="{TemplateBinding Background}" CornerRadius="8" Margin="5,3">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#Pill">
+      <Setter Property="Background" Value="{DynamicResource VelaBgHover}" />
+    </Style>
+    <Style Selector="^:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource VelaTextSecondary}" />
+    </Style>
+  </ControlTheme>
+
   <!-- 分段控件里的一格。 -->
   <ControlTheme x:Key="DockerSegmentButton" TargetType="RadioButton">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource VelaTextTertiary}" />
     <Setter Property="Height" Value="20" />
-    <Setter Property="Padding" Value="9,0" />
+    <Setter Property="Padding" Value="11,0" />
     <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
@@ -220,8 +251,48 @@
   <!-- 抽屉/详情页的页签。 -->
   <ControlTheme x:Key="DockerTabButton" TargetType="RadioButton" BasedOn="{StaticResource DockerSegmentButton}">
     <Setter Property="Height" Value="24" />
-    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="Padding" Value="11,0" />
     <Setter Property="FontSize" Value="{DynamicResource VelaFontSize12}" />
+  </ControlTheme>
+
+  <!-- 视图开关(时间戳 / 换行 / 仅错误 / 跟随)。
+       描边 = 关,强调色底 = 开。用底色而不是打勾:这三颗要在一眼扫过时读出状态。 -->
+  <ControlTheme x:Key="DockerChipToggle" TargetType="ToggleButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextSecondary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="9,0" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Chip" Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#Chip">
+      <Setter Property="Background" Value="{DynamicResource VelaBgHover}" />
+    </Style>
+    <Style Selector="^:checked /template/ Border#Chip">
+      <Setter Property="Background" Value="{DynamicResource VelaAccentDim}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="^:checked">
+      <Setter Property="Foreground" Value="{DynamicResource VelaAccent}" />
+    </Style>
   </ControlTheme>
 
   <!-- 开关。 -->

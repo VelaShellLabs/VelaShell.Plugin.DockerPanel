@@ -12,7 +12,8 @@
     <Border Grid.Row="0" Classes="toolbar">
       <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
         <TextBlock Grid.Column="0" Text="镜像" Classes="h1" />
-        <TextBlock Grid.Column="1" Text="{Binding TotalCount}" Classes="meta" Margin="8,0,0,0" />
+        <TextBlock Grid.Column="1" Text="{Binding TotalCount}" Classes="cell" Margin="9,0,0,0"
+                   Foreground="{DynamicResource VelaTextTertiary}" />
 
         <Border Grid.Column="2" Margin="12,0,0,0" CornerRadius="4" Padding="2"
                 Background="{DynamicResource VelaBgInput}"
@@ -73,8 +74,7 @@
                        Foreground="{DynamicResource VelaTextSecondary}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Grid.Column="6" Theme="{StaticResource DockerToolButton}" Margin="0,0,8,0"
-                Background="{DynamicResource VelaAccent}" BorderBrush="Transparent"
+        <Button Grid.Column="6" Theme="{StaticResource DockerToolButton}" Classes="primary" Margin="0,0,9,0"
                 Command="{Binding PullCommand}">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <ui:Glyph Key="Docker.arrow-down-to-line" Size="13"
@@ -83,7 +83,8 @@
                        Foreground="{DynamicResource VelaAccentForeground}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}" Command="{Binding RefreshCommand}">
+        <Button Grid.Column="7" Theme="{StaticResource DockerIconButton}" Width="26" Height="26"
+                ToolTip.Tip="刷新" Command="{Binding RefreshCommand}">
           <ui:Glyph Key="Icon.refresh-cw" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
         </Button>
       </Grid>
@@ -121,8 +122,12 @@
       </StackPanel>
     </Border>
 
+    <!-- 列宽与下面的数据行共用同一串定义,改一处必须改两处。 -->
     <Border Grid.Row="2" Classes="header-row">
-      <Grid ColumnDefinitions="26,*,110,90,120,100,150">
+      <Grid ColumnDefinitions="26,*,104,84,118,96,120">
+        <CheckBox Grid.Column="0" Classes="compact" IsThreeState="True"
+                  HorizontalAlignment="Center" ToolTip.Tip="全选当前筛选出的这些行"
+                  IsChecked="{Binding AllSelected}" />
         <TextBlock Grid.Column="1" Text="仓库 / 标签" Classes="col" Margin="4,0,0,0" />
         <TextBlock Grid.Column="2" Text="镜像 ID" Classes="col" />
         <TextBlock Grid.Column="3" Text="大小" Classes="col" />
@@ -136,7 +141,11 @@
         <ItemsControl ItemsSource="{Binding View}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="ui:ImageRow">
-              <Grid Height="32" ColumnDefinitions="26,*,110,90,120,100,150" Background="Transparent">
+              <!-- 整行可点开详情 —— 行尾只留四颗动作按钮,和设计稿一致 -->
+              <Border Classes="row" Tapped="OnRowTapped"
+                      Classes.current="{Binding Current}"
+                      Classes.selected="{Binding Selected}">
+              <Grid Height="32" ColumnDefinitions="26,*,104,84,118,96,120">
                 <!-- 设计稿 19 号板的「镜像 · 更多」那五项 -->
                 <Grid.ContextMenu>
                   <ContextMenu>
@@ -202,13 +211,9 @@
                           CommandParameter="{Binding}">
                     <ui:Glyph Key="Icon.trash-2" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
                   </Button>
-                  <Button Theme="{StaticResource DockerIconButton}" Width="22" Height="22" ToolTip.Tip="详情"
-                          Command="{Binding $parent[ItemsControl].((pages:ImagesPageViewModel)DataContext).OpenDetailCommand}"
-                          CommandParameter="{Binding}">
-                    <ui:Glyph Key="Icon.chevron-right" Size="13" Brush="{DynamicResource VelaTextTertiary}" />
-                  </Button>
                 </StackPanel>
               </Grid>
+              </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

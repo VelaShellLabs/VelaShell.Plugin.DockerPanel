@@ -568,3 +568,119 @@ public sealed class CommitContainerForm : PanelForm
                       $"{_containerName} {Repository}:{Tag}";
     }
 }
+
+/// <summary>
+/// exec 会话的用户与 shell。
+/// <para>
+/// 这两样在 <c>exec</c> 建立时就定死了,改不了活着的那一个会话 ——
+/// 所以这张表单确认之后必然伴随一次重连,而不是"下次生效"。
+/// </para>
+/// </summary>
+public sealed class ExecUserForm : PanelForm
+{
+    private readonly TextField _user;
+    private readonly ChoiceField _shell;
+
+    /// <summary>建表单。</summary>
+    public ExecUserForm(string currentUser, string currentShell)
+    {
+        _user = new("用户")
+        {
+            Value = currentUser,
+            Placeholder = "留空 = 镜像里 USER 指定的那个",
+            Hint = "可以是名字或 uid,也可以写 uid:gid"
+        };
+        _shell = new("Shell") { Value = currentShell, AsSegments = true };
+        _shell.Options.Add(new("/bin/bash", "bash", "多数发行版镜像都有。"));
+        _shell.Options.Add(new("/bin/sh", "sh", "精简镜像(alpine / distroless)只有它。"));
+        _shell.Options.Add(new("/bin/ash", "ash", "busybox 系。"));
+        Watch(_user);
+        Watch(_shell);
+        UpdatePreview();
+    }
+
+    /// <inheritdoc />
+    public override string Title => "切换用户";
+
+    /// <inheritdoc />
+    public override string Icon => "Docker.users";
+
+    /// <inheritdoc />
+    public override string ConfirmLabel => "重新连接";
+
+    /// <inheritdoc />
+    public override string ConfirmIcon => "Icon.refresh-cw";
+
+    /// <inheritdoc />
+    public override string FooterHint => "会结束当前 exec 会话并重开一个";
+
+    /// <summary>用户。</summary>
+    public string User => _user.Value.Trim();
+
+    /// <summary>shell 的绝对路径。</summary>
+    public string Shell => _shell.Value;
+
+    /// <inheritdoc />
+    protected override void UpdatePreview()
+    {
+        string user = User.Length > 0 ? $"&User={User}" : "";
+        CommandPreview = $"POST /containers/{{id}}/exec   Cmd=[{Shell}]{user}";
+        CommandNote = "等价于  docker exec -it " + (User.Length > 0 ? $"-u {User} " : "") + $"<容器> {Shell}";
+    }
+}
+
+/// <summary>exec 会话的工作目录。</summary>
+public sealed class ExecWorkingDirForm : PanelForm
+{
+    private readonly TextField _dir;
+
+    /// <summary>建表单。</summary>
+    public ExecWorkingDirForm(string current)
+    {
+        _dir = new("工作目录")
+        {
+            Value = current,
+            Placeholder = "留空 = 镜像里 WORKDIR 指定的那个",
+            Hint = "绝对路径;目录不存在时 exec 会直接失败"
+        };
+        Watch(_dir);
+        UpdatePreview();
+    }
+
+    /// <inheritdoc />
+    public override string Title => "工作目录";
+
+    /// <inheritdoc />
+    public override string Icon => "Icon.folder";
+
+    /// <inheritdoc />
+    public override string ConfirmLabel => "重新连接";
+
+    /// <inheritdoc />
+    public override string ConfirmIcon => "Icon.refresh-cw";
+
+    /// <inheritdoc />
+    public override string FooterHint => "会结束当前 exec 会话并重开一个";
+
+    /// <summary>工作目录。</summary>
+    public string WorkingDir => _dir.Value.Trim();
+
+    /// <inheritdoc />
+    public override bool Validate()
+    {
+        if (WorkingDir.Length > 0 && !WorkingDir.StartsWith('/'))
+        {
+            _dir.Error = "要绝对路径 —— exec 没有「当前目录」可以相对。";
+            return false;
+        }
+        return true;
+    }
+
+    /// <inheritdoc />
+    protected override void UpdatePreview()
+    {
+        string dir = WorkingDir.Length > 0 ? $"&WorkingDir={WorkingDir}" : "";
+        CommandPreview = $"POST /containers/{{id}}/exec   Cmd=[shell]{dir}";
+        CommandNote = "等价于  docker exec -it " + (WorkingDir.Length > 0 ? $"-w {WorkingDir} " : "") + "<容器> <shell>";
+    }
+}

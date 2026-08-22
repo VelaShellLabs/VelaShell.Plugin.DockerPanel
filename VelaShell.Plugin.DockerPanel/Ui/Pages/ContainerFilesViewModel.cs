@@ -79,6 +79,50 @@ public sealed class FileEntryItem(ContainerFileEntry entry, string changeMarker)
         "C" => RowTone.Warn,
         _ => RowTone.Idle
     };
+
+    // ── 树 ────────────────────────────────────────────────────────
+
+    /// <summary>在树里的层级。根("/")是 0。</summary>
+    public int Depth { get; init; }
+
+    /// <summary>缩进像素。每层 13px —— 与折叠箭头同宽,竖着看是一条对齐的线。</summary>
+    public double Indent => Depth * 13;
+
+    /// <summary>只有目录才有折叠箭头。文件那一格留空,名字才不会左右跳。</summary>
+    public bool HasCaret => IsDirectory;
+
+    /// <summary>展开了没有。</summary>
+    public bool Expanded
+    {
+        get => _expanded;
+        set
+        {
+            if (SetField(ref _expanded, value))
+            {
+                OnPropertyChanged(nameof(CaretIcon));
+            }
+        }
+    }
+
+    private bool _expanded;
+
+    /// <summary>折叠箭头的朝向。</summary>
+    public string CaretIcon => Expanded ? "Icon.chevron-down" : "Icon.chevron-right";
+
+    /// <summary>子节点。目录第一次展开时才去列 —— 一上来递归整棵树会把隧道占满。</summary>
+    public List<FileEntryItem> Children { get; } = [];
+
+    /// <summary>子节点列过没有。空目录也算列过,否则每次点都会再发一次 exec。</summary>
+    public bool ChildrenLoaded { get; set; }
+
+    /// <summary>这一行是不是编辑器里正打开的那个文件。</summary>
+    public bool Current
+    {
+        get => _current;
+        set => SetField(ref _current, value);
+    }
+
+    private bool _current;
 }
 
 /// <summary>
@@ -226,24 +270,15 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         };
     }
 
-    /// <summary>当前目录。</summary>
+    /// <summary>
+    /// 当前目录 —— 树上最后一个被展开或被打开文件所在的那一个。
+    /// 上传落在这里,所以它必须跟着树走,而不是自己另记一份。
+    /// </summary>
     public string Path
     {
         get => _path;
-        private set
-        {
-            if (SetField(ref _path, value))
-            {
-                OnPropertyChanged(nameof(CanGoUp));
-            }
-        }
+        private set => SetField(ref _path, value);
     }
-
-    /// <summary>能不能回上一级。</summary>
-    public bool CanGoUp => Path != "/";
-
-    /// <summary>当前目录下的条目。</summary>
-    public ObservableCollection<FileEntryItem> Entries { get; } = [];
 
     /// <summary>正在读。</summary>
     public bool Busy
@@ -283,6 +318,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
             if (SetField(ref _openFilePath, value))
             {
                 OnPropertiesChanged(nameof(HasOpenFile), nameof(OpenFileName), nameof(OpenFileDirectory));
+                MarkCurrentFile(value);
             }
         }
     }
@@ -336,22 +372,13 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
 
     /// <summary>打开一个目录或文件。</summary>
     public RelayCommand OpenCommand => _open ??= new(p => p is FileEntryItem item
-        ? item.IsDirectory ? NavigateAsync(item.FullPath) : OpenFileAsync(item.FullPath)
+        ? item.IsDirectory ? ToggleAsync(item) : OpenFileAsync(item.FullPath)
         : Task.CompletedTask);
 
     private RelayCommand? _open;
 
-    /// <summary>回上一级。</summary>
-    public RelayCommand UpCommand => _up ??= new(_ =>
-    {
-        int slash = Path.TrimEnd('/').LastIndexOf('/');
-        return NavigateAsync(slash <= 0 ? "/" : Path.TrimEnd('/')[..slash]);
-    });
-
-    private RelayCommand? _up;
-
-    /// <summary>重新列一次当前目录。</summary>
-    public RelayCommand RefreshCommand => _refresh ??= new(_ => NavigateAsync(Path));
+    /// <summary>重新列一次(整棵树丢掉重建,并重新取一次相对镜像的变更)。</summary>
+    public RelayCommand RefreshCommand => _refresh ??= new(_ => ReloadTreeAsync());
 
     private RelayCommand? _refresh;
 
@@ -567,12 +594,190 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         }
     }
 
-    private void ApplyEntryView()
+    private void ApplyEntryView() => RebuildTree();
+
+    // ── 文件树 ────────────────────────────────────────────────────
+    //
+    // 设计稿 04 号板的左栏是一棵**常驻**的树,不是"打开文件就消失的目录列表":
+    // 改配置这件事本来就是在几个相邻文件之间来回跳,
+    // 每跳一次都要先关掉编辑器再重新走一遍目录,是这一页最费手的地方。
+
+    /// <summary>左栏那棵树:已展开的节点摊平成一列(界面绑这个)。</summary>
+    public ObservableCollection<FileEntryItem> Tree { get; } = [];
+
+    /// <summary>左栏标题:哪个容器的文件系统。</summary>
+    public string TreeTitle => $"{containerName} 文件系统";
+
+    private FileEntryItem? _root;
+
+    /// <summary>展开 / 收起一个目录,并把它记成"当前目录"(上传落到这里)。</summary>
+    private async Task ToggleAsync(FileEntryItem item)
     {
-        foreach (FileEntryItem item in Entries)
+        if (!item.IsDirectory)
+        {
+            return;
+        }
+        if (item.Expanded)
+        {
+            item.Expanded = false;
+        }
+        else
+        {
+            await ExpandAsync(item).ConfigureAwait(true);
+        }
+        Path = item.FullPath;
+        RebuildTree();
+    }
+
+    /// <summary>展开一个目录。第一次展开才去列 —— 一上来递归整棵树会把隧道占满。</summary>
+    private async Task ExpandAsync(FileEntryItem item)
+    {
+        if (item.ChildrenLoaded)
+        {
+            item.Expanded = true;
+            return;
+        }
+        if (shell.Client is not { } client)
+        {
+            return;
+        }
+        Busy = true;
+        Error = "";
+        try
+        {
+            ContainerFileEntry[] entries = await client
+                .ListDirectoryAsync(containerId, item.FullPath, shell.Lifetime).ConfigureAwait(true);
+            item.Children.Clear();
+            // 目录在前、再按名字排:树里最常做的动作是"往下钻",
+            // 目录混在文件中间会让每一层都要重新找一遍。
+            foreach (ContainerFileEntry entry in entries
+                         .OrderByDescending(e => e.IsDirectory)
+                         .ThenBy(e => e.Name, StringComparer.Ordinal))
+            {
+                item.Children.Add(new(entry, _changes.GetValueOrDefault(entry.FullPath, ""))
+                {
+                    Depth = item.Depth + 1
+                });
+            }
+            item.ChildrenLoaded = true;
+            item.Expanded = true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Error = ex is DockerApiException api ? api.Message : ex.Message;
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    /// <summary>把展开着的部分摊平成一列。</summary>
+    private void RebuildTree()
+    {
+        Tree.Clear();
+        if (_root is null)
+        {
+            return;
+        }
+        Append(_root);
+        return;
+
+        void Append(FileEntryItem node)
         {
             // 目录永远留着 —— 藏掉目录会让"只看变更"变成一个走不进任何子目录的死胡同。
-            item.Visible = !_changedOnly || item.IsDirectory || item.HasChange;
+            if (!_changedOnly || node.IsDirectory || node.HasChange)
+            {
+                Tree.Add(node);
+            }
+            if (!node.Expanded)
+            {
+                return;
+            }
+            foreach (FileEntryItem child in node.Children)
+            {
+                Append(child);
+            }
+        }
+    }
+
+    /// <summary>建根节点并展开一层。</summary>
+    private async Task BuildTreeAsync()
+    {
+        _root = new(new("/", "/", true, false, 0, "", "", "", null), "");
+        await ExpandAsync(_root).ConfigureAwait(true);
+        RebuildTree();
+    }
+
+    /// <summary>把树里指向某个路径的那一行标成"正在编辑"。</summary>
+    private void MarkCurrentFile(string? path)
+    {
+        foreach (FileEntryItem node in Tree)
+        {
+            node.Current = node.FullPath == path;
+        }
+    }
+
+    /// <summary>在**已展开过**的那部分树里按路径找一个节点。</summary>
+    private FileEntryItem? FindNode(string path)
+    {
+        if (_root is null)
+        {
+            return null;
+        }
+        FileEntryItem node = _root;
+        foreach (string segment in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (node.Children.FirstOrDefault(c => c.Name == segment) is not { } child)
+            {
+                return null;
+            }
+            node = child;
+        }
+        return node;
+    }
+
+    /// <summary>
+    /// 一路展开到某个路径。从抽屉的「挂载」那一节点进来时用 ——
+    /// 用户点的是一个挂载点,期待的是"树已经停在那里",而不是"从 / 自己找过去"。
+    /// </summary>
+    private async Task ExpandToAsync(string path)
+    {
+        if (_root is null)
+        {
+            return;
+        }
+        FileEntryItem node = _root;
+        await ExpandAsync(node).ConfigureAwait(true);
+        foreach (string segment in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (node.Children.FirstOrDefault(c => c.Name == segment) is not { } child)
+            {
+                break;
+            }
+            node = child;
+            if (node.IsDirectory)
+            {
+                await ExpandAsync(node).ConfigureAwait(true);
+            }
+        }
+        if (node.IsDirectory)
+        {
+            Path = node.FullPath;
+        }
+        RebuildTree();
+    }
+
+    /// <summary>把整棵树丢掉重来。变更标记也重新取一次 —— 它决定了 A/C/D 和「只看变更」。</summary>
+    private async Task ReloadTreeAsync()
+    {
+        await LoadChangesAsync().ConfigureAwait(true);
+        string previous = Path;
+        _root = null;
+        await BuildTreeAsync().ConfigureAwait(true);
+        if (previous != "/")
+        {
+            await ExpandToAsync(previous).ConfigureAwait(true);
         }
     }
 
@@ -609,7 +814,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
             content = buffer.ToArray();
         }
         string target = Path.TrimEnd('/') + "/" + source.Name;
-        bool exists = Entries.Any(e => e.Name == source.Name);
+        bool exists = FindNode(target) is not null;
         bool confirmed = await shell.Confirm.AskAsync(shell.BuildConfirm(new()
         {
             Title = exists ? $"覆盖容器内的 {source.Name}?" : $"上传 {source.Name} 到 {containerName}?",
@@ -641,8 +846,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         {
             await client.WriteFileAsync(containerId, target, content, shell.Lifetime).ConfigureAwait(true);
             shell.Feedback.Notify(FeedbackKind.Success, "已上传", $"{target} · {Humanize.Bytes(content.Length)}");
-            await LoadChangesAsync().ConfigureAwait(true);
-            await NavigateAsync(Path).ConfigureAwait(true);
+            await ReloadTreeAsync().ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -661,12 +865,8 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
     /// </summary>
     public async Task GoToAsync(string path)
     {
-        if (!_loaded)
-        {
-            _loaded = true;
-            await LoadChangesAsync().ConfigureAwait(true);
-        }
-        await NavigateAsync(path).ConfigureAwait(true);
+        await EnsureLoadedAsync().ConfigureAwait(true);
+        await ExpandToAsync(path).ConfigureAwait(true);
     }
 
     /// <summary>第一次进这一页时才加载。</summary>
@@ -678,7 +878,7 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         }
         _loaded = true;
         await LoadChangesAsync().ConfigureAwait(true);
-        await NavigateAsync("/").ConfigureAwait(true);
+        await BuildTreeAsync().ConfigureAwait(true);
     }
 
     private async Task LoadChangesAsync()
@@ -704,35 +904,6 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
         }
     }
 
-    private async Task NavigateAsync(string path)
-    {
-        if (shell.Client is not { } client)
-        {
-            return;
-        }
-        Busy = true;
-        Error = "";
-        try
-        {
-            ContainerFileEntry[] entries = await client.ListDirectoryAsync(containerId, path, shell.Lifetime)
-                                                       .ConfigureAwait(true);
-            Path = path;
-            Entries.Clear();
-            foreach (ContainerFileEntry entry in entries)
-            {
-                Entries.Add(new(entry, _changes.GetValueOrDefault(entry.FullPath, "")));
-            }
-            ApplyEntryView();
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Error = ex is DockerApiException api ? api.Message : ex.Message;
-        }
-        finally
-        {
-            Busy = false;
-        }
-    }
 
     private async Task OpenFileAsync(string path)
     {
@@ -754,7 +925,13 @@ public sealed class ContainerFilesViewModel(DockerPanelViewModel shell, string c
             _originalText = Encoding.UTF8.GetString(bytes);
             EditorText = _originalText;
             OpenFilePath = path;
-            _openEntry = Entries.FirstOrDefault(e => e.FullPath == path)?.Entry;
+            // 从树里取元数据,而不是从"当前目录的列表"里 ——
+            // 树上点开的文件所在目录,未必是 Path 指着的那一个。
+            _openEntry = FindNode(path)?.Entry;
+            if (path.LastIndexOf('/') > 0)
+            {
+                Path = path[..path.LastIndexOf('/')];
+            }
             DiffMode = false;
             BuildFileProperties();
             OnPropertiesChanged(nameof(ModifiedLinesText), nameof(LineEnding), nameof(Language),

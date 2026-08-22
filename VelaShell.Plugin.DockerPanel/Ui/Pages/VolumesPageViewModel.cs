@@ -132,6 +132,15 @@ public sealed class VolumesPageViewModel : PageViewModel
     /// <summary>选中一行。</summary>
     public RelayCommand SelectCommand { get; }
 
+    /// <summary>关掉右侧详情。</summary>
+    public RelayCommand ClearSelectionCommand => _clearSelection ??= new(_ =>
+    {
+        Selected = null;
+        return Task.CompletedTask;
+    });
+
+    private RelayCommand? _clearSelection;
+
     /// <summary>新建卷。</summary>
     public RelayCommand CreateCommand { get; }
 

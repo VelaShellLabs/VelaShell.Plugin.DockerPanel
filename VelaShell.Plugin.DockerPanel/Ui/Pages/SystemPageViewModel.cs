@@ -3,6 +3,21 @@ using VelaShell.Plugin.DockerPanel.Docker;
 
 namespace VelaShell.Plugin.DockerPanel.Ui.Pages;
 
+/// <summary>
+/// 系统页顶上那一排统计卡(设计稿的 C/StatCard)。
+/// <para>
+/// 第三行的 <paramref name="Sub" /> 不是装饰:一个孤零零的「镜像 34」说明不了任何事,
+/// 「其中 14 个没人用」才是让人决定要不要清理的那一句。
+/// </para>
+/// </summary>
+/// <param name="Icon">图标资源键。</param>
+/// <param name="Label">名目。</param>
+/// <param name="Value">主数值。</param>
+/// <param name="Sub">底下那行小字。</param>
+/// <param name="Tone">数值的语气。</param>
+public readonly record struct SystemStat(string Icon, string Label, string Value, string Sub,
+    RowTone Tone = RowTone.Idle);
+
 /// <summary>磁盘占用表里的一行。</summary>
 /// <param name="Kind">类型。</param>
 /// <param name="Total">总数。</param>
@@ -87,7 +102,9 @@ public sealed class SystemPageViewModel : PageViewModel
     public override string Title => "系统";
 
     /// <summary>顶部四张统计卡。</summary>
-    public ObservableCollection<DetailField> Stats { get; } = [];
+    public ObservableCollection<SystemStat> Stats { get; } = [];
+
+    private int _networkCount;
 
     /// <summary>磁盘占用明细。</summary>
     public ObservableCollection<DiskRow> DiskRows { get; } = [];
@@ -132,6 +149,15 @@ public sealed class SystemPageViewModel : PageViewModel
             _usage = usageTask.Result;
             _info = infoTask.Result;
             _version = versionTask.Result;
+            // 网络数量 df 不给。它便宜,顺手问一次;失败就当 0,不该拖垮这一页。
+            try
+            {
+                _networkCount = (await client.ListNetworksAsync(cancellationToken).ConfigureAwait(true)).Length;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _networkCount = 0;
+            }
             BuildStats();
             BuildDisk();
             BuildEngine();
@@ -172,11 +198,24 @@ public sealed class SystemPageViewModel : PageViewModel
         {
             return;
         }
-        Stats.Add(new("容器", info.Containers.ToString(),
+        // 每张卡的第三行都是"这个数字的分母或去向" —— 光看「镜像 34」说明不了任何事,
+        // 「其中 14 个没人用」才是让人动手的那一句。
+        int volumes = _usage?.Volumes?.Length ?? 0;
+        int volumesIdle = _usage?.Volumes?.Count(v => v.UsageData is not { RefCount: > 0 }) ?? 0;
+        int imagesDangling = _usage?.Images?.Count(i => i.IsDangling) ?? 0;
+        int cacheRecords = _usage?.BuildCache?.Length ?? 0;
+        Stats.Add(new("Docker.box", "容器", info.Containers.ToString(),
+            $"运行中 {info.ContainersRunning}",
             info.ContainersRunning > 0 ? RowTone.Ok : RowTone.Idle));
-        Stats.Add(new("镜像", info.Images.ToString()));
-        Stats.Add(new("卷", (_usage?.Volumes?.Length ?? 0).ToString()));
-        Stats.Add(new("构建缓存", Humanize.Bytes(_buildCacheBytes), RowTone.Warn));
+        Stats.Add(new("Icon.layers", "镜像", info.Images.ToString(),
+            imagesDangling > 0 ? $"悬空 {imagesDangling}" : "没有悬空镜像",
+            imagesDangling > 0 ? RowTone.Warn : RowTone.Idle));
+        Stats.Add(new("Icon.hard-drive", "卷", volumes.ToString(),
+            volumesIdle > 0 ? $"没人用 {volumesIdle}" : "都在使用中",
+            volumesIdle > 0 ? RowTone.Warn : RowTone.Idle));
+        Stats.Add(new("Icon.network", "网络", _networkCount.ToString(), "含内置的三个"));
+        Stats.Add(new("Docker.database", "构建缓存", Humanize.Bytes(_buildCacheBytes),
+            $"{cacheRecords} 条记录", _buildCacheBytes > 0 ? RowTone.Warn : RowTone.Idle));
     }
 
     /// <summary>

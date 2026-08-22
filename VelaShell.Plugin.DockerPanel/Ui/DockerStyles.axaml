@@ -11,8 +11,9 @@
 
   <!-- ── 文字 ───────────────────────────────────────────────────── -->
 
+  <!-- 页标题 / 工具条标题。设计稿是 14/600 —— 16 会把 40px 工具条撑得没有呼吸。 -->
   <Style Selector="TextBlock.h1">
-    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize16}" />
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize14}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource VelaTextPrimary}" />
     <Setter Property="VerticalAlignment" Value="Center" />
@@ -25,10 +26,27 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
+  <!-- 页内小节标题(「磁盘占用」「空间回收」这一档):12/600/Primary。 -->
   <Style Selector="TextBlock.h3">
     <Setter Property="FontSize" Value="{DynamicResource VelaFontSize12}" />
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaTextPrimary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 抽屉里的分节标题:11/600/Secondary。抽屉只有 440px 宽,
+       这里的标题职责是"分隔",不是"标题" —— 跟 h3 同重会把它读成新页面。 -->
+  <Style Selector="TextBlock.h4">
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize11}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource VelaTextSecondary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 小节标题右侧那枚文字动作(「完整 inspect」「查看明细」「编辑」)。 -->
+  <Style Selector="TextBlock.action">
+    <Setter Property="FontSize" Value="{DynamicResource VelaFontSize10}" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaAccent}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
@@ -127,8 +145,11 @@
     <Setter Property="Padding" Value="12,0" />
   </Style>
 
+  <!-- 列头。设计稿的底是 bg-page,映射表里 bg-page → VelaBgDockDocument;
+       VelaBgPage 是留给左导航栏(bg-rail)的那一档,写在这里会把
+       "列头比列表深一点"压成"列头和导航栏一样深",层次就没了。 -->
   <Style Selector="Border.header-row">
-    <Setter Property="Background" Value="{DynamicResource VelaBgPage}" />
+    <Setter Property="Background" Value="{DynamicResource VelaBgDockDocument}" />
     <Setter Property="BorderBrush" Value="{DynamicResource VelaBorderPrimary}" />
     <Setter Property="BorderThickness" Value="0,0,0,1" />
     <Setter Property="Height" Value="26" />
@@ -203,6 +224,26 @@
     <Setter Property="FontFamily" Value="{DynamicResource VelaUiMonoFont}" />
   </Style>
 
+  <!-- ── 按钮变体 ─────────────────────────────────────────────────
+       工具条上永远只有**一颗**填充色的按钮 —— 那颗就是这一页的主动作。
+       其余一律描边,靠图标和位置区分。 -->
+
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource VelaAccent}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaAccentForeground}" />
+  </Style>
+  <!-- 悬停不换底:主按钮本来就是最亮的一块,再亮就压过了页面内容。 -->
+  <Style Selector="Button.primary:pointerover /template/ Border">
+    <Setter Property="Background" Value="{DynamicResource VelaAccent}" />
+  </Style>
+
+  <!-- 破坏性动作:只染边和字,不染底 —— 填充红会让人以为它已经在跑了。 -->
+  <Style Selector="Button.danger">
+    <Setter Property="BorderBrush" Value="{DynamicResource VelaShellRedDim}" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaError}" />
+  </Style>
+
   <Style Selector="CheckBox.compact">
     <Setter Property="MinWidth" Value="0" />
     <Setter Property="Padding" Value="0" />
@@ -225,6 +266,25 @@
   </Style>
   <Style Selector="ListBoxItem.row:selected /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource VelaBgActive}" />
+  </Style>
+
+  <!--
+    ItemsControl 里的数据行(不是 ListBoxItem 的那些)。两种"被选中"要分得开:
+      · current  = 抽屉里正开着的那一行 → 中性选中底
+      · selected = 勾了准备批量操作的行 → 强调色底
+    勾选压过当前:下一步的「删除」打的是勾选集,那件事更要紧。
+  -->
+  <Style Selector="Border.row">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.row:pointerover">
+    <Setter Property="Background" Value="{DynamicResource VelaBgHover}" />
+  </Style>
+  <Style Selector="Border.row.current">
+    <Setter Property="Background" Value="{DynamicResource VelaBgActive}" />
+  </Style>
+  <Style Selector="Border.row.selected">
+    <Setter Property="Background" Value="{DynamicResource VelaAccentDim}" />
   </Style>
 
   <!-- 面板里所有列表都不要 Fluent 默认的圆角与内边距。 -->

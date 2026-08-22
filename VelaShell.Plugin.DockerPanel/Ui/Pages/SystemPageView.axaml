@@ -7,10 +7,11 @@
 
   <DockPanel>
     <Border DockPanel.Dock="Top" Classes="toolbar">
+      <!-- 那两行"df 说了什么"挪到「磁盘占用」的小节标题旁边去了 ——
+           40px 的工具条里叠两行小字,两行都读不清。 -->
       <Grid ColumnDefinitions="Auto,Auto,*,Auto">
         <TextBlock Grid.Column="0" Text="系统" Classes="h1" />
-        <TextBlock Grid.Column="1" Text="{Binding DiskSubtitle}" Classes="meta" Margin="10,0,0,0" />
-        <TextBlock Grid.Column="1" Text="{Binding HostDiskText}" Classes="meta" Margin="10,16,0,0"
+        <TextBlock Grid.Column="1" Text="{Binding HostDiskText}" Classes="cell" Margin="10,0,0,0"
                    IsVisible="{Binding HostDiskText, Converter={x:Static ui:Converters.NotEmpty}}"
                    Foreground="{DynamicResource VelaTextTertiary}" />
         <Button Grid.Column="3" Theme="{StaticResource DockerToolButton}" Command="{Binding RefreshCommand}">
@@ -34,13 +35,20 @@
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="pages:DetailField">
+            <DataTemplate x:DataType="pages:SystemStat">
               <Border Classes="card" Padding="13,11" Margin="0,0,12,0">
                 <StackPanel Spacing="5">
-                  <TextBlock Text="{Binding Key}" Classes="label" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <ui:Glyph Key="{Binding Icon}" Size="12" VerticalAlignment="Center"
+                              Brush="{DynamicResource VelaTextTertiary}" />
+                    <TextBlock Text="{Binding Label}" Classes="label" />
+                  </StackPanel>
                   <TextBlock Text="{Binding Value}" FontSize="{DynamicResource VelaFontSize20}"
                              FontWeight="SemiBold"
                              Foreground="{Binding Tone, Converter={x:Static ui:Converters.ToneBrush}}" />
+                  <!-- 这一行才是这张卡的信息量:分母,或者"有多少能清掉" -->
+                  <TextBlock Text="{Binding Sub}" FontSize="{DynamicResource VelaFontSize10}"
+                             Foreground="{DynamicResource VelaTextTertiary}" />
                 </StackPanel>
               </Border>
             </DataTemplate>
@@ -49,10 +57,12 @@
 
         <!-- 磁盘占用 -->
         <StackPanel Spacing="8">
-          <Grid ColumnDefinitions="Auto,Auto,*">
-            <TextBlock Grid.Column="0" Text="磁盘占用" Classes="h2" />
-            <TextBlock Grid.Column="1" Text="{Binding ReclaimableText, StringFormat='可回收 {0}'}"
-                       Classes="meta" Margin="10,0,0,0" Foreground="{DynamicResource VelaWarning}" />
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto" Height="22">
+            <TextBlock Grid.Column="0" Text="磁盘占用" Classes="h3" />
+            <!-- 写清楚这些数字是谁给的:df 是一次实打实的远端统计,不是缓存 -->
+            <TextBlock Grid.Column="1" Text="{Binding DiskSubtitle}" Classes="meta" Margin="8,0,0,0" />
+            <TextBlock Grid.Column="3" Text="{Binding ReclaimableText, StringFormat='可回收 {0}'}"
+                       Classes="cell" Foreground="{DynamicResource VelaWarning}" />
           </Grid>
 
           <!--
@@ -108,7 +118,7 @@
 
           <Border Classes="card" ClipToBounds="True">
             <StackPanel>
-              <Border Height="28" Padding="12,0" Background="{DynamicResource VelaBgPage}"
+              <Border Height="28" Padding="12,0" Background="{DynamicResource VelaBgDockDocument}"
                       BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
                 <Grid ColumnDefinitions="*,110,110,130,180">
                   <TextBlock Grid.Column="0" Text="类型" Classes="col" />
@@ -140,7 +150,7 @@
         <!-- 回收 -->
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="Auto,Auto,*">
-            <TextBlock Grid.Column="0" Text="空间回收" Classes="h2" />
+            <TextBlock Grid.Column="0" Text="空间回收" Classes="h3" />
             <TextBlock Grid.Column="1" Text="每一项都会先弹出面板内确认框,里面写清将要执行的动作与后果"
                        Classes="meta" Margin="10,0,0,0" />
           </Grid>
@@ -195,14 +205,14 @@
         <!-- 引擎信息 -->
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="Auto,Auto,*">
-            <TextBlock Grid.Column="0" Text="引擎信息" Classes="h2" />
+            <TextBlock Grid.Column="0" Text="引擎信息" Classes="h3" />
             <TextBlock Grid.Column="1" Text="GET /version · GET /info" Classes="meta" Margin="10,0,0,0" />
           </Grid>
           <Grid ColumnDefinitions="*,24,*">
             <ItemsControl Grid.Column="0" ItemsSource="{Binding EngineLeft}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="pages:DetailField">
-                  <Grid ColumnDefinitions="120,*" Height="22">
+                  <Grid ColumnDefinitions="106,*" Height="22">
                     <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label" />
                     <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" />
                   </Grid>
@@ -212,7 +222,7 @@
             <ItemsControl Grid.Column="2" ItemsSource="{Binding EngineRight}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="pages:DetailField">
-                  <Grid ColumnDefinitions="120,*" Height="22">
+                  <Grid ColumnDefinitions="106,*" Height="22">
                     <TextBlock Grid.Column="0" Text="{Binding Key}" Classes="label" />
                     <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="cell" />
                   </Grid>

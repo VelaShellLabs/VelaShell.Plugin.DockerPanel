@@ -97,10 +97,37 @@ public sealed class TopItem(string name, double value, double max, string valueT
     public bool Hot { get; } = hot;
 }
 
+/// <summary>
+/// CPU 趋势图里的一根柱子。
+/// <para>
+/// 高度在视图模型里就算好,不在 XAML 里换算 —— 纵轴要按**窗口峰值**缩放,
+/// 而那个分母只有视图模型知道。
+/// </para>
+/// </summary>
+/// <param name="Height">柱高(像素,最高 96)。</param>
+/// <param name="HasSample">这一格采到数没有。没采到的格子留空,而不是画成 0 —— 那是两件事。</param>
+public readonly record struct TrendBar(double Height, bool HasSample);
+
 /// <summary>总览页。</summary>
 public sealed class OverviewPageViewModel : PageViewModel
 {
     private const int MaxEvents = 60;
+
+    /// <summary>趋势图的格子数。48 × 5s = 4 分钟,与图下那条时间轴一一对上。</summary>
+    private const int TrendSlots = 48;
+
+    /// <summary>趋势图的柱高上限(像素)。</summary>
+    private const double TrendHeight = 96;
+
+    /// <summary>
+    /// 纵轴的下限。
+    /// <para>
+    /// 一台 32 核机器的容器总占用常年在个位数,纵轴钉死 0–100% 会把任何真实负载
+    /// 都压成一条贴着底边的直线 —— 那张图就什么也读不出来了。
+    /// 所以纵轴跟着窗口峰值走,但不低于这个数,免得 0.1% 的抖动被放大成山峰。
+    /// </para>
+    /// </summary>
+    private const double TrendFloorPercent = 5;
 
     /// <summary>算"持续高 CPU"的门槛,与行内 sparkline 转黄的阈值同一个数。</summary>
     private const double HotCpuThreshold = 30;
@@ -202,7 +229,44 @@ public sealed class OverviewPageViewModel : PageViewModel
     }
 
     /// <summary>CPU 趋势采样。</summary>
-    public ObservableCollection<double> CpuTrend { get; } = [];
+    /// <summary>
+    /// CPU 趋势图的 48 根柱子。**永远是 48 根**:还没采到的那些留空,
+    /// 否则刚打开面板时几根柱子挤在左边,而下面那条时间轴却横跨整张卡,对不上。
+    /// </summary>
+    public ObservableCollection<TrendBar> CpuTrend { get; } = [];
+
+    /// <summary>趋势图标题旁边那行小字 —— 得写清楚纵轴到哪儿,否则读不出量级。</summary>
+    public string TrendScaleText
+    {
+        get => _trendScaleText;
+        private set => SetField(ref _trendScaleText, value);
+    }
+
+    private string _trendScaleText = "每 5 秒一个采样点";
+
+    /// <summary>按当前窗口重画趋势图。</summary>
+    private void RebuildTrend()
+    {
+        double peak = _cpuTrend.Count > 0 ? _cpuTrend.Max() : 0;
+        double scale = Math.Max(peak, TrendFloorPercent);
+        TrendScaleText = $"每 5 秒一个采样点 · 纵轴 0–{Humanize.Percent(scale)}";
+        CpuTrend.Clear();
+        for (int i = _cpuTrend.Count; i < TrendSlots; i++)
+        {
+            CpuTrend.Add(new(0, false));
+        }
+        foreach (double sample in _cpuTrend)
+        {
+            CpuTrend.Add(new(Math.Max(2, Math.Clamp(sample / scale, 0, 1) * TrendHeight), true));
+        }
+    }
+
+    /// <summary>把趋势图清成 48 个空格子(而不是清成空的)。</summary>
+    private void ClearTrend()
+    {
+        _cpuTrend.Clear();
+        RebuildTrend();
+    }
 
     /// <summary>CPU 占用 Top 5。</summary>
     public ObservableCollection<TopItem> TopCpu { get; } = [];
@@ -359,8 +423,7 @@ public sealed class OverviewPageViewModel : PageViewModel
         Events.Clear();
         Attention.Clear();
         TopCpu.Clear();
-        CpuTrend.Clear();
-        _cpuTrend.Clear();
+        ClearTrend();
         LoadedOnce = false;
         RunningText = "—";
         CpuText = "—";
@@ -409,15 +472,11 @@ public sealed class OverviewPageViewModel : PageViewModel
             ? $"容器占用 · 宿主共 {Humanize.Bytes(_hostMemory)}{(_hostCpus > 0 ? $" · {_hostCpus} 核" : "")}"
             : "容器占用";
         _cpuTrend.Add(total);
-        while (_cpuTrend.Count > 48)
+        while (_cpuTrend.Count > TrendSlots)
         {
             _cpuTrend.RemoveAt(0);
         }
-        CpuTrend.Clear();
-        foreach (double sample in _cpuTrend)
-        {
-            CpuTrend.Add(sample);
-        }
+        RebuildTrend();
         double max = running.Count > 0 ? running.Max(r => r.CpuPercent) : 0;
         TopCpu.Clear();
         foreach (ContainerRow row in running.OrderByDescending(r => r.CpuPercent).Take(5))
@@ -437,8 +496,7 @@ public sealed class OverviewPageViewModel : PageViewModel
         MemText = "—";
         MemDetail = _hostMemory > 0 ? $"宿主共 {Humanize.Bytes(_hostMemory)} · {_hostCpus} 核" : "";
         TopCpu.Clear();
-        CpuTrend.Clear();
-        _cpuTrend.Clear();
+        ClearTrend();
     }
 
     /// <summary>更新"可回收空间"那张卡(系统页算完之后顺手喂进来)。</summary>
