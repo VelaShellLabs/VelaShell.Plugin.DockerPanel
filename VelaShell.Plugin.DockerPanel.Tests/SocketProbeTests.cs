@@ -77,7 +77,7 @@ public sealed class SocketProbeTests
 
         await SocketProbe.RunAsync(exec, custom, TestContext.CancellationToken);
 
-        StringAssert.Contains(exec.LastCommand, "/run/user/1000/docker.sock");
+        Assert.Contains("/run/user/1000/docker.sock", exec.LastCommand);
     }
 
     private sealed class StubExec(string output) : IRemoteExecApi

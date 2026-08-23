@@ -31,9 +31,42 @@ public abstract class ObservableObject : INotifyPropertyChanged
         return true;
     }
 
-    /// <summary>手动触发一次通知(计算属性跟着源属性变时用)。</summary>
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
-        PropertyChanged?.Invoke(this, new(propertyName));
+    /// <summary>
+    /// 手动触发一次通知(计算属性跟着源属性变时用)。
+    /// <para>
+    /// <b>通知一律在 UI 线程上发出去。</b>订阅者不是普通的观察者:XAML 绑定与视图侧那几个
+    /// 监听器(抽屉布局、列宽)收到通知之后会直接去改控件,而在别的线程上碰控件是一个硬性异常
+    /// (<c>The calling thread cannot access this object</c>)。
+    /// </para>
+    /// <para>
+    /// 为什么放在这里而不是让每个调用方自己 <see cref="Ui.Post" />:后台线程改属性的地方太多了
+    /// —— 事件流、统计采样、日志、以及**释放路径**(面板关闭时那串
+    /// <c>ConfigureAwait(false)</c> 之后就已经不在 UI 线程上了)。漏掉任何一处,
+    /// 用户看到的都是一个崩溃,而不是一次退化。这一处兜住,就没有"哪一处漏了"这回事。
+    /// </para>
+    /// </summary>
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        // 先取出来:发出去之前最后一个订阅者退订了的话,字段就成 null 了。
+        if (PropertyChanged is not { } handler)
+        {
+            return;
+        }
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            handler(this, new(propertyName));
+            return;
+        }
+        try
+        {
+            Dispatcher.UIThread.Post(() => handler(this, new(propertyName)));
+        }
+        catch (Exception)
+        {
+            // 应用正在退出时 dispatcher 可能已经关了。那时没人再看这条通知了,
+            // 而为一条通知把关闭流程炸掉是更糟的结果。
+        }
+    }
 
     /// <summary>触发一组通知。</summary>
     protected void OnPropertiesChanged(params string[] propertyNames)
