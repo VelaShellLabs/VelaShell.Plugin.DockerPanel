@@ -77,9 +77,20 @@
                   <ui:WeightedStackPanel />
                 </ItemsPanelTemplate>
               </ItemsControl.ItemsPanel>
+              <!--
+                权重设在**容器**上,不能设在下面那块 Border 上:ItemsControl 会把每一项
+                包进一个 ContentPresenter,面板看到的孩子是 presenter,
+                模板里的 Tag 在它下面一层 —— 那样每一段都读成 0,整条不占宽,
+                界面上就是一条空槽,而数据其实完全正确。
+              -->
+              <ItemsControl.ItemContainerTheme>
+                <ControlTheme TargetType="ContentPresenter" x:DataType="pages:DiskSegment">
+                  <Setter Property="ui:WeightedStackPanel.Weight" Value="{Binding Weight}" />
+                </ControlTheme>
+              </ItemsControl.ItemContainerTheme>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="pages:DiskSegment">
-                  <Border Height="26" ToolTip.Tip="{Binding Label, Converter={x:Static ui:Converters.TipText}}" Tag="{Binding Weight}">
+                  <Border Height="26" ToolTip.Tip="{Binding Label, Converter={x:Static ui:Converters.TipText}}">
                     <Border.Background>
                       <Binding Path="Brush">
                         <Binding.Converter>
