@@ -245,6 +245,10 @@ orleans.codegen.cs
 # CI 通过 STRONG_NAME_KEY secret 注入 src/VelaShell.snk,不入库。
 *.snk
 
+# .vpx 的签名私钥(P-256 PKCS#8 PEM)。发版流水线从 KEY_PEM_FILE 机密还原成
+# 工作区根目录的 velashell-signing.pem,跑完即删 —— 这一条是防它被误提交的兜底。
+*.pem
+
 # Since there are multiple workflows, uncomment next line to ignore bower_components
 # (https://github.com/github/gitignore/pull/1529#issuecomment-104372622)
 #bower_components/
