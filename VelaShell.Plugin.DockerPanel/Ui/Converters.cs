@@ -11,7 +11,13 @@ namespace VelaShell.Plugin.DockerPanel.Ui;
 /// 面板用到的值转换器。
 /// <para>
 /// 全部走宿主的 <c>Vela*</c> 令牌:转换器只负责"这一行是什么状态",
-/// 具体是哪个颜色由主题字典决定 —— 切明暗时不需要面板做任何事。
+/// 具体是哪个颜色由主题字典决定。
+/// </para>
+/// <para>
+/// 取色一律经 <see cref="ThemeBrush" /> —— 转换器只在**绑定源**变化时才跑,而主题不是绑定源,
+/// 所以换肤时这里的代码根本不会被再调一次。<see cref="ThemeBrushes" /> 的办法是让画刷对象
+/// 保持不变、只改它的颜色,于是绑定一次都不用重算。别在这个文件里直接去 <c>TryFindResource</c>
+/// 拿画刷:那样拿到的是宿主当前那一格字典里的实例,宿主换主题是整格替换,它会就此停在旧色上。
 /// </para>
 /// </summary>
 public static class Converters
@@ -99,13 +105,13 @@ public static class Converters
     /// <summary>文件树里的图标色:目录用强调色,文件退到弱化色。</summary>
     public static readonly IValueConverter FileIconBrush =
         new FuncValueConverter<bool, IBrush>(isDirectory => isDirectory
-            ? Resolve("VelaAccent", Brushes.MediumPurple)
-            : Resolve("VelaTextTertiary", Brushes.Gray));
+            ? ThemeBrush("VelaAccent", Brushes.MediumPurple)
+            : ThemeBrush("VelaTextTertiary", Brushes.Gray));
 
     /// <summary>「这一行是当前打开的那个」→ 选中底色,否则透明。</summary>
     public static readonly IValueConverter CurrentRowBackground =
         new FuncValueConverter<bool, IBrush>(current => current
-            ? Resolve("VelaAccentDim", Brushes.Transparent)
+            ? ThemeBrush("VelaAccentDim", Brushes.Transparent)
             : Brushes.Transparent);
 
     /// <summary>「换行」开关 → 文本换行模式。关掉时长行横向截断,不折成好几屏。</summary>
@@ -156,32 +162,34 @@ public static class Converters
     /// </summary>
     public static readonly IValueConverter HotAccent =
         new FuncValueConverter<bool, IBrush>(hot => hot
-            ? Resolve("VelaWarning", Brushes.Orange)
-            : Resolve("VelaAccent", Brushes.MediumPurple));
+            ? ThemeBrush("VelaWarning", Brushes.Orange)
+            : ThemeBrush("VelaAccent", Brushes.MediumPurple));
 
     /// <summary>CPU 高负载 → 警示色,否则常规数值色。给 sparkline 旁边那个百分比用。</summary>
     public static readonly IValueConverter HotText =
         new FuncValueConverter<bool, IBrush>(hot => hot
-            ? Resolve("VelaWarning", Brushes.Orange)
-            : Resolve("VelaTextSecondary", Brushes.Gray));
+            ? ThemeBrush("VelaWarning", Brushes.Orange)
+            : ThemeBrush("VelaTextSecondary", Brushes.Gray));
 
     /// <summary>
-    /// 按**当前主题变体**取一个画刷。
+    /// 按令牌取画刷。**全部**转换器的取色都必须走这一条。
     /// <para>
-    /// 必须带上 <c>ActualThemeVariant</c>:宿主的令牌分两族 ——
-    /// <c>VelaError</c> / <c>VelaWarning</c> / <c>VelaShell*</c> 写在整份主题文件里,
-    /// 而 <c>VelaAccent</c> / <c>VelaStatusConnected</c> / <c>VelaGauge*</c> / <c>VelaText*</c>
-    /// 写在 <c>ThemeDictionaries</c> 的 Dark / Light 分支下。
-    /// 不带主题的那个重载按 <c>ThemeVariant.Default</c> 查,后一族一个都查不到,
-    /// 于是**恰好半套颜色**静默回落成灰 —— 红橙还在、强调色和状态色全没了。
+    /// 拿到的是一支会跟着宿主换肤就地改色的画刷(见 <see cref="ThemeBrushes" />)。
+    /// 直接把宿主资源里的画刷返回出去是不行的:转换器只在绑定源变化时才跑,主题不是绑定源,
+    /// 而宿主换主题是整格替换字典 —— 返回出去的那个对象会永远停在旧主题的颜色上。
     /// </para>
     /// </summary>
-    private static IBrush Resolve(string key, IBrush fallback) =>
-        Lookup(key) is IBrush brush ? brush : fallback;
+    internal static IBrush ThemeBrush(string key, IBrush fallback) => ThemeBrushes.Get(key, fallback);
 
     /// <summary>
-    /// 按当前主题变体查一个资源。所有转换器都必须走这一条 ——
-    /// 这个文件里曾经有十几处各自直接调不带主题的重载,于是各自静默变灰。
+    /// 按当前主题变体查一个**非颜色**资源(图标几何)。
+    /// <para>
+    /// 颜色不要走这里 —— 走 <see cref="ThemeBrush" />。几何不随主题变,取到就一直有效。
+    /// </para>
+    /// <para>
+    /// 必须带上 <c>ActualThemeVariant</c>:宿主的资源分两族,不带主题的那个重载按
+    /// <c>ThemeVariant.Default</c> 查,写在 <c>ThemeDictionaries</c> 分支下的那一族一个都查不到。
+    /// </para>
     /// </summary>
     internal static object? Lookup(string key)
     {
@@ -201,7 +209,7 @@ public static class Converters
                 RowTone.Busy => dim ? "VelaAccentDim" : "VelaAccent",
                 _ => dim ? "VelaShellSubtleDim" : "VelaTextTertiary"
             };
-            return Resolve(key, Brushes.Gray);
+            return ThemeBrush(key, Brushes.Gray);
         }
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
@@ -224,9 +232,9 @@ public static class Converters
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
             value switch
             {
-                RowTone.Ok => Resolve("VelaShellGreenDim", Brushes.Transparent),
-                RowTone.Danger => Resolve("VelaShellRedDim", Brushes.Transparent),
-                RowTone.Warn => Resolve("VelaShellYellowDim", Brushes.Transparent),
+                RowTone.Ok => ThemeBrush("VelaShellGreenDim", Brushes.Transparent),
+                RowTone.Danger => ThemeBrush("VelaShellRedDim", Brushes.Transparent),
+                RowTone.Warn => ThemeBrush("VelaShellYellowDim", Brushes.Transparent),
                 _ => Brushes.Transparent
             };
 
@@ -237,7 +245,7 @@ public static class Converters
     private sealed class ActiveBackgroundConverter : IValueConverter
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-            value is true ? Resolve("VelaAccentDim", Brushes.Transparent) : Brushes.Transparent;
+            value is true ? ThemeBrush("VelaAccentDim", Brushes.Transparent) : Brushes.Transparent;
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
             throw new NotSupportedException();
@@ -255,7 +263,7 @@ public static class Converters
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
             var index = value is int i && i >= 0 ? i : 0;
-            return Resolve(Palette[index % Palette.Length], Brushes.Gray);
+            return ThemeBrush(Palette[index % Palette.Length], Brushes.Gray);
         }
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
@@ -265,7 +273,7 @@ public static class Converters
     private sealed class SeverityBrushConverter : IValueConverter
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-            Resolve(value switch
+            ThemeBrush(value switch
             {
                 1 => "VelaStatusConnected",
                 2 => "VelaWarning",
@@ -289,7 +297,7 @@ public static class Converters
                 FeedbackKind.Error => dim ? "VelaShellRedDim" : "VelaError",
                 _ => dim ? "VelaAccentDim" : "VelaAccent"
             };
-            return Resolve(key, Brushes.Gray);
+            return ThemeBrush(key, Brushes.Gray);
         }
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
@@ -332,7 +340,7 @@ public sealed class DataLossBorderConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var key = value is true ? "VelaError" : "VelaBorderSecondary";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+        return Converters.ThemeBrush(key, Brushes.Gray);
     }
 
     /// <inheritdoc />
@@ -347,7 +355,7 @@ public sealed class ReadOnlyBackgroundConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var key = value is true ? "VelaBgSurface" : "VelaBgInput";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Transparent;
+        return Converters.ThemeBrush(key, Brushes.Transparent);
     }
 
     /// <inheritdoc />
@@ -362,7 +370,7 @@ public sealed class DangerTextConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var key = value is true ? "VelaError" : "VelaTextTertiary";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+        return Converters.ThemeBrush(key, Brushes.Gray);
     }
 
     /// <inheritdoc />
@@ -376,7 +384,7 @@ public sealed class FollowBackgroundConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        return value is not true ? Brushes.Transparent : (object)(Converters.Lookup("VelaShellGreenDim") as IBrush ?? Brushes.Transparent);
+        return value is not true ? Brushes.Transparent : (object)(Converters.ThemeBrush("VelaShellGreenDim", Brushes.Transparent));
     }
 
     /// <inheritdoc />
@@ -391,7 +399,7 @@ public sealed class FollowForegroundConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var key = value is true ? "VelaStatusConnected" : "VelaTextSecondary";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+        return Converters.ThemeBrush(key, Brushes.Gray);
     }
 
     /// <inheritdoc />
@@ -411,7 +419,7 @@ public sealed class MatchBackgroundConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        return value is not true ? Brushes.Transparent : (object)(Converters.Lookup("VelaShellYellowDim") as IBrush ?? Brushes.Transparent);
+        return value is not true ? Brushes.Transparent : (object)(Converters.ThemeBrush("VelaShellYellowDim", Brushes.Transparent));
     }
 
     /// <inheritdoc />
@@ -426,7 +434,7 @@ public sealed class LogLineForegroundConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var key = value is true ? "VelaShellRed" : "VelaShellWhite";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+        return Converters.ThemeBrush(key, Brushes.Gray);
     }
 
     /// <inheritdoc />
@@ -453,7 +461,7 @@ public sealed class LogBodyBrushConverter : IMultiValueConverter
             : level == LogLevel.Warn ? "VelaWarning"
             : level == LogLevel.Debug ? "VelaTextTertiary"
             : "VelaShellWhite";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+        return Converters.ThemeBrush(key, Brushes.Gray);
     }
 }
 
@@ -476,7 +484,7 @@ public sealed class AuthBrushConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var key = value is true ? "VelaStatusConnected" : "VelaWarning";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+        return Converters.ThemeBrush(key, Brushes.Gray);
     }
 
     /// <inheritdoc />
@@ -511,7 +519,7 @@ public sealed class OutputLineForegroundConverter : IMultiValueConverter
             : isError || level == LogLevel.Error ? "VelaShellRed"
             : level == LogLevel.Warn ? "VelaWarning"
             : "VelaShellWhite";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+        return Converters.ThemeBrush(key, Brushes.Gray);
     }
 }
 
@@ -521,7 +529,7 @@ public sealed class ResourceBrushConverter : IValueConverter
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        return value is not string key ? Brushes.Transparent : (object)(Converters.Lookup(key) as IBrush ?? Brushes.Transparent);
+        return value is not string key ? Brushes.Transparent : (object)(Converters.ThemeBrush(key, Brushes.Transparent));
     }
 
     /// <inheritdoc />
@@ -536,7 +544,7 @@ public sealed class PruneBorderConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var key = value is RowTone.Danger ? "VelaShellRedDim" : "VelaBorderPrimary";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+        return Converters.ThemeBrush(key, Brushes.Gray);
     }
 
     /// <inheritdoc />
@@ -551,7 +559,7 @@ public sealed class HotBrushConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var key = value is true ? "VelaGaugeWarn" : "VelaGaugeCpu";
-        return Converters.Lookup(key) as IBrush ?? Brushes.Gray;
+        return Converters.ThemeBrush(key, Brushes.Gray);
     }
 
     /// <inheritdoc />
