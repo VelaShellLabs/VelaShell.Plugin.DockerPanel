@@ -11,18 +11,89 @@ SSH 会话**上管理远端的容器、镜像、卷、网络与 Compose 项目,�
 命令面板(`Ctrl+P` / `Ctrl+K`)搜 **Docker** → *打开 Docker 管理面板*。
 
 - 插件说明、设计取舍与已知边界:[`VelaShell.Plugin.DockerPanel/README.md`](VelaShell.Plugin.DockerPanel/README.md)
-- 插件开发规范:VelaShell 仓库的 `docs/plugins/dev-guide.md`
+- 插件开发规范:[开发指南](https://github.com/VelaShellLabs/velashell-docs/blob/main/zh/templates/dev-guide.md)
+- SDK 契约:[SDK 参考](https://github.com/VelaShellLabs/velashell-docs/blob/main/zh/sdk/sdk-reference.md)
 
 ## 构建
 
-本仓依赖尚未发布的 **VelaShell.PluginSdk 1.2.0**(新增远程隧道能力),从
-`G:\VelaShell\artifacts\nuget` 这个本地源解析 —— 见 [`nuget.config`](nuget.config)。
-SDK 发到 nuget.org 之后那一条就可以删掉。
+只引 `VelaShell.PluginSdk.Build` 一个包(契约 + 与宿主一致的 Avalonia + 打包器全随它到位),
+从 nuget.org 解析,不需要任何本地源。SDK 版本钉在
+[`VelaShell.Plugin.DockerPanel.csproj`](VelaShell.Plugin.DockerPanel/VelaShell.Plugin.DockerPanel.csproj)
+的那条 `PackageReference` 上。
 
 ```bash
 dotnet build                                  # 开发构建
-dotnet test                                   # 62 个单测,不需要宿主
-dotnet build -c Release -t:PackVpx            # → bin/vpx/velashell.dockerpanel-0.2.0.vpx
+dotnet test                                   # 144 个单测,不需要宿主
+dotnet build -c Release -t:PackVpx            # → bin/vpx/velashell.dockerpanel-<版本>.vpx
+```
+
+需要 Docker 守护进程的那几条 compose 用例在没有 daemon 的机器上自动判为 Inconclusive,
+不会让整轮测试变红。
+
+> **apiLevel 2**:本插件编译在 SDK 2.x 上,只能装在 2.x 宿主里。清单里的
+> `"apiLevel": 2` 就是干这个的 —— 装到 1.x 宿主上时它会在**发现期**给出
+> 「需要更新 VelaShell」,而不是等到装载时抛一个看不懂的程序集绑定异常。
+
+## 发版
+
+`.vpx` 由 GitHub Actions 构建并签名,见
+[`.github/workflows/release.yml`](.github/workflows/release.yml)。
+
+**版本号的唯一事实来源是 `plugin.json` 的 `version`**,不是标签。流水线会核对两者一致,
+对不上就失败 —— 所以顺序是:
+
+1. 改 `VelaShell.Plugin.DockerPanel/plugin.json` 的 `version`;
+2. 合进 `main`;
+3. 在 GitHub 上发 Release,标签填 `v<同一个版本>`。
+
+产出自动挂到该 Release 上:已签名的 `velashell.dockerpanel-<版本>.vpx` 与 `SHA256SUMS.txt`。
+
+### 签名密钥:怎么生成、怎么放进 GitHub Secret
+
+`.vpx` 必须签名 —— 它是用户手工安装与插件商店分发的形态,没有签名就没法说明
+"这个包确实来自我"。流水线缺密钥时**直接失败**,不会悄悄发一个未签名的包。
+
+**① 生成一对密钥**(只需一次,`vela-plugin` 随 SDK 包分发,也可 `dotnet tool install -g VelaShell.Plugin.Cli`):
+
+```bash
+vela-plugin keygen          # → 当前目录下 velashell-plugin-key.pem(P-256 PKCS#8)
+```
+
+它同时打印**公钥 base64** 与**指纹**(`SHA256:…`)—— 指纹是插件商店登记用的,
+私钥文件请自己备份好,丢了就换不回同一个身份了。
+
+> ⚠️ `keygen` 没有 `--help`:敲 `vela-plugin keygen --help` 会**直接生成一把密钥**,
+> 而不是打印用法。
+
+**② 把私钥转成 base64**(GitHub Secret 存不了二进制/多行文件,所以存它的 base64):
+
+```powershell
+# Windows PowerShell —— 一行输出,可直接全选复制
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("velashell-plugin-key.pem")) | Set-Clipboard
+```
+
+```bash
+# Linux
+base64 -w0 velashell-plugin-key.pem
+# macOS(其 base64 没有 -w)
+base64 < velashell-plugin-key.pem | tr -d '\n'
+```
+
+> ⚠️ **别用 `certutil -encode`**:它会在结果里加上 `-----BEGIN CERTIFICATE-----` 头尾和换行,
+> 解出来不是原始 PEM,流水线那步会报 "did not decode to a PEM private key"。
+> 要的是**文件字节**的 base64,一整行,没有别的东西。
+
+**③ 存进仓库机密**:GitHub 仓库 → Settings → Secrets and variables → Actions →
+New repository secret,名字填 **`KEY_PEM_FILE`**,值粘贴第 ② 步那一整行。
+
+流水线会把它解回 `velashell-signing.pem`、校验首行确实是 `BEGIN … PRIVATE KEY`、
+用它签包,跑完(含失败路径)立即删除。仓库的 `.gitignore` 也排除了 `*.pem` 作为兜底。
+
+**本地想签一个包**:
+
+```bash
+dotnet build -c Release -t:PackVpx -p:VelaSigningKey=/path/to/velashell-plugin-key.pem
+vela-plugin info bin/vpx/velashell.dockerpanel-<版本>.vpx   # flags 应含 Signed、signature 为 Valid
 ```
 
 ## 许可
