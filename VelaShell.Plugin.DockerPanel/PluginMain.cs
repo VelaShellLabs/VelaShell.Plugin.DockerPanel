@@ -23,6 +23,9 @@ public sealed class DockerPanelPlugin : IVelaPlugin
     public async Task ActivateAsync(IPluginContext context, CancellationToken cancellationToken)
     {
         _context = context;
+        // 转换器取的那些画刷要跟着宿主换肤走。订阅的是宿主 Application 的资源变更,
+        // 是一条从宿主指向本程序集的引用 —— 停用时必须 Detach,否则 ALC 回收不掉。
+        ThemeBrushes.Attach();
         _command = context.Commands.Register(new(
             "velashell.dockerpanel.open",
             "Docker: 打开 Docker 管理面板",
@@ -48,6 +51,8 @@ public sealed class DockerPanelPlugin : IVelaPlugin
             await viewModel.DisposeAsync().ConfigureAwait(false);
             _viewModel = null;
         }
+        // 撤掉挂在宿主 Application 上的资源订阅(见 ActivateAsync)。
+        ThemeBrushes.Detach();
         _context = null;
     }
 

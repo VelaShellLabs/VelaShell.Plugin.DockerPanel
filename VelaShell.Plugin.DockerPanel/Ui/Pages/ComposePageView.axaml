@@ -77,7 +77,7 @@
         <ScrollViewer>
           <StackPanel>
             <Border IsVisible="{Binding !ComposeAvailable}" Padding="12,10"
-                    Background="{DynamicResource DockerWarnDim}">
+                    Background="{DynamicResource VelaShellYellowDim}">
               <TextBlock Text="{Binding UnavailableHint}" Classes="hint"
                          Foreground="{DynamicResource VelaWarning}" />
             </Border>
@@ -231,7 +231,7 @@
           <Grid ColumnDefinitions="Auto,*,Auto,Auto">
             <TextBlock Grid.Column="0" Text="{Binding ProjectFile}" Classes="meta" />
             <Border Grid.Column="2" Classes="chip" Height="17" Margin="0,0,8,0" IsVisible="{Binding IsModified}"
-                    Background="{DynamicResource DockerWarnDim}">
+                    Background="{DynamicResource VelaShellYellowDim}">
               <TextBlock Text="{Binding ModifiedText}" FontSize="{DynamicResource VelaFontSize9}"
                          Foreground="{DynamicResource VelaWarning}" VerticalAlignment="Center" />
             </Border>
@@ -272,7 +272,7 @@
           <Grid ColumnDefinitions="Auto,*,Auto,Auto">
             <TextBlock Grid.Column="0" Classes="meta" Text="项目目录下的 .env —— compose 只认这一个" />
             <Border Grid.Column="2" Classes="chip" Height="17" Margin="0,0,8,0" IsVisible="{Binding EnvModified}"
-                    Background="{DynamicResource DockerWarnDim}">
+                    Background="{DynamicResource VelaShellYellowDim}">
               <TextBlock Text="{Binding EnvModifiedText}" FontSize="{DynamicResource VelaFontSize9}"
                          Foreground="{DynamicResource VelaWarning}" VerticalAlignment="Center" />
             </Border>
@@ -439,7 +439,7 @@
                   <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="12,0" MinHeight="17">
                     <TextBlock Grid.Column="0" Text="{Binding Time}" Width="60" Margin="0,0,10,0"
                                FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize10}"
-                               Foreground="{DynamicResource DockerCodeComment}" VerticalAlignment="Top" />
+                               Foreground="{DynamicResource VelaTextTertiary}" VerticalAlignment="Top" />
                     <!-- 服务名:颜色跟着序号走。七个服务的日志混在一起时,
                          靠颜色分辨来源比逐行读名字快得多 —— 与容器日志那边同一套调色。 -->
                     <TextBlock Grid.Column="1" Text="{Binding Source}" Width="132" Margin="0,0,10,0"
@@ -550,7 +550,7 @@
                     <TextBlock Grid.Column="0" Text="{Binding Time}"
                                FontFamily="{DynamicResource VelaUiMonoFont}"
                                FontSize="{DynamicResource VelaFontSize9}"
-                               Foreground="{DynamicResource DockerCodeComment}" VerticalAlignment="Center" />
+                               Foreground="{DynamicResource VelaTextTertiary}" VerticalAlignment="Center" />
                     <SelectableTextBlock Grid.Column="1" Text="{Binding Text}"
                                          FontFamily="{DynamicResource VelaUiMonoFont}"
                                          FontSize="{DynamicResource VelaFontSize10}" TextWrapping="Wrap">

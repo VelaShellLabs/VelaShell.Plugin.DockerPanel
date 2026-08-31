@@ -21,7 +21,7 @@
   <Border Width="560" MaxHeight="480" CornerRadius="8" ClipToBounds="True"
           Background="{DynamicResource VelaBgContentHeader}"
           BorderBrush="{DynamicResource VelaBorderSecondary}" BorderThickness="1"
-          BoxShadow="0 12 32 0 #66000000">
+          BoxShadow="{DynamicResource VelaShadowWindow}">
     <DockPanel>
       <!-- 输入行:主机名一并写出来 —— 命令作用在哪台机器上不能靠猜 -->
       <Border DockPanel.Dock="Top" Height="46" Padding="14,0"

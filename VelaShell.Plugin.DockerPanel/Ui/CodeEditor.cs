@@ -41,6 +41,9 @@ public sealed class CodeEditor : UserControl
     private static bool _registered;
 
     private readonly TextEditor _editor;
+
+    /// <summary>应用级资源变更(= 宿主换了配色)的处理器;进出可视树时挂/摘。</summary>
+    private readonly EventHandler<ResourcesChangedEventArgs> _onAppResourcesChanged;
     private bool _syncing;
 
     /// <summary>文本。双向 —— 编辑器里改了要回到视图模型。</summary>
@@ -97,7 +100,16 @@ public sealed class CodeEditor : UserControl
         };
         Content = _editor;
         Focusable = false;
+        // 编辑器的配色是**一次性取值**的(xshd 高亮定义要的是 Color 不是 Brush,
+        // 挂不了 DynamicResource),所以换肤时必须有人来叫醒它。
+        //
+        // 只挂 ActualThemeVariantChanged 是不够的 —— 那只在明↔暗之间翻转时才响。
+        // 宿主有十二套主题,VelaDark → Tokyo Night 是**同一个变体**内部的换肤:
+        // 变体没变,颜色全变了,这个事件一声不吭。
+        // 应用级资源字典的变更覆盖全部三种情形(换具名主题、跟随系统翻转、改强调色),
+        // 是这里唯一靠得住的信号。
         ActualThemeVariantChanged += (_, _) => ApplyLanguage();
+        _onAppResourcesChanged = (_, _) => ApplyLanguage();
     }
 
     /// <inheritdoc cref="TextProperty" />
@@ -174,7 +186,25 @@ public sealed class CodeEditor : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        if (Application.Current is { } app)
+        {
+            app.ResourcesChanged += _onAppResourcesChanged;
+        }
         ApplyLanguage();
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// 订阅挂在 <c>Application.Current</c> 上(活得比本控件久),不摘就是一条把整个面板
+    /// 钉在内存里的引用 —— 插件停用后 ALC 也就回收不掉了。
+    /// </remarks>
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (Application.Current is { } app)
+        {
+            app.ResourcesChanged -= _onAppResourcesChanged;
+        }
+        base.OnDetachedFromVisualTree(e);
     }
 
     /// <summary>把语言、字体与当前主题的配色一起落到编辑器上。</summary>
@@ -225,14 +255,22 @@ public sealed class CodeEditor : UserControl
         return definition;
     }
 
+    /// <summary>
+    /// xshd 里的角色名 → 宿主令牌名。
+    /// <para>
+    /// 一律指宿主的**终端十六色**那一族(<c>VelaShell*</c>):那正是各主题为"代码/日志里的
+    /// 语法着色"准备的一套语义色,逐主题派生。面板自己曾经按明暗写死过两套 Dracula /
+    /// Alucard 的值,结果是十二套主题只有两套语法色 —— 底色换了,字没换。
+    /// </para>
+    /// </summary>
     private static string? Role(string name) => name switch
     {
-        "Comment" => "DockerCodeComment",
-        "String" => "DockerCodeString",
-        "Number" or "Constant" => "DockerCodeNumber",
-        "Key" => "DockerCodeKey",
-        "Section" => "DockerCodeSection",
-        "Punctuation" => "DockerCodePunctuation",
+        "Comment" => "VelaShellSubtle",
+        "String" => "VelaShellYellow",
+        "Number" or "Constant" => "VelaShellBlue",
+        "Key" => "VelaShellCyan",
+        "Section" => "VelaShellGreen",
+        "Punctuation" => "VelaShellMagenta",
         "Variable" => "VelaWarning",
         _ => null
     };

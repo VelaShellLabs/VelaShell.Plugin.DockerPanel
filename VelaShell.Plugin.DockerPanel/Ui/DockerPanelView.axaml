@@ -245,7 +245,7 @@
              这句话必须在页面里说,只让顶栏那枚徽章灭掉是不够的。 -->
         <Border DockPanel.Dock="Top" Height="30" Padding="12,0"
                 IsVisible="{Binding EventsDegraded}"
-                Background="{DynamicResource DockerWarnDim}"
+                Background="{DynamicResource VelaShellYellowDim}"
                 BorderBrush="{DynamicResource VelaBorderPrimary}" BorderThickness="0,0,0,1">
           <Grid ColumnDefinitions="Auto,Auto,*,Auto">
             <ui:Glyph Grid.Column="0" Key="Icon.wifi-off" Size="13" VerticalAlignment="Center"
@@ -360,6 +360,10 @@
 
     <!-- ── 覆盖层:主机切换弹层 / 任务中心 / 设置 / 闸门 / 表单 / 对话框 / toast ── -->
     <Grid Grid.Row="1" IsHitTestVisible="{Binding EndpointMenuOpen}">
+      <!-- 这个 #01000000 不是配色,是**命中测试面**:菜单开着时铺一层几乎全透明的板子,
+           点它就关菜单。Transparent(#00000000)在 Avalonia 里不参与命中测试,点击会穿过去
+           落到下面的内容上 —— 于是"点别处关掉菜单"变成"点别处顺手触发了别处的按钮"。
+           故意留成字面量:它跟主题无关,换成任何令牌都是错的。 -->
       <Border IsVisible="{Binding EndpointMenuOpen}" Background="#01000000">
         <Border.GestureRecognizers />
       </Border>
@@ -631,14 +635,14 @@
     <!-- 命令面板:压在内容之上、闸门之下 —— 它触发的动作往往还要再弹一次闸门。
          遮罩可点:点面板以外的地方就是"算了" —— 命令面板里没有用户输了一半的东西。 -->
     <Grid Grid.Row="1" IsVisible="{Binding Palette.IsOpen}">
-      <Border Background="#9905070A" PointerPressed="OnScrimPressed" />
+      <Border Background="{DynamicResource VelaScrim}" PointerPressed="OnScrimPressed" />
       <ui:CommandPaletteView DataContext="{Binding Palette}"
                              VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,80,0,0" />
     </Grid>
 
     <!-- 确认闸门 -->
     <Grid Grid.Row="1" IsVisible="{Binding Confirm.IsOpen}">
-      <Border Background="#CC05070A" />
+      <Border Background="{DynamicResource VelaScrimStrong}" />
       <ui:ConfirmGateView DataContext="{Binding Confirm}" MaxWidth="560" VerticalAlignment="Center"
                           HorizontalAlignment="Center" />
     </Grid>
@@ -647,7 +651,7 @@
          没有表单时 ContentControl 压根不实例化它 —— IsVisible 只是不画,
          子树照样建、绑定照样求值,那正是一串“Value is null”绑定告警的来源。 -->
     <Grid Grid.Row="1" IsVisible="{Binding HasForm}">
-      <Border Background="#CC05070A" />
+      <Border Background="{DynamicResource VelaScrimStrong}" />
       <ContentControl Content="{Binding ActiveForm}" MaxWidth="480" VerticalAlignment="Center"
                       HorizontalAlignment="Center">
         <ContentControl.DataTemplates>
@@ -660,7 +664,7 @@
 
     <!-- 自定义对话框(拉取镜像) -->
     <Grid Grid.Row="1" IsVisible="{Binding HasDialog}">
-      <Border Background="#CC05070A" />
+      <Border Background="{DynamicResource VelaScrimStrong}" />
       <ContentControl Content="{Binding ActiveDialog}" MaxWidth="460" VerticalAlignment="Center"
                       HorizontalAlignment="Center">
         <ContentControl.DataTemplates>

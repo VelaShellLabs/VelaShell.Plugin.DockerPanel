@@ -151,7 +151,7 @@
                      FontWeight="SemiBold"
                      Foreground="{DynamicResource VelaTextPrimary}" VerticalAlignment="Center" />
           <Border Grid.Column="3" Classes="chip" Height="16" Margin="8,0,0,0"
-                  IsVisible="{Binding IsModified}" Background="{DynamicResource DockerWarnDim}">
+                  IsVisible="{Binding IsModified}" Background="{DynamicResource VelaShellYellowDim}">
             <TextBlock Text="{Binding ModifiedText}" FontSize="{DynamicResource VelaFontSize9}"
                        Foreground="{DynamicResource VelaWarning}" VerticalAlignment="Center" />
           </Border>
@@ -328,7 +328,7 @@
               <Grid ColumnDefinitions="Auto,*" Height="24">
                 <TextBlock Grid.Column="0" Text="保存后" Classes="h4" />
               </Grid>
-              <Border CornerRadius="6" Padding="10,9" Background="{DynamicResource DockerWarnDim}">
+              <Border CornerRadius="6" Padding="10,9" Background="{DynamicResource VelaShellYellowDim}">
                 <StackPanel Spacing="6">
                   <TextBlock Text="多数服务不会自动重载配置" FontSize="{DynamicResource VelaFontSize11}"
                              FontWeight="Medium" Foreground="{DynamicResource VelaWarning}" TextWrapping="Wrap" />

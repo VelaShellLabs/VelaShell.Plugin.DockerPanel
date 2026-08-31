@@ -11,36 +11,37 @@
   -->
 
   <ResourceDictionary.ThemeDictionaries>
+    <!--
+      这里**只剩品牌色**。
+
+      从前这两格里还有八支画刷:告警淡底,以及语法高亮的字符串/数字/键/注释/段落头/标点。
+      它们按 Dark / Light 各写死一套 —— Dracula 的黄紫青粉,和 Alucard 的那几个深色。
+      在宿主只有明暗两套主题时这是对的;宿主长出十二套具名主题之后就错了:
+      ThemeDictionaries 认的是 ThemeVariant(只有 Dark / Light 两格),于是 Tokyo Night、
+      Nord、Gruvbox、Obsidian… 共用同一套 Dracula 色,Sakura、GitHub Light、One Light
+      共用同一套 Alucard 色。底色跟着主题换了,压在上面的字没换。
+
+      而宿主本来就有一整套**语义**令牌是逐主题派生的(VelaShellYellow / Cyan / Green /
+      Magenta / Blue / Subtle —— 终端十六色那一族),语法高亮要的正是它们。
+      所以这八支不是"改个值",而是**整个删掉**,用处改指宿主令牌:
+
+        DockerCodeString      → VelaShellYellow
+        DockerCodeNumber      → VelaShellBlue
+        DockerCodeKey         → VelaShellCyan
+        DockerCodeComment     → VelaShellSubtle(界面上的弱化说明文字用 VelaTextTertiary,
+                                 同值,但那边要的是"三档正文"而不是"注释")
+        DockerCodeSection     → VelaShellGreen
+        DockerCodePunctuation → VelaShellMagenta
+        DockerWarnDim         → VelaShellYellowDim
+
+      品牌蓝留下:它是 Docker 的标识色,**不该**跟着主题变 —— 那正是"品牌色"的定义。
+      只按明暗分两格,是为了让它在两种底色上都压得住。
+    -->
     <ResourceDictionary x:Key="Dark">
-      <!-- 告警底色。宿主的 VelaWarning 是橙(#FFB86C),但没有配套的半透明底 —— 这里补一个。 -->
-      <SolidColorBrush x:Key="DockerWarnDim" Color="#33FFB86C" />
-      <!-- 品牌蓝只给左上角那枚鲸鱼用。 -->
       <SolidColorBrush x:Key="DockerBrand" Color="#4DA6FF" />
-      <!-- 日志/代码里的字符串与数字:取 Dracula 的黄与绿,与终端里看到的一致。 -->
-      <SolidColorBrush x:Key="DockerCodeString" Color="#F1FA8C" />
-      <SolidColorBrush x:Key="DockerCodeNumber" Color="#BD93F9" />
-      <SolidColorBrush x:Key="DockerCodeKey" Color="#8BE9FD" />
-      <SolidColorBrush x:Key="DockerCodeComment" Color="#6272A4" />
-      <!-- 语法高亮多出来的两个角色:段落头([section])与标点(: - | >)。 -->
-      <SolidColorBrush x:Key="DockerCodeSection" Color="#50FA7B" />
-      <SolidColorBrush x:Key="DockerCodePunctuation" Color="#FF79C6" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Light">
-      <SolidColorBrush x:Key="DockerWarnDim" Color="#26B26A00" />
       <SolidColorBrush x:Key="DockerBrand" Color="#0B72C4" />
-      <!--
-        亮色下换成 Alucard(Dracula 的官方亮色变体)的那几个深色。
-
-        这四个原来直接沿用了暗色值,理由写的是"终端/代码底仍是深色" ——
-        **那个前提是错的**:宿主的 VelaBgTerminal 在亮色下是 #FFFBEB(奶白),
-        于是 #F1FA8C 的浅黄压在 #FFFBEB 上,对比度只有 1.1:1,等于看不见。
-      -->
-      <SolidColorBrush x:Key="DockerCodeString" Color="#846E15" />
-      <SolidColorBrush x:Key="DockerCodeNumber" Color="#644AC9" />
-      <SolidColorBrush x:Key="DockerCodeKey" Color="#036A96" />
-      <SolidColorBrush x:Key="DockerCodeComment" Color="#6C664B" />
-      <SolidColorBrush x:Key="DockerCodeSection" Color="#14710A" />
-      <SolidColorBrush x:Key="DockerCodePunctuation" Color="#A3144D" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 

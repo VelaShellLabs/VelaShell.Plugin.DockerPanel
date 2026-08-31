@@ -341,7 +341,7 @@
   <Style Selector="Button.danger-solid">
     <Setter Property="Background" Value="{DynamicResource VelaError}" />
     <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="Foreground" Value="{DynamicResource VelaErrorForeground}" />
     <Setter Property="FontWeight" Value="Medium" />
   </Style>
   <!-- 与主按钮同理:悬停不换底,换了就等于底色在闪。 -->
