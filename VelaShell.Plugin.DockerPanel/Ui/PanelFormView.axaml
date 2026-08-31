@@ -44,7 +44,7 @@
           <!-- 提醒:不是"这样填不行",而是"这样填可以,但会有一个你未必想要的后果"。
                放在字段**之前** —— 说在动手之后就没有意义了。 -->
           <Border IsVisible="{Binding HasNotice}" CornerRadius="6" Padding="11,9"
-                  Background="{DynamicResource DockerWarnDim}">
+                  Background="{DynamicResource VelaShellYellowDim}">
             <StackPanel Orientation="Horizontal" Spacing="8">
               <ui:Glyph Key="Icon.triangle-alert" Size="13" VerticalAlignment="Top" Margin="0,1,0,0"
                         Brush="{DynamicResource VelaWarning}" />
@@ -283,7 +283,7 @@
                          TextWrapping="Wrap" />
               <TextBlock Text="{Binding CommandNote}" FontFamily="{DynamicResource VelaUiMonoFont}"
                          FontSize="{DynamicResource VelaFontSize9}"
-                         Foreground="{DynamicResource DockerCodeComment}" TextWrapping="Wrap" />
+                         Foreground="{DynamicResource VelaTextTertiary}" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
         </StackPanel>

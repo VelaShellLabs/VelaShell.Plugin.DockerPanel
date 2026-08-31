@@ -39,7 +39,7 @@
           <Border Grid.Column="2" Classes="chip" Margin="9,0,0,0" IsVisible="{Binding IsDataLoss}"
                   Background="{DynamicResource VelaError}" Height="18">
             <TextBlock Text="会丢数据" FontSize="{DynamicResource VelaFontSize10}" FontWeight="SemiBold"
-                       Foreground="#FFFFFF" VerticalAlignment="Center" />
+                       Foreground="{DynamicResource VelaErrorForeground}" VerticalAlignment="Center" />
           </Border>
           <Button Grid.Column="4" Theme="{StaticResource DockerIconButton}" Command="{Binding CancelCommand}">
             <ui:Glyph Key="Icon.x" Size="14" Brush="{DynamicResource VelaTextTertiary}" />
@@ -84,7 +84,7 @@
               </ItemsControl>
               <TextBlock Text="{Binding CommandNote}" IsVisible="{Binding HasCommandNote}"
                          FontFamily="{DynamicResource VelaUiMonoFont}" FontSize="{DynamicResource VelaFontSize10}"
-                         Foreground="{DynamicResource DockerCodeComment}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                         Foreground="{DynamicResource VelaTextTertiary}" TextWrapping="Wrap" Margin="0,3,0,0" />
             </StackPanel>
           </Border>
 
@@ -199,9 +199,9 @@
                   Background="{DynamicResource VelaError}" BorderBrush="Transparent"
                   Command="{Binding ConfirmCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <ui:Glyph Key="{Binding ConfirmIcon}" Size="13" Brush="#FFFFFF" />
+              <ui:Glyph Key="{Binding ConfirmIcon}" Size="13" Brush="{DynamicResource VelaErrorForeground}" />
               <TextBlock Text="{Binding ConfirmLabel}" FontSize="{DynamicResource VelaFontSize12}"
-                         FontWeight="Medium" Foreground="#FFFFFF" VerticalAlignment="Center" />
+                         FontWeight="Medium" Foreground="{DynamicResource VelaErrorForeground}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
         </Grid>
