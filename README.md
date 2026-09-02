@@ -21,6 +21,12 @@ SSH 会话**上管理远端的容器、镜像、卷、网络与 Compose 项目,�
 [`VelaShell.Plugin.DockerPanel.csproj`](VelaShell.Plugin.DockerPanel/VelaShell.Plugin.DockerPanel.csproj)
 的那条 `PackageReference` 上。
 
+Avalonia 的版本由 SDK 包导出的权威值锁定,
+[`Directory.Build.targets`](Directory.Build.targets) 在构建期核对(**VELAD1000**):
+测试工程的 `Avalonia` / `Avalonia.Headless`(单测没有宿主可回落,得自己提供运行时那份),
+以及插件工程的 `Avalonia.AvaloniaEdit`。升 SDK 之后按它的报错把版本跟上即可 ——
+后者尤其值得这道闸:它漂了在本仓库一个测试都不会红,要等用户打开一个 `compose.yaml` 才炸。
+
 ```bash
 dotnet build                                  # 开发构建
 dotnet test                                   # 144 个单测,不需要宿主
@@ -39,14 +45,31 @@ dotnet build -c Release -t:PackVpx            # → bin/vpx/velashell.dockerpane
 `.vpx` 由 GitHub Actions 构建并签名,见
 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
 
-**版本号的唯一事实来源是 `plugin.json` 的 `version`**,不是标签。流水线会核对两者一致,
-对不上就失败 —— 所以顺序是:
+**版本号不用手工改。** 标签解析出来之后,流水线第一件事就是跑 `scripts/Set-Version.ps1`,
+把该版本写进两个落点;发布成功后再由 `sync-main` 任务开一个 PR 把改动回写 `main`(等你合)。
+所以发版只剩两步:
 
-1. 改 `VelaShell.Plugin.DockerPanel/plugin.json` 的 `version`;
-2. 合进 `main`;
-3. 在 GitHub 上发 Release,标签填 `v<同一个版本>`。
+1. 合进 `main`;
+2. 在 GitHub 上发 Release,标签填 `v<版本>`(如 `v0.4.0`;预发布用 `v0.4.0-preview.1`)。
 
 产出自动挂到该 Release 上:已签名的 `velashell.dockerpanel-<版本>.vpx` 与 `SHA256SUMS.txt`。
+
+### 版本号的两个落点
+
+| 落点 | 作用 | 漏改的后果 |
+| --- | --- | --- |
+| `VelaShell.Plugin.DockerPanel/plugin.json` 的 `version` | `.vpx` 文件名与宿主里显示的插件版本 | 发 `0.4.0` 出来的仍旧是 `velashell.dockerpanel-0.3.1.vpx` |
+| `Directory.Build.props` 的 `VelaPluginVersion` | `AssemblyVersion` / `FileVersion`(MSBuild 读不了带注释的 JSONC,所以要存一份副本) | 程序集版本停在上一版,**什么都不会报错** |
+
+**两处都别手改**,跑脚本:
+
+```bash
+pwsh scripts/Set-Version.ps1 0.4.0          # 一次写全两处
+pwsh scripts/Set-Version.ps1 0.4.0 -Check   # 只体检不落盘(CI 用的就是它)
+```
+
+本地先跑一遍再提交也行,那样发版时流水线里的那次就是个空操作。CI 的「版本号同步体检」
+在 PR 上只提醒,合进 `main` / `dev` 后判红。
 
 ### 签名密钥:怎么生成、怎么放进 GitHub Secret
 

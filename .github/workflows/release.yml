@@ -12,16 +12,24 @@
 #                  未签名的 .vpx 与签过的在文件名、大小、构建日志上都看不出区别,
 #                  不能让它悄悄发出去。怎么生成这个 base64 见 README 的「发版」一节。
 #
-# 📌 版本号的来源是 plugin.json,**不是**标签。
+# 📌 版本号不用手工改:标签解析出来之后,流水线**第一件事**就是跑
+#    scripts/Set-Version.ps1,把该版本写进 VelaShell.Plugin.DockerPanel/plugin.json 的
+#    version(决定 .vpx 文件名与宿主里显示的版本)与 Directory.Build.props 的
+#    VelaPluginVersion(程序集版本)。发布成功后由 sync-main 任务开一个 PR 把这些改动
+#    回写 main(等你手动合)。所以发版只剩两步:合进 main → 发 Release,标签填 v<版本>。
 #
-#    兄弟仓库 velashell-plugins 的做法相反:它一个仓库装着四个插件,跑的是「统一发布列车」,
-#    所以由流水线把标签里的版本号盖进每个 plugin.json,发完再开 PR 回写 main。
-#    本仓库只有一个插件 —— plugin.json 的 version 就是这个插件的版本,没有第二个版本号
-#    需要对齐。于是这里反过来:**校验标签与 plugin.json 一致**,不一致就失败。
+#    ⚠️ 这里 2026-09-03 改过口径。原先是**反过来的**:plugin.json 是唯一事实来源,
+#       流水线只校验标签与它一致,不一致就失败 —— 理由是本仓库只有一个插件,没有第二个
+#       版本号需要对齐,于是也不需要回写这一步。
 #
-#    好处是没有回写这一步,仓库永远是唯一事实来源;代价是发版多一步:
-#      改 plugin.json 的 version → 合进 main → 发 Release,标签填 v<同一个版本>。
-#    忘了改 version 就直接被下面那步拦住,而不是发出一个文件名与预期不符的包。
+#       改口径的原因是「没有第二个版本号」这个前提不再成立:Directory.Build.props 现在
+#       也存了一份 VelaPluginVersion 给 AssemblyVersion / FileVersion 用(MSBuild 读不了
+#       带注释的 JSONC)。两处一旦要对齐,「人工改对两处再打标签」就比「流水线按标签写
+#       两处」更容易错 —— 而漏改 VelaPluginVersion **不会有任何报错**,只是程序集版本
+#       悄悄停在上一版。于是与兄弟仓库 velashell-plugins 统一成 stamp + 回写。
+#
+#       代价是仓库在发版当下短暂地落后于 Release(直到 sync-main 的 PR 合掉);
+#       CI 的「版本号同步体检」盯着这件事,合进 main/dev 后仍不同步就判红。
 name: Release
 
 on:
@@ -47,6 +55,10 @@ permissions:
 jobs:
   publish:
     runs-on: windows-latest
+    # 供 sync-main 回写时复用,免得把标签解析逻辑抄第二遍。
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -68,23 +80,17 @@ jobs:
           "tag=$tag" >> $env:GITHUB_OUTPUT
           Write-Host "Publishing version $version (tag $tag)"
 
-      # plugin.json 的 version 决定 .vpx 的文件名与宿主里显示的插件版本。它必须与标签一致,
-      # 否则发出去的是 velashell.dockerpanel-0.3.0.vpx 而 Release 页上写着 v0.4.0 ——
-      # 两边对不上时,用户装完在宿主里看到的版本号是错的,而且没有任何报错。
-      - name: Verify plugin.json matches the tag
+      # 把标签里的版本号写进仓库,**放在构建之前** —— .vpx 的文件名、宿主里显示的插件版本
+      # 与程序集版本因此永远与 Release 标签一致,与仓库里当时提交了什么无关。
+      # 改动会在发布成功后由 sync-main 以 PR 形式回写 main。
+      - name: Stamp version into the repo
         shell: pwsh
         run: |
-          $manifestPath = 'VelaShell.Plugin.DockerPanel/plugin.json'
-          # plugin.json 是 JSONC(带注释),不能用 ConvertFrom-Json 直接读 —— 用正则取第一个 version。
-          $manifest = Get-Content -Raw $manifestPath
-          $declared = [regex]::Match($manifest, '"version"\s*:\s*"([^"]+)"').Groups[1].Value
-          if ([string]::IsNullOrWhiteSpace($declared)) { Write-Error "Could not read `"version`" from $manifestPath"; exit 1 }
-          $expected = '${{ steps.version.outputs.version }}'
-          if ($declared -ne $expected) {
-            Write-Error "Version mismatch: the release tag says '$expected' but $manifestPath says '$declared'. Bump the manifest, merge it to main, then re-run this release."
-            exit 1
-          }
-          Write-Host "OK: plugin.json version $declared matches the tag."
+          & ./scripts/Set-Version.ps1 '${{ steps.version.outputs.version }}'
+          # if ($LASTEXITCODE) 而不是 -ne 0:.ps1 不调用 exit 时**不会设置** $LASTEXITCODE,
+          # 那时它是 $null —— 而 `$null -ne 0` 为真,会把一次成功判成失败。
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          git --no-pager diff --stat
 
       - name: Test
         shell: pwsh
@@ -226,3 +232,96 @@ jobs:
         if: always()
         shell: pwsh
         run: Remove-Item velashell-signing.pem -Force -ErrorAction SilentlyContinue
+
+  # ── 把版本号回写 main(以 PR 的形式)────────────────────────────────────────
+  # 上面那个 Stamp 步骤只改了 runner 上的工作区 —— 资产已经挂上去了,但仓库里的
+  # plugin.json 与 Directory.Build.props 还停在上一版。不回写的话,下一个克隆仓库的人
+  # 看到的版本号是错的,本地 build 出来的 .vpx 文件名也对不上,而且 CI 的
+  # `Set-Version.ps1 -Check` 会一直红着。
+  #
+  # **开 PR 而不是直推 main**:main 迟早要开分支保护,直推那条路会被挡死。
+  # 分支名 chore/version-<版本> 是确定的,所以手动补跑同一个标签会更新同一个 PR,
+  # 不会攒出一堆。
+  #
+  # 单独一个 job 而不是接在 publish 后面:publish 的工作区检出在**标签**上、且已被构建
+  # 产物弄脏,在那里 checkout main 会把两者搅在一起。这里从干净的 main 重新跑一遍脚本,
+  # 结果与 publish 里那次逐字节相同(脚本是纯函数)。
+  sync-main:
+    needs: publish
+    if: ${{ !inputs.dryRun }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # VERSION_SYNC_TOKEN 是**可选**的:没配就用 github.token,一切照常,唯一区别是
+      # GITHUB_TOKEN 开出来的 PR **不会触发 CI**(GitHub 防工作流自循环的既定行为)。
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          token: ${{ secrets.VERSION_SYNC_TOKEN || github.token }}
+
+      - name: Open version-sync PR
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.VERSION_SYNC_TOKEN || github.token }}
+        run: |
+          $version = '${{ needs.publish.outputs.version }}'
+          $branch = "chore/version-$version"
+
+          & ./scripts/Set-Version.ps1 $version
+          # if ($LASTEXITCODE) 而不是 -ne 0:.ps1 不调用 exit 时**不会设置** $LASTEXITCODE,
+          # 那时它是 $null —— 而 `$null -ne 0` 为真,会把一次成功判成失败。
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+          if (-not (git status --porcelain)) {
+            Write-Host "::notice::main 里的版本号已经是 $version,无需回写。"
+            exit 0
+          }
+
+          # 回写失败不该让一次已经成功的发布显示成红的 —— 资产在 Release 上,已经是既成事实。
+          # 这里整段降级成警告,把手工补救的命令给出来。
+          #
+          # try/catch 与 $LASTEXITCODE 两道都要:GitHub 给 pwsh 步骤预置了
+          # $ErrorActionPreference='stop',而 PowerShell 7.4 起
+          # $PSNativeCommandUseErrorActionPreference 默认为 true —— 原生命令返回非零会
+          # **抛异常**,只写 if ($LASTEXITCODE) 的话根本走不到。
+          try {
+            git config user.name  'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git checkout -b $branch
+            git commit -am "chore: 版本号同步到 $version"
+            # --force:分支名由版本号决定,补跑时内容是从干净 main 重新生成的,
+            # 强推等于「把这个 PR 刷新到最新」,不存在要保留的历史。
+            git push --force origin $branch
+            if ($LASTEXITCODE -ne 0) { throw "推送 $branch 失败。" }
+
+            # `// empty` 不是装饰:没有匹配的 PR 时 `.[0].url` 求值为 null,而 jq 会把它
+            # 原样打成字符串 "null" —— 在 PowerShell 里那是**真值**,会让下面误判成「PR 已存在」。
+            $existing = gh pr list --head $branch --state open --json url --jq '.[0].url // empty'
+            if ($existing) {
+              Write-Host "::notice::版本同步 PR 已存在,已刷新到最新:$existing"
+              exit 0
+            }
+
+            # 不用 here-string:YAML 块标量里每行都带缩进,而 PowerShell 要求 @" 的
+            # 结束符顶格,两者不可调和。用数组拼。
+            $body = @(
+              "本次发布(``$version``)的版本号回写。由 ``.github/workflows/release.yml`` 的 sync-main 任务生成。"
+              ""
+              "内容是 ``pwsh scripts/Set-Version.ps1 $version`` 的输出 —— 纯版本号替换,不含任何其它改动:"
+              "``VelaShell.Plugin.DockerPanel/plugin.json`` 的 ``version`` 与 ``Directory.Build.props`` 的 ``VelaPluginVersion``。"
+              "同一份改动已经在发布流水线里构建、测试、打包全过一遍了(资产也已经挂上 Release)。"
+              ""
+              "**合掉它**,否则 CI 的版本同步体检(``Set-Version.ps1 -Check``)会一直红着,"
+              "而且下一个克隆仓库的人看到的版本号是错的、本地打出来的 ``.vpx`` 文件名也对不上。"
+            ) -join "`n"
+
+            $url = gh pr create --base main --head $branch --title "chore: 版本号同步到 $version" --body $body
+            if ($LASTEXITCODE -ne 0) { throw "gh pr create 失败。" }
+            Write-Host "::notice::已开出版本同步 PR:$url"
+          } catch {
+            Write-Host $_.Exception.Message
+            Write-Host "::warning::版本号回写 PR 没能开出来。发布本身已成功;请在本地跑 ``pwsh scripts/Set-Version.ps1 $version`` 后自行提 PR 合进 main,否则 CI 的版本同步体检会一直失败。"
+            exit 0
+          }
