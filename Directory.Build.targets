@@ -1,0 +1,83 @@
+<Project>
+
+	<!--
+	  Avalonia 版本与 SDK 锁的一致性核对。
+
+	  Avalonia 版本的**权威在 velashell-plugin-sdk**:VelaShell.PluginSdk.Build 用精确区间
+	  [x.y.z] 把它锁给插件工程,VelaShell.PluginSdk 再把同一个值经 buildTransitive 导出成
+	  $(VelaSdkPinnedAvaloniaVersion) / $(VelaSdkPinnedAvaloniaEditVersion)。
+
+	  本仓库有两处会写死 Avalonia 版本,漂掉的后果各不相同,但都不是"构建会红"这么便宜:
+
+	    ① 测试工程的 Avalonia / Avalonia.Headless —— 插件对 Avalonia 是 compile-only
+	       (运行时由宿主提供同一套程序集),而单测没有宿主,所以测试工程必须自己把运行时
+	       程序集拉进来。与锁的版本漂了,headless 会话里控件类型对不上 —— 这个现象与
+	       "插件装进真宿主后炸掉"长得一模一样,排查时很容易怀疑到插件代码上去。
+
+	    ② 插件工程的 Avalonia.AvaloniaEdit —— 程序集名 AvaloniaEdit 命中宿主
+	       PluginAssemblyLoadContext 的 SharedPrefixes("Avalonia"),运行时一律回落到宿主
+	       那份。漂了**在本仓库一个测试都不会红**:要等用户装上插件、打开一个 compose.yaml
+	       才炸,而那时离根因已经非常远。
+
+	  兄弟仓库 velashell-plugins 有同名核对(VELAP1000),本仓库此前没有 —— 于是这两处
+	  一直只能靠人记得。补上。
+
+	  ⚠️ 为什么整个核对挤在插件工程里做,连测试工程的版本也由它 XmlPeek 回来:
+	     $(VelaSdkPinnedAvaloniaVersion) 只在**引用了 VelaShell.PluginSdk 且吃得到它 build
+	     资产**的工程里才有值。测试工程引的是 VelaShell.PluginSdk.Testing,而那个包对
+	     VelaShell.PluginSdk 的依赖带 exclude="Build,Analyzers" —— build 资产不传递,属性
+	     在那边是空的(ProjectReference 也不传 build 资产)。若按"每个工程核对自己"来写,
+	     测试工程那半边会因为条件不成立而**静默跳过**,正好漏掉①这个更常漂的落点。
+	     测试工程 ProjectReference 了插件工程,所以 `dotnet test` 一样会触发这次核对。
+
+	  ⚠️ 本仓库没有中央包版本管理(CPM),版本就写在各 csproj 的 PackageReference 上,
+	     因此这里读的是 @(PackageReference) 与 XmlPeek,而不是 velashell-plugins 那样的
+	     @(PackageVersion)。哪天本仓库也上了 CPM,这个目标要跟着改写。
+	-->
+	<Target Name="VerifyAvaloniaMatchesSdk" BeforeTargets="BeforeBuild"
+	        Condition="'$(VelaSdkPinnedAvaloniaVersion)' != '' and '$(VelaPluginId)' != ''">
+
+		<PropertyGroup>
+			<_VelaTestsProject>$(MSBuildThisFileDirectory)VelaShell.Plugin.DockerPanel.Tests\VelaShell.Plugin.DockerPanel.Tests.csproj</_VelaTestsProject>
+		</PropertyGroup>
+
+		<!-- 找不到就红,不静默跳过:这个核对的全部价值就在于"不会漏"。 -->
+		<Error Condition="!Exists('$(_VelaTestsProject)')" Code="VELAD1001"
+		       Text="Avalonia 版本核对找不到测试工程:$(_VelaTestsProject)。改了测试工程的目录名或文件名,就要同步改 Directory.Build.targets 里的 _VelaTestsProject —— 否则这道核对会静默失效,而失效本身不会有任何提示。" />
+
+		<XmlPeek XmlInputPath="$(_VelaTestsProject)"
+		         Query="/Project/ItemGroup/PackageReference[@Include='Avalonia']/@Version">
+			<Output TaskParameter="Result" ItemName="_VelaTestsAvalonia" />
+		</XmlPeek>
+		<XmlPeek XmlInputPath="$(_VelaTestsProject)"
+		         Query="/Project/ItemGroup/PackageReference[@Include='Avalonia.Headless']/@Version">
+			<Output TaskParameter="Result" ItemName="_VelaTestsAvaloniaHeadless" />
+		</XmlPeek>
+
+		<!-- 取不到 = 那条 PackageReference 被挪走了(比如改用了 CPM,或者换了包名)。
+		     这与"版本一致"是两回事,不区分的话核对会给出假绿灯。 -->
+		<Error Condition="'@(_VelaTestsAvalonia)' == '' or '@(_VelaTestsAvaloniaHeadless)' == ''" Code="VELAD1001"
+		       Text="在测试工程里没找到 Avalonia / Avalonia.Headless 的 PackageReference(读到的分别是 '@(_VelaTestsAvalonia)' / '@(_VelaTestsAvaloniaHeadless)')。测试工程必须显式提供这两份运行时程序集(单测没有宿主可回落);若确实改了引用方式,请同步改写本核对,别把它留在这里空转。" />
+
+		<Error Condition="'@(_VelaTestsAvalonia)' != '' and '@(_VelaTestsAvalonia)' != '$(VelaSdkPinnedAvaloniaVersion)'"
+		       Code="VELAD1000"
+		       Text="Avalonia 版本与 SDK 锁的不一致:VelaShell.PluginSdk $(VelaSdkPackageVersion) 锁的是 $(VelaSdkPinnedAvaloniaVersion),而测试工程引的 Avalonia 是 @(_VelaTestsAvalonia)。把 VelaShell.Plugin.DockerPanel.Tests.csproj 里的 Avalonia 与 Avalonia.Headless 都改成 $(VelaSdkPinnedAvaloniaVersion)。" />
+
+		<Error Condition="'@(_VelaTestsAvaloniaHeadless)' != '' and '@(_VelaTestsAvaloniaHeadless)' != '$(VelaSdkPinnedAvaloniaVersion)'"
+		       Code="VELAD1000"
+		       Text="Avalonia 版本与 SDK 锁的不一致:VelaShell.PluginSdk $(VelaSdkPackageVersion) 锁的是 $(VelaSdkPinnedAvaloniaVersion),而测试工程引的 Avalonia.Headless 是 @(_VelaTestsAvaloniaHeadless)。把 VelaShell.Plugin.DockerPanel.Tests.csproj 里的 Avalonia 与 Avalonia.Headless 都改成 $(VelaSdkPinnedAvaloniaVersion)。" />
+
+		<!-- ② AvaloniaEdit 走自己的版本线,由 SDK 单独导出一个权威值。
+		     它是本工程自己的 PackageReference,直接从项目项里读回来即可。
+		     插件哪天不再需要 AvaloniaEdit,这一条自然为空、跳过 —— 与①不同,那是合法状态。 -->
+		<PropertyGroup>
+			<_VelaAvaloniaEditPin>@(PackageReference->WithMetadataValue('Identity','Avalonia.AvaloniaEdit')->'%(Version)')</_VelaAvaloniaEditPin>
+		</PropertyGroup>
+
+		<Error Condition="'$(_VelaAvaloniaEditPin)' != '' and '$(VelaSdkPinnedAvaloniaEditVersion)' != '' and '$(_VelaAvaloniaEditPin)' != '$(VelaSdkPinnedAvaloniaEditVersion)'"
+		       Code="VELAD1000"
+		       Text="AvaloniaEdit 版本与 SDK 锁的不一致:VelaShell.PluginSdk $(VelaSdkPackageVersion) 锁的是 $(VelaSdkPinnedAvaloniaEditVersion),而本工程引的 Avalonia.AvaloniaEdit 是 $(_VelaAvaloniaEditPin)。程序集名 AvaloniaEdit 命中装载器的 &quot;Avalonia&quot; 前缀,运行时一律回落到宿主那份 —— 版本漂了要等用户打开 compose.yaml 才炸。把它改成 $(VelaSdkPinnedAvaloniaEditVersion)。" />
+
+	</Target>
+
+</Project>

@@ -1,0 +1,137 @@
+# 日常验证。发布不走这里(见 release.yml),但**发布会做的事这里基本都做一遍** ——
+# 尤其是 .vpx:打包器来自 SDK 包,格式或共享程序集链路坏掉的话,发现的时机应该是现在,
+# 而不是发 Release 那天在最不该出错的时刻。
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $props = Get-Content -Raw Directory.Build.props
+          $version = [regex]::Match($props, '<VelaPluginVersion[^>]*>([^<]+)</VelaPluginVersion>').Groups[1].Value
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            Write-Error "Could not read VelaPluginVersion from Directory.Build.props"
+            exit 1
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Validating version $version"
+
+      # 版本号同步体检。版本有两个落点(plugin.json 的 version 与 Directory.Build.props 的
+      # VelaPluginVersion),发版时由 release.yml 自动写全,但仓库自己也得保持诚实:
+      # 有人手改了 plugin.json 却没动 VelaPluginVersion,或者发版那次的版本同步 PR 一直
+      # 没合 —— 两种情况都在这里显形,而不是等到某天发现程序集版本停在半年前。
+      #
+      # 【为什么 PR 上只提醒、不判红】发布产物**不依赖**仓库当时的版本状态:release.yml 会在
+      # runner 上按标签重跑 Set-Version.ps1,把两个落点全部改写一遍。所以落点漂移伤的是**人**
+      # (程序集版本是假的、本地 build 出来的 .vpx 文件名对不上),不是发布正确性 ——
+      # 拿一个仓库卫生问题去挡住别人的 PR 不成比例,何况提 PR 的人多半不是造成漂移的那个。
+      #
+      # push 到 main/dev 仍然判红:那时仓库确实处在不诚实的状态,而且此刻有能力修它的人
+      # 就是刚把代码合进来的那个。红灯短、响、可操作。
+      - name: Version consistency check
+        shell: pwsh
+        run: |
+          & ./scripts/Set-Version.ps1 '${{ steps.version.outputs.version }}' -Check
+          # if ($LASTEXITCODE) 而不是 -ne 0:.ps1 不调用 exit 时**不会设置** $LASTEXITCODE,
+          # 那时它是 $null —— 而 `$null -ne 0` 为真,会把一次成功判成失败。
+          if ($LASTEXITCODE) {
+            if ('${{ github.event_name }}' -eq 'pull_request') {
+              Write-Host "::warning title=版本号落点不同步::要改版本就跑 ``pwsh scripts/Set-Version.ps1 <版本>``(两个落点一起动);别手改 plugin.json 的 version。PR 上只提醒,合进 main/dev 后会判红。"
+              exit 0
+            }
+            exit $LASTEXITCODE
+          }
+
+      # 这一步同时跑掉了 Directory.Build.targets 的 VerifyAvaloniaMatchesSdk:
+      # 测试工程 ProjectReference 了插件工程,而那道核对就挂在插件工程的 BeforeBuild 上。
+      - name: Test
+        shell: pwsh
+        run: |
+          dotnet test VelaShell.Plugin.DockerPanel.slnx -c Debug --nologo
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      # 打包器随 VelaShell.PluginSdk.Build 包分发,上一步的还原已经把它拉下来了,
+      # 直接从包缓存里取 —— 免得为了读一次包再装一个全局工具(版本还可能与打包用的那份
+      # 不一致)。版本号从 csproj 上那条 PackageReference 读:本仓库没有 CPM,它就在那里。
+      - name: Resolve vela-plugin
+        shell: pwsh
+        run: |
+          $csproj = Get-Content -Raw VelaShell.Plugin.DockerPanel/VelaShell.Plugin.DockerPanel.csproj
+          $build = [regex]::Match($csproj, '<PackageReference[^>]*Include="VelaShell\.PluginSdk\.Build"[^>]*Version="([^"]+)"').Groups[1].Value
+          if ([string]::IsNullOrWhiteSpace($build)) { throw "Could not read the VelaShell.PluginSdk.Build version from the csproj." }
+          $cli = Join-Path $env:USERPROFILE ".nuget/packages/velashell.pluginsdk.build/$build/tools/net11.0/VelaShell.Plugin.Cli.dll"
+          if (-not (Test-Path $cli)) { throw "vela-plugin not found at $cli (VelaShell.PluginSdk.Build $build)" }
+          "VELA_CLI=$cli" >> $env:GITHUB_ENV
+          Write-Host "vela-plugin: VelaShell.PluginSdk.Build $build"
+
+      # 签名密钥。**可选**:来自 fork 的 PR 拿不到仓库机密(GitHub 的既定行为),
+      # 此时不签名继续跑 —— 这条路径要验的是「包能不能打出来、里面装的对不对」,与签名无关。
+      # 而仓库自己的 push/PR 拿得到,于是签名链路在**发版之前**就跑过了:密钥格式不对、
+      # vela-plugin 读不了这把钥匙,这类问题会在这里显形,而不是等发 Release 那天。
+      - name: Restore signing key (optional)
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:KEY_PEM_B64)) {
+            Write-Host "::notice::KEY_PEM_FILE unavailable (fork PR); packing .vpx without a signature."
+            "VELA_SIGN_ARGS=" >> $env:GITHUB_ENV
+          } else {
+            [IO.File]::WriteAllBytes("$PWD/velashell-signing.pem", [Convert]::FromBase64String($env:KEY_PEM_B64))
+            "VELA_SIGN_ARGS=-p:VelaSigningKey=$PWD/velashell-signing.pem" >> $env:GITHUB_ENV
+          }
+        env:
+          KEY_PEM_B64: ${{ secrets.KEY_PEM_FILE }}
+
+      # .vpx 也在 CI 里出一遍:打包器来自 SDK 包,格式坏了要在这里撞上,
+      # 而不是等用户手工安装时才发现。VelaVpxOutputDirectory 要带尾部斜杠。
+      - name: Pack .vpx
+        shell: pwsh
+        run: |
+          dotnet build VelaShell.Plugin.DockerPanel/VelaShell.Plugin.DockerPanel.csproj `
+            -c Release -t:PackVpx `
+            -p:VelaVpxOutputDirectory="$PWD/artifacts/vpx/" --nologo $env:VELA_SIGN_ARGS
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem artifacts/vpx | Select-Object Name, Length
+
+      - name: Remove signing key
+        if: always()
+        shell: pwsh
+        run: Remove-Item velashell-signing.pem -Force -ErrorAction SilentlyContinue
+
+      # 共享程序集绝不能落进包里 —— 落了就说明 SDK 包的 ExcludeAssets="runtime" 链路断了,
+      # 而这种包发出去之后,现象是用户机器上的控件类型转换失败,离根因非常远。
+      # 这条在 release.yml 里也有一份:那边是最后一道闸,这边是让它在合并之前就红。
+      - name: Assert no shared assemblies leaked
+        shell: pwsh
+        run: |
+          $staging = Join-Path $env:RUNNER_TEMP 'vpx-inspect'
+          Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
+          # .vpx **不是**改了名的 zip(自带头部),Expand-Archive 打不开它 ——
+          # 要用 vela-plugin 自己的 unpack(它就是给诊断用的)。
+          $package = Get-ChildItem artifacts/vpx/*.vpx | Select-Object -First 1
+          if (-not $package) { throw "No .vpx produced." }
+          dotnet $env:VELA_CLI unpack $package.FullName $staging
+          if ($LASTEXITCODE -ne 0) { throw "vela-plugin unpack failed for $($package.Name)." }
+          $leaked = Get-ChildItem $staging -Recurse -Filter '*.dll' |
+            Where-Object { $_.Name -like 'Avalonia*' -or $_.Name -eq 'VelaShell.PluginSdk.dll' }
+          if ($leaked) {
+            throw "Shared assemblies leaked into the .vpx: $(($leaked | ForEach-Object Name) -join ', ')"
+          }
+          Write-Host "OK: no shared assemblies in the package."

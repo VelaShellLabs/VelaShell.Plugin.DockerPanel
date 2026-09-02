@@ -1,0 +1,31 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- ── 本插件的发行版本号 ─────────────────────────────────────────────────
+         **真正决定分发形态的是 VelaShell.Plugin.DockerPanel/plugin.json 的 "version"**
+         —— .vpx 的文件名与宿主里显示的插件版本都读它。这里这一份是给 MSBuild 用的副本:
+         AssemblyVersion / FileVersion 读不了 JSONC(plugin.json 带注释),而不给它们赋值
+         的话程序集版本会一直停在 1.0.0.0 —— 崩溃栈、文件属性页、宿主的插件详情里看到的
+         都是那个假数字。
+
+         两份必须一致。**不要手改任何一处**,跑:
+
+             pwsh scripts/Set-Version.ps1 <版本>
+
+         它一次写全两个落点;CI 的「版本号同步体检」(Set-Version.ps1 -Check)兜底。
+
+         发版流水线在解析出 Release 标签之后**第一件事**就是跑同一个脚本(见
+         .github/workflows/release.yml),只改 runner 上的工作区、不回写仓库 ——
+         于是产物版本号永远等于 Release 标签,与仓库里当时提交了什么无关;发布成功后
+         由 sync-main 任务开一个 PR 把改动回写 main。 -->
+    <VelaPluginVersion Condition="'$(VelaPluginVersion)' == ''">0.3.1</VelaPluginVersion>
+    <!-- 去掉预发布后缀的数字版:AssemblyVersion / FileVersion 不接受 `-preview.1` 这种后缀。 -->
+    <VelaPluginVersionCore>$([System.Text.RegularExpressions.Regex]::Replace($(VelaPluginVersion), '-.*$', ''))</VelaPluginVersionCore>
+    <Version>$(VelaPluginVersion)</Version>
+    <AssemblyVersion>$(VelaPluginVersionCore)</AssemblyVersion>
+    <FileVersion>$(VelaPluginVersionCore)</FileVersion>
+    <!-- 不把 git 提交哈希拼进 InformationalVersion(默认会加 +sha 后缀)。 -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+</Project>

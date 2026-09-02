@@ -30,7 +30,7 @@ SDK 1.1 的远程执行只有两种**文本**形态:整段 UTF-8 解码,或按 `
 `0x0A` 处把一帧劈成两半。
 
 所以 SDK 加了 `IRemoteTunnelApi`:到远端 unix socket / TCP 端点的裸字节双工流。
-`plugin.json` 钉了 `minSdkVersion: "1.2.0"`,装在老宿主上会在**发现期**干净地标为不兼容,
+`plugin.json` 钉了 `minSdkVersion: "2.0.0"`,装在老宿主上会在**发现期**干净地标为不兼容,
 而不是运行到一半炸出 `MissingMethodException`。
 
 ---

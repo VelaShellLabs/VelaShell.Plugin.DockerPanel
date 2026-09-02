@@ -72,6 +72,16 @@ dotnet build -c Release -t:PackVpx            # → bin/vpx/velashell.dockerpane
 - 实心语义色上的文字不要写 `#FFFFFF`:暗色主题的语义色本身是亮色,白字压上去读不出来。
   用 `VelaErrorForeground` / `VelaWarningForeground` / `VelaSuccessForeground`。
 
+### 插件版本号不要手改
+
+本插件的版本有**两个**落点:`VelaShell.Plugin.DockerPanel/plugin.json` 的 `version`
+(决定 `.vpx` 文件名与宿主里显示的版本)与 `Directory.Build.props` 的 `VelaPluginVersion`
+(决定 `AssemblyVersion` / `FileVersion`)。只改一处**不会有任何报错**,后果是程序集版本
+悄悄停在上一版。要改就跑 `pwsh scripts/Set-Version.ps1 <版本>`,两处一起动;
+CI 的「版本号同步体检」兜底。
+
+平时其实**根本不需要改**:发版流水线会按 Release 标签自动写这两处,发完再开 PR 回写 `main`。
+
 ### SDK 版本号不归你定
 
 用到 SDK 新契约面时,**不要**自己改 `plugin.json` 的 `minSdkVersion`、
